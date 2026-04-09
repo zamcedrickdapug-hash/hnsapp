@@ -178,16 +178,7 @@ function App() {
 			) : null}
 
 			{!loadingSession && token && user?.role === 'admin' ? (
-				<section className="panel">
-					<div className="panel-toolbar">
-						<p>Logged in as {user.fullName} (Admin)</p>
-						<button type="button" className="ghost" onClick={handleLogout}>
-							Logout
-						</button>
-					</div>
-
-					<AdminPanel token={token} />
-				</section>
+				<AdminPanel token={token} user={user} onLogout={handleLogout} />
 			) : null}
 
 			{!loadingSession && token && user && user.role === 'parent' ? (

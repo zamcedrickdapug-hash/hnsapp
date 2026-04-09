@@ -191,6 +191,12 @@ const userSchema = new mongoose.Schema(
       enum: ['pending', 'reviewing', 'approved', 'declined'],
       default: 'pending',
     },
+    accountState: {
+      type: String,
+      enum: ['active', 'suspended', 'banned'],
+      default: 'active',
+      index: true,
+    },
     declineReason: {
       type: String,
       trim: true,

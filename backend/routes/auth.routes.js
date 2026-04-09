@@ -19,6 +19,7 @@ const buildAuthPayload = (user) => ({
   phone: user.phone,
   homeAddress: user.homeAddress,
   status: user.status,
+  accountState: user.accountState,
 });
 
 router.post('/login', async (req, res) => {
@@ -59,6 +60,16 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({
         message: 'Your account is not active yet. Please wait for admin verification.',
         accountStatus: user.status,
+      });
+    }
+
+    if (['parent', 'driver'].includes(user.role) && ['suspended', 'banned'].includes(String(user.accountState || 'active'))) {
+      return res.status(403).json({
+        message:
+          user.accountState === 'banned'
+            ? 'Your account has been banned. Please contact support.'
+            : 'Your account has been suspended. Please contact support.',
+        accountState: user.accountState,
       });
     }
 

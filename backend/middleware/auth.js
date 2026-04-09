@@ -26,6 +26,16 @@ const requireAuth = async (req, res, next) => {
       return res.status(401).json({ message: 'Invalid authentication token.' });
     }
 
+    if (user.role !== 'admin' && ['suspended', 'banned'].includes(String(user.accountState || 'active'))) {
+      return res.status(403).json({
+        message:
+          user.accountState === 'banned'
+            ? 'Your account has been banned. Please contact support.'
+            : 'Your account has been suspended. Please contact support.',
+        accountState: user.accountState,
+      });
+    }
+
     req.user = user;
     return next();
   } catch (error) {
