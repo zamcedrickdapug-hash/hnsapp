@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
 const express = require('express');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
@@ -9,12 +10,17 @@ const User = require('./models/User');
 const authRoutes = require('./routes/auth.routes');
 const parentRoutes = require('./routes/parent.routes');
 const adminRoutes = require('./routes/admin.routes');
+const driverRoutes = require('./routes/driver.routes');
+const routingRoutes = require('./routes/routing');
+const { initSocketServer } = require('./socket');
 
 dotenv.config();
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 const app = express();
+const server = http.createServer(app);
+initSocketServer(server);
 const PORT = Number(process.env.PORT || 4000);
 
 const getLegacyMongoUrl = () => {
@@ -99,6 +105,8 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/parents', parentRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/driver', driverRoutes);
+app.use('/api/routing', routingRoutes);
 
 app.use((req, res) => {
 	res.status(404).json({ message: 'Endpoint not found.' });
@@ -114,7 +122,7 @@ const startServer = async () => {
 		await connectToDatabase();
 		await seedDefaultAdmin();
 
-		app.listen(PORT, () => {
+		server.listen(PORT, () => {
 			console.log(`Backend server listening on http://localhost:${PORT}`);
 		});
 	} catch (error) {

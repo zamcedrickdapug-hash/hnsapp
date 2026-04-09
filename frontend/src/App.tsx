@@ -4,6 +4,8 @@ import SignupPage from './page/signup/signup.jsx'
 import LoginPage from './page/login/login.jsx'
 import AdminPanel from './page/admin/admin.jsx'
 import ParentDashboard from './page/Parents/ParentDashboard.jsx'
+import DriverDashboard from './page/Driver/DriverDashboard.jsx'
+import { registerPushSubscription } from './lib/pushNotifications'
 import './App.css'
 
 type Role = 'parent' | 'driver' | 'admin'
@@ -23,11 +25,19 @@ type AuthResponse = {
 	user: AuthUser
 }
 
+type BeforeInstallPromptEvent = Event & {
+	prompt: () => Promise<void>
+	userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
+}
+
 function App() {
 	const [tab, setTab] = useState<'register' | 'login' | 'admin' | 'applicant'>('login')
 	const [token, setToken] = useState('')
 	const [user, setUser] = useState<AuthUser | null>(null)
 	const [loadingSession, setLoadingSession] = useState(true)
+	const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null)
+	const [showInstallNotice, setShowInstallNotice] = useState(false)
+	const [installingApp, setInstallingApp] = useState(false)
 	const hasActiveSession = !loadingSession && Boolean(token && user)
 
 	useEffect(() => {
@@ -59,6 +69,50 @@ function App() {
 		restoreSession()
 	}, [])
 
+	useEffect(() => {
+		if (!token || !user || !['parent', 'driver'].includes(user.role)) {
+			return
+		}
+
+		registerPushSubscription(token).catch(() => {
+			// Notification subscription should not block normal app usage.
+		})
+	}, [token, user])
+
+	useEffect(() => {
+		const handleBeforeInstallPrompt = (event: Event) => {
+			event.preventDefault()
+			setInstallEvent(event as BeforeInstallPromptEvent)
+			setShowInstallNotice(true)
+		}
+
+		const handleAppInstalled = () => {
+			setInstallEvent(null)
+			setShowInstallNotice(false)
+		}
+
+		window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+		window.addEventListener('appinstalled', handleAppInstalled)
+
+		return () => {
+			window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+			window.removeEventListener('appinstalled', handleAppInstalled)
+		}
+	}, [])
+
+	const handleInstallApp = async () => {
+		if (!installEvent) {
+			return
+		}
+
+		setInstallingApp(true)
+		await installEvent.prompt()
+		await installEvent.userChoice
+		setInstallingApp(false)
+		setInstallEvent(null)
+		setShowInstallNotice(false)
+	}
+
 	const handleLoggedIn = ({ token: authToken, user: authUser }: AuthResponse) => {
 		setToken(authToken)
 		setUser(authUser)
@@ -75,6 +129,29 @@ function App() {
 
 	return (
 		<main className={`app-shell ${hasActiveSession ? 'app-shell--fullscreen' : ''}`}>
+			{showInstallNotice && installEvent ? (
+				<div className="install-app-notice" role="status" aria-live="polite">
+					<div className="install-app-notice__content">
+						<span className="material-symbols-rounded" aria-hidden="true">
+							download
+						</span>
+						<div>
+							<strong>Install H&S App</strong>
+							<p>Install this app for faster access and notifications.</p>
+						</div>
+					</div>
+
+					<div className="install-app-notice__actions">
+						<button type="button" className="ghost" onClick={() => setShowInstallNotice(false)}>
+							Later
+						</button>
+						<button type="button" className="install-app-notice__install" onClick={handleInstallApp} disabled={installingApp}>
+							{installingApp ? 'Installing...' : 'Install App'}
+						</button>
+					</div>
+				</div>
+			) : null}
+
 			{loadingSession ? (
 				<section className="panel"><p>Restoring your session...</p></section>
 			) : null}
@@ -113,8 +190,12 @@ function App() {
 				</section>
 			) : null}
 
-			{!loadingSession && token && user && ['parent', 'driver'].includes(user.role) ? (
+			{!loadingSession && token && user && user.role === 'parent' ? (
 				<ParentDashboard token={token} user={user} onLogout={handleLogout} />
+			) : null}
+
+			{!loadingSession && token && user && user.role === 'driver' ? (
+				<DriverDashboard token={token} user={user} onLogout={handleLogout} />
 			) : null}
 		</main>
 	)

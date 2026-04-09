@@ -5,8 +5,10 @@ const express = require('express');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
-const { requireApplicant } = require('../middleware/auth');
+const VanRequest = require('../models/VanRequest');
+const { requireApplicant, requireParent } = require('../middleware/auth');
 const { validateRegistrationPayload } = require('../utils/validation');
+const { sendPushToUserIds } = require('../utils/pushNotifications');
 
 const router = express.Router();
 
@@ -61,6 +63,27 @@ const removeFileIfExists = (filePath) => {
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath);
   }
+};
+
+const parseRequesterLocation = (locationPayload) => {
+  const latitude = Number(locationPayload?.latitude);
+  const longitude = Number(locationPayload?.longitude);
+  const accuracy = Number(locationPayload?.accuracy);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    return null;
+  }
+
+  return {
+    latitude,
+    longitude,
+    ...(Number.isFinite(accuracy) && accuracy >= 0 ? { accuracy } : {}),
+    capturedAt: new Date(),
+  };
 };
 
 router.post('/register', upload.single('validId'), async (req, res) => {
@@ -144,6 +167,89 @@ router.patch('/notifications/:notificationId/read', requireApplicant, async (req
   await req.user.save();
 
   return res.status(200).json({ message: 'Notification marked as read.' });
+});
+
+router.post('/van-requests', requireParent, async (req, res) => {
+  try {
+    const studentName =
+      String(req.body?.studentName || '').trim() || String(req.user?.student?.fullName || '').trim();
+    const pickupZone =
+      String(req.body?.pickupZone || '').trim() || String(req.user?.homeAddress || '').trim();
+    const gradeSection =
+      String(req.body?.gradeSection || '').trim() || String(req.user?.student?.gradeLevel || '').trim();
+    const schoolName =
+      String(req.body?.schoolName || '').trim() || String(req.user?.student?.schoolName || '').trim();
+    const emergencyContact =
+      String(req.body?.emergencyContact || '').trim() || String(req.user?.phone || '').trim();
+    const notes = String(req.body?.notes || '').trim();
+    const requesterLocation = parseRequesterLocation(req.body?.requesterLocation);
+
+    if (!studentName || !pickupZone) {
+      return res.status(400).json({
+        message:
+          'Student name and pickup zone are required. Please complete parent settings or allow profile fallback values.',
+      });
+    }
+
+    const activeRequest = await VanRequest.findOne({
+      parent: req.user._id,
+      status: { $in: ['searching', 'accepted'] },
+    }).select('_id status');
+
+    if (activeRequest) {
+      return res.status(409).json({ message: 'You already have an active ride request.' });
+    }
+
+    const rideRequest = await VanRequest.create({
+      parent: req.user._id,
+      studentName,
+      gradeSection,
+      schoolName,
+      pickupZone,
+      emergencyContact,
+      notes,
+      requesterLocation,
+      status: 'searching',
+    });
+
+    req.user.notifications.push({
+      title: 'Searching for driver',
+      message: 'Your school van request is now searching for an available driver.',
+      status: 'pending',
+    });
+    await req.user.save();
+
+    const activeDrivers = await User.find({ role: 'driver', status: 'approved' }).select('_id');
+    const activeDriverIds = activeDrivers.map((driver) => String(driver._id));
+
+    sendPushToUserIds(activeDriverIds, {
+      title: 'New School Van Request',
+      body: `${studentName} needs pickup${pickupZone ? ` at ${pickupZone}` : ''}.`,
+      data: {
+        type: 'new-van-request',
+        requestId: String(rideRequest._id),
+      },
+    }).catch(() => {});
+
+    return res.status(201).json({
+      message: 'School van request submitted successfully.',
+      request: rideRequest,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: 'Unable to submit ride request right now.' });
+  }
+});
+
+router.get('/van-requests', requireParent, async (req, res) => {
+  try {
+    const requests = await VanRequest.find({ parent: req.user._id })
+      .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber')
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({ requests });
+  } catch (error) {
+    return res.status(500).json({ message: 'Unable to load your ride requests right now.' });
+  }
 });
 
 router.use((error, req, res, next) => {

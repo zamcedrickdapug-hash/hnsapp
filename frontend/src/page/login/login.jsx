@@ -48,7 +48,7 @@ export default function LoginPage({ onLoggedIn }) {
 	return (
 		<section className="login-page">
 			<h2>Login</h2>
-			<p>Parents and drivers can access the system only after admin approval.</p>
+		
 
 			<form className="auth-form" onSubmit={handleSubmit}>
 				<label>
@@ -89,10 +89,6 @@ export default function LoginPage({ onLoggedIn }) {
 
 			{error ? <p className="feedback error">{error}</p> : null}
 			{statusMessage ? <p className="feedback info">{statusMessage}</p> : null}
-
-			<p className="hint">
-				Default admin account is auto-created on backend startup. Set ADMIN_EMAIL and ADMIN_PASSWORD in your environment for production.
-			</p>
 		</section>
 	);
 }

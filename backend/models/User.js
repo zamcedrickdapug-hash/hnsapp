@@ -109,6 +109,42 @@ const validIdSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const pushSubscriptionSchema = new mongoose.Schema(
+  {
+    endpoint: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    expirationTime: {
+      type: Number,
+      default: null,
+    },
+    keys: {
+      auth: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+      p256dh: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+    },
+    userAgent: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    lastUsedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+);
+
 const userSchema = new mongoose.Schema(
   {
     role: {
@@ -162,6 +198,10 @@ const userSchema = new mongoose.Schema(
     },
     notifications: {
       type: [notificationSchema],
+      default: [],
+    },
+    pushSubscriptions: {
+      type: [pushSubscriptionSchema],
       default: [],
     },
   },

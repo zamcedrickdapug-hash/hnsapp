@@ -1,0 +1,62 @@
+.trip-map {
+	height: 320px;
+	width: 100%;
+	min-height: 260px;
+	border-radius: 16px;
+	overflow: hidden;
+	border: 1px solid rgba(101, 134, 214, 0.35);
+	background: #071739;
+	position: relative;
+}
+
+.trip-map__container {
+	height: 100%;
+	width: 100%;
+}
+
+.trip-map .maplibregl-canvas {
+	outline: none;
+}
+
+.trip-map-marker {
+	display: grid;
+	place-items: center;
+	width: 34px;
+	height: 34px;
+	border-radius: 999px;
+	border: none;
+	font-size: 0.86rem;
+	font-weight: 800;
+	color: #ffffff;
+	cursor: pointer;
+	padding: 0;
+	box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.2);
+}
+
+.trip-map-marker span {
+	line-height: 1;
+}
+
+.trip-map-marker--pickup {
+	background: linear-gradient(145deg, #13c880, #0c9f65);
+}
+
+.trip-map-marker--van {
+	background: linear-gradient(145deg, #3f94ff, #2e63d7);
+}
+
+.trip-map__status {
+	position: absolute;
+	top: 12px;
+	left: 12px;
+	padding: 6px 10px;
+	border-radius: 999px;
+	font-size: 0.72rem;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	color: #eaf3ff;
+	background: rgba(10, 28, 68, 0.82);
+	backdrop-filter: blur(4px);
+	border: 1px solid rgba(146, 177, 255, 0.5);
+	z-index: 3;
+}

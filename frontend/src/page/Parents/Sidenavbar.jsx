@@ -1,28 +1,40 @@
 import { Button } from '../../components/ui/button'
+import logo from '../../assets/logo.png'
 
 const menuItems = [
-	{ key: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
-	{ key: 'service', label: 'Service Request', icon: 'add_circle' },
-	{ key: 'history', label: 'History', icon: 'receipt_long' },
+	{ key: 'dashboard', label: 'Live Dashboard', icon: 'dashboard' },
+	{ key: 'history', label: 'Trip History', icon: 'receipt_long' },
+	{ key: 'settings', label: 'Settings', icon: 'settings' },
 ]
 
-export default function Sidenavbar({ user, activeSection, onChangeSection, onLogout }) {
+export default function Sidenavbar({ user, activeSection, onChangeSection, onLogout, isOpen, onToggle }) {
 	return (
-		<aside className="parent-sidebar">
+		<aside className={`parent-sidebar ${isOpen ? 'open' : 'collapsed'}`}>
 			<div className="sidebar-brand">
-				<div className="brand-logo">H&S</div>
-				<div>
+				<button
+					type="button"
+					className="brand-logo sidebar-toggle-logo"
+					onClick={onToggle}
+					aria-label={isOpen ? 'Close sidebar' : 'Open sidebar'}
+				>
+					<img src={logo} alt="H&S logo" className="brand-logo-image" />
+				</button>
+				{isOpen ? (
+					<div>
 					<h2>H&S APP</h2>
-					<p>{user.role === 'driver' ? 'Driver Panel' : 'Parent Panel'}</p>
-				</div>
+					<p>Parent Panel</p>
+					</div>
+				) : null}
 			</div>
 
 			<div className="sidebar-user">
 				<div className="avatar-pill">{user.fullName?.slice(0, 2).toUpperCase() || 'HS'}</div>
-				<div>
-					<h3>{user.fullName}</h3>
-					<p>{user.role} account</p>
-				</div>
+				{isOpen ? (
+					<div>
+						<h3>{user.fullName}</h3>
+						<p>{user.role} account</p>
+					</div>
+				) : null}
 			</div>
 
 			<nav className="sidebar-menu">
@@ -36,17 +48,17 @@ export default function Sidenavbar({ user, activeSection, onChangeSection, onLog
 						<span className="material-symbols-rounded" aria-hidden="true">
 							{item.icon}
 						</span>
-						<span>{item.label}</span>
+						{isOpen ? <span className="menu-item-label">{item.label}</span> : null}
 					</button>
 				))}
 			</nav>
 
 			<div className="sidebar-foot">
-				<Button variant="secondary" onClick={onLogout}>
+				<Button variant="secondary" onClick={onLogout} aria-label="Sign Out">
 					<span className="material-symbols-rounded" aria-hidden="true">
 						logout
 					</span>
-					Sign Out
+					{isOpen ? 'Sign Out' : null}
 				</Button>
 			</div>
 		</aside>

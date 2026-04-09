@@ -81,9 +81,7 @@ export default function SignupPage() {
 	return (
 		<section className="signup-page">
 			<h2>Create Account</h2>
-			<p>
-				Select your role and complete the required details. All accounts stay Pending Verification until approved by admin.
-			</p>
+			
 
 			<form className="registration-form" onSubmit={handleSubmit}>
 				<fieldset>
