@@ -1,0 +1,93 @@
+.signup-page {
+	display: grid;
+	gap: 1rem;
+
+	h2 {
+		margin: 0;
+		font-size: clamp(1.2rem, 2.2vw, 1.55rem);
+		color: #f4f6ff;
+	}
+
+	p {
+		margin: 0;
+		color: #aab4d6;
+	}
+}
+
+.registration-form {
+	display: grid;
+	gap: 0.85rem;
+
+	fieldset {
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 16px;
+		margin: 0;
+		padding: 0.85rem;
+		display: grid;
+		gap: 0.7rem;
+		background: rgba(5, 18, 52, 0.55);
+	}
+
+	legend {
+		padding: 0 0.5rem;
+		color: #f4f6ff;
+		font-weight: 700;
+		letter-spacing: 0.01em;
+	}
+
+	label {
+		display: grid;
+		gap: 0.35rem;
+		color: #d4dcf5;
+		font-size: 0.9rem;
+		font-weight: 600;
+	}
+
+	input,
+	select {
+		border: 1px solid rgba(95, 123, 198, 0.45);
+		border-radius: 12px;
+		padding: 0.6rem 0.7rem;
+		font: inherit;
+		color: #f2f6ff;
+		background: rgba(7, 20, 58, 0.95);
+	}
+
+	input::placeholder {
+		color: #8f9ec9;
+	}
+
+	input:focus,
+	select:focus {
+		outline: 2px solid rgba(74, 137, 255, 0.55);
+		outline-offset: 1px;
+	}
+
+	button {
+		border: none;
+		border-radius: 12px;
+		background: linear-gradient(130deg, #468aff, #2a68e7);
+		color: #fff;
+		font: inherit;
+		font-weight: 700;
+		padding: 0.7rem 0.9rem;
+		cursor: pointer;
+	}
+
+	button:disabled {
+		cursor: wait;
+		opacity: 0.65;
+	}
+}
+
+.errors {
+	margin: 0;
+	padding-left: 1.1rem;
+	color: #ff8a8a;
+}
+
+.success {
+	margin: 0;
+	color: #82dcaa;
+	font-weight: 600;
+}

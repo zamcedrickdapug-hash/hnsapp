@@ -1,0 +1,230 @@
+.app-shell {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 1.2rem;
+  display: grid;
+  gap: 1rem;
+  align-content: center;
+}
+
+.app-shell--fullscreen {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  min-height: 100dvh;
+  gap: 0;
+  align-content: stretch;
+}
+
+.tab-nav {
+  display: flex;
+  gap: 0.55rem;
+}
+
+.tab-nav button,
+.panel button {
+  font: inherit;
+}
+
+.tab-nav button {
+  flex: 1;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  color: #c5cde6;
+  border-radius: 12px;
+  padding: 0.7rem 0.9rem;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.tab-nav button.active {
+  background: linear-gradient(135deg, #3f83ff, #2b6ceb);
+  border-color: rgba(73, 141, 255, 0.8);
+  color: #fff;
+}
+
+.panel {
+  border: 1px solid rgba(117, 154, 255, 0.2);
+  border-radius: 18px;
+  background: rgba(9, 16, 39, 0.84);
+  padding: 1rem;
+  display: grid;
+  gap: 1rem;
+  backdrop-filter: blur(8px);
+}
+
+.auth-card {
+  max-width: 420px;
+  width: 100%;
+  margin: 0 auto;
+  box-shadow:
+    0 0 0 1px rgba(64, 118, 255, 0.12),
+    0 35px 60px -36px rgba(2, 11, 31, 1);
+}
+
+.auth-head {
+  text-align: center;
+  display: grid;
+  gap: 0.35rem;
+
+  h1 {
+    margin: 0;
+    color: #f2f5ff;
+    font-size: clamp(1.5rem, 4.4vw, 2.05rem);
+  }
+
+  p {
+    margin: 0;
+    color: #a7b1d1;
+    font-size: 0.95rem;
+    line-height: 1.45;
+  }
+}
+
+.panel-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.panel-toolbar p {
+  margin: 0;
+  color: #d8def3;
+}
+
+.ghost {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: #eff3ff;
+  border-radius: 999px;
+  padding: 0.48rem 0.8rem;
+  cursor: pointer;
+}
+
+.parent-dashboard {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.parent-dashboard header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.parent-dashboard h2 {
+  margin: 0;
+  color: #f4f6ff;
+}
+
+.parent-dashboard h3 {
+  margin: 0 0 0.35rem;
+  color: #f4f6ff;
+}
+
+.parent-dashboard h4 {
+  margin: 0 0 0.25rem;
+  color: #f4f6ff;
+}
+
+.profile-card,
+.notification-card {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 0.9rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+}
+
+.profile-card p,
+.notification-card p {
+  margin: 0.2rem 0;
+  color: #b9c2df;
+}
+
+.status-pill {
+  border-radius: 999px;
+  font-size: 0.77rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.2rem 0.6rem;
+}
+
+.status-pill.approved {
+  color: #08643a;
+  background: #dbfde9;
+}
+
+.status-pill.pending {
+  color: #8b4d00;
+  background: #ffe8c7;
+}
+
+.status-pill.reviewing {
+  color: #00568b;
+  background: #d9edff;
+}
+
+.status-pill.declined {
+  color: #8c1e1e;
+  background: #ffdada;
+}
+
+.notification-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.notification-item {
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.75rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.notification-item.unread {
+  border-color: rgba(88, 146, 255, 0.45);
+  background: rgba(42, 88, 175, 0.18);
+}
+
+.notification-item button {
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #3e82ff, #2e6ee8);
+  color: #fff;
+  font-weight: 700;
+  height: fit-content;
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
+}
+
+.notification-item small {
+  color: #9ca8ce;
+}
+
+.error-text {
+  color: #b32929;
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    padding: 0.8rem;
+  }
+
+  .notification-item {
+    flex-direction: column;
+  }
+
+  .notification-item button {
+    align-self: start;
+  }
+}

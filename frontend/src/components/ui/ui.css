@@ -1,0 +1,132 @@
+.ui-button {
+  border: none;
+  border-radius: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.ui-button:hover {
+  transform: translateY(-1px);
+}
+
+.ui-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.ui-button--md {
+  padding: 0.7rem 1rem;
+}
+
+.ui-button--sm {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.88rem;
+}
+
+.ui-button--lg {
+  padding: 0.8rem 1.2rem;
+  font-size: 1rem;
+}
+
+.ui-button--icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+}
+
+.ui-button--default {
+  background: linear-gradient(135deg, #4d8fff, #2f67dd);
+  color: #fff;
+  box-shadow: 0 16px 28px -20px rgba(45, 108, 235, 0.95);
+}
+
+.ui-button--secondary {
+  background: rgba(255, 255, 255, 0.06);
+  color: #d6def8;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+}
+
+.ui-button--ghost {
+  background: transparent;
+  color: #d6def8;
+}
+
+.ui-button--destructive {
+  background: linear-gradient(135deg, #d84b5b, #b32737);
+  color: #fff;
+}
+
+.ui-card {
+  background: linear-gradient(160deg, rgba(12, 22, 56, 0.95), rgba(10, 18, 45, 0.84));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  box-shadow: 0 26px 50px -42px rgba(2, 12, 44, 1);
+}
+
+.ui-card__header {
+  padding: 1rem 1.1rem 0.4rem;
+}
+
+.ui-card__title {
+  margin: 0;
+  color: #f2f5ff;
+  font-size: 1.05rem;
+}
+
+.ui-card__description {
+  margin: 0.22rem 0 0;
+  color: #93a2cc;
+  font-size: 0.9rem;
+}
+
+.ui-card__content {
+  padding: 0.9rem 1.1rem 1.1rem;
+}
+
+.ui-input,
+.ui-select {
+  width: 100%;
+  border: 1px solid rgba(95, 123, 198, 0.45);
+  border-radius: 12px;
+  padding: 0.64rem 0.74rem;
+  color: #f2f6ff;
+  background: rgba(7, 20, 58, 0.95);
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.ui-input::placeholder {
+  color: #93a0c6;
+}
+
+.ui-input:focus,
+.ui-select:focus {
+  outline: 2px solid rgba(74, 137, 255, 0.55);
+  outline-offset: 1px;
+}
+
+.ui-select-wrap {
+  position: relative;
+}
+
+.ui-select {
+  appearance: none;
+  padding-right: 2rem;
+}
+
+.ui-select__icon {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #96a4cc;
+  pointer-events: none;
+  font-size: 1.2rem;
+}
