@@ -2,7 +2,7 @@
   "name": "hnsapp",
   "private": true,
   "scripts": {
-    "build": "npm install --prefix backend --omit=dev",
+    "build": "npm install --prefix frontend && npm run build --prefix frontend && npm install --prefix backend --omit=dev",
     "start": "npm --prefix backend start",
     "backend:dev": "npm run dev --prefix backend",
     "frontend:dev": "npm run dev --prefix frontend",

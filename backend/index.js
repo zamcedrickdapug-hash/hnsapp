@@ -23,6 +23,8 @@ const server = http.createServer(app);
 initSocketServer(server);
 const PORT = Number(process.env.PORT || 4000);
 const FRONTEND_URL = String(process.env.FRONTEND_URL || '').trim();
+const FRONTEND_DIST_PATH = path.resolve(__dirname, '../frontend/dist');
+const FRONTEND_INDEX_PATH = path.join(FRONTEND_DIST_PATH, 'index.html');
 let isDatabaseConnected = false;
 
 const getLegacyMongoUrl = () => {
@@ -113,8 +115,17 @@ const initializeDatabase = async () => {
 };
 
 app.use(express.json({ limit: '1mb' }));
+app.use(express.static(FRONTEND_DIST_PATH));
 
-app.get('/', (req, res) => {
+const respondWithFrontendApp = (req, res, next) => {
+	if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
+		return next();
+	}
+
+	if (fs.existsSync(FRONTEND_INDEX_PATH)) {
+		return res.sendFile(FRONTEND_INDEX_PATH);
+	}
+
 	if (FRONTEND_URL) {
 		return res.redirect(FRONTEND_URL);
 	}
@@ -122,9 +133,11 @@ app.get('/', (req, res) => {
 	return res.status(200).json({
 		message: 'H&S backend is running.',
 		health: '/api/health',
-		note: 'Set FRONTEND_URL to auto-redirect this domain to your frontend app.',
+		note: 'Frontend build not found. Run `npm run build --prefix frontend` or set FRONTEND_URL.',
 	});
-});
+};
+
+app.get('/', respondWithFrontendApp);
 
 app.get('/health', (req, res) => {
 	return res.redirect('/api/health');
@@ -142,6 +155,8 @@ app.use('/api/parents', parentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/driver', driverRoutes);
 app.use('/api/routing', routingRoutes);
+
+app.get(/^\/(?!api|socket\.io).*/, respondWithFrontendApp);
 
 app.use((req, res) => {
 	res.status(404).json({ message: 'Endpoint not found.' });
