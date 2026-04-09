@@ -22,6 +22,7 @@ const app = express();
 const server = http.createServer(app);
 initSocketServer(server);
 const PORT = Number(process.env.PORT || 4000);
+const FRONTEND_URL = String(process.env.FRONTEND_URL || '').trim();
 let isDatabaseConnected = false;
 
 const getLegacyMongoUrl = () => {
@@ -112,6 +113,22 @@ const initializeDatabase = async () => {
 };
 
 app.use(express.json({ limit: '1mb' }));
+
+app.get('/', (req, res) => {
+	if (FRONTEND_URL) {
+		return res.redirect(FRONTEND_URL);
+	}
+
+	return res.status(200).json({
+		message: 'H&S backend is running.',
+		health: '/api/health',
+		note: 'Set FRONTEND_URL to auto-redirect this domain to your frontend app.',
+	});
+});
+
+app.get('/health', (req, res) => {
+	return res.redirect('/api/health');
+});
 
 app.get('/api/health', (req, res) => {
 	res.status(200).json({
