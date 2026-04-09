@@ -504,7 +504,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 											<h4>{formatLocation(trip.requesterLocation)}</h4>
 										</div>
 										<div>
-											<p>LAST LOCATION</p>
+											<p>LAST LOCATIONS</p>
 											<h4>
 												{trip.liveLocation
 													? `${trip.liveLocation.latitude}, ${trip.liveLocation.longitude}`
