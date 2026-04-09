@@ -22,6 +22,7 @@ const app = express();
 const server = http.createServer(app);
 initSocketServer(server);
 const PORT = Number(process.env.PORT || 4000);
+let isDatabaseConnected = false;
 
 const getLegacyMongoUrl = () => {
 	const envPaths = [path.resolve(__dirname, '../.env'), path.resolve(__dirname, '.env')];
@@ -93,13 +94,30 @@ const connectToDatabase = async () => {
 	const connectionString = validateMongoConnectionString(getMongoConnectionString());
 
 	await mongoose.connect(connectionString);
-	console.log('Connected to MongoDB.');
+};
+
+const initializeDatabase = async () => {
+	try {
+		await connectToDatabase();
+		await seedDefaultAdmin();
+	} catch (error) {
+		isDatabaseConnected = false;
+		console.error('Database initialization failed:', error.message);
+
+		// Keep the service alive for platform healthchecks, then retry.
+		setTimeout(() => {
+			initializeDatabase();
+		}, 5000);
+	}
 };
 
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/api/health', (req, res) => {
-	res.status(200).json({ message: 'Server is running.' });
+	res.status(200).json({
+		message: 'Server is running.',
+		database: isDatabaseConnected ? 'connected' : 'connecting',
+	});
 });
 
 app.use('/api/auth', authRoutes);
@@ -119,16 +137,25 @@ app.use((error, req, res, next) => {
 
 const startServer = async () => {
 	try {
-		await connectToDatabase();
-		await seedDefaultAdmin();
-
 		server.listen(PORT, () => {
 			console.log(`Backend server listening on http://localhost:${PORT}`);
 		});
+
+		initializeDatabase();
 	} catch (error) {
 		console.error('Failed to start backend server:', error.message);
 		process.exit(1);
 	}
 };
+
+mongoose.connection.on('connected', () => {
+	isDatabaseConnected = true;
+	console.log('Connected to MongoDB.');
+});
+
+mongoose.connection.on('disconnected', () => {
+	isDatabaseConnected = false;
+	console.warn('Disconnected from MongoDB. Reconnecting...');
+});
 
 startServer();
