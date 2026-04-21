@@ -1,6 +1,9 @@
 {
   "name": "hnsapp",
   "private": true,
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
   "scripts": {
     "build": "npm install --prefix frontend && npm run build --prefix frontend && npm install --prefix backend --omit=dev",
     "start": "npm --prefix backend start",
