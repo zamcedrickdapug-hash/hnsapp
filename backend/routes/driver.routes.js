@@ -200,8 +200,8 @@ router.patch('/requests/:requestId/picked-up', async (req, res) => {
       return res.status(403).json({ message: 'You are not assigned to this request.' });
     }
 
-    if (rideRequest.status !== 'arrived') {
-      return res.status(409).json({ message: 'Trip must be arrived at pickup before marking as picked up.' });
+    if (!['accepted', 'arrived'].includes(rideRequest.status)) {
+      return res.status(409).json({ message: 'Only active pickup trips can be marked as picked up.' });
     }
 
     rideRequest.status = 'picked_up';

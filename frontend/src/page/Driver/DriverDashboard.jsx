@@ -424,13 +424,9 @@ export default function DriverDashboard({ token, user, onLogout }) {
 
 	const canMarkPickedUp = useMemo(() => {
 		if (!selectedTrip) return false
-		if (selectedTrip.status !== 'arrived') return false
-		if (gpsStatus !== 'Active') return false
-		const driverPos = selectedTripVanPosition
-		const pickupPos = selectedTripRequesterPosition
-		if (!driverPos || !pickupPos) return false
-		return distanceInMeters(driverPos, pickupPos) <= 60
-	}, [gpsStatus, selectedTrip, selectedTripRequesterPosition, selectedTripVanPosition])
+		if (!['accepted', 'arrived'].includes(selectedTrip.status)) return false
+		return gpsStatus === 'Active'
+	}, [gpsStatus, selectedTrip])
 
 	const handlePickedUp = async () => {
 		if (!selectedTrip) return
