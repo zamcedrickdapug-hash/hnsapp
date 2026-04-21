@@ -85,7 +85,9 @@ function markOsrmUnavailable() {
 	osrmBackoffUntil = Math.max(osrmBackoffUntil, Date.now() + OSRM_UNAVAILABLE_COOLDOWN_MS)
 }
 
-async function fetchWithTimeout(endpoint, signal, options = {}) {
+// skipOsrmMark = true for backend calls so a backend failure does NOT
+// poison the osrmBackoffUntil flag and block the direct OSRM fallback.
+async function fetchWithTimeout(endpoint, signal, options = {}, skipOsrmMark = false) {
 	const timeoutController = new AbortController()
 	const timeoutId = setTimeout(() => timeoutController.abort(), OSRM_REQUEST_TIMEOUT_MS)
 
@@ -98,7 +100,7 @@ async function fetchWithTimeout(endpoint, signal, options = {}) {
 		return await fetch(endpoint, { ...options, signal: timeoutController.signal })
 	} catch (error) {
 		if (error?.name === 'AbortError' || error instanceof TypeError) {
-			markOsrmUnavailable()
+			if (!skipOsrmMark) markOsrmUnavailable()
 			throw createServiceUnavailableError()
 		}
 		throw error
@@ -186,14 +188,21 @@ async function fetchRoadPathViaBackend(pickupPosition, vanPosition, signal) {
 	}
 
 	const promise = (async () => {
-		const response = await fetchWithTimeout('/api/routing/route', signal, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				start: [pickupLat, pickupLng],
-				end: [vanLat, vanLng],
-			}),
-		})
+		// skipOsrmMark = true: a backend network failure must NOT set osrmBackoffUntil,
+		// otherwise the direct OSRM fallback below gets incorrectly blocked.
+		const response = await fetchWithTimeout(
+			'/api/routing/route',
+			signal,
+			{
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					start: [pickupLat, pickupLng],
+					end: [vanLat, vanLng],
+				}),
+			},
+			true, // skipOsrmMark
+		)
 
 		if (!response.ok) {
 			if (response.status === 429) {
@@ -237,6 +246,8 @@ async function fetchRoadPath(pickupPosition, vanPosition, signal) {
 		if (isRateLimitError(error) || isServiceUnavailableError(error)) {
 			throw error
 		}
+		// Any other backend error (404, bad JSON, etc.) → fall through to direct OSRM
+		console.warn('Backend routing failed, trying direct OSRM:', error?.message)
 	}
 
 	// Try direct OSRM only if backend failed for a non-rate-limit reason
@@ -388,15 +399,12 @@ export default function LiveTripMap({
 			fetchRoadPath(pickupPosition, effectiveVanPosition, abortController.signal)
 				.then((path) => {
 					if (path && path.length > 1) {
-						// Only update if the new path is a real road route
 						setRoutePath(path)
 					}
 					setIsRouteLoading(false)
 				})
 				.catch((error) => {
 					if (!abortController.signal.aborted) {
-						// Keep the previous road route displayed — do NOT replace with
-						// a straight-line fallback. Just quietly stop the loading state.
 						console.warn('Route fetch failed, keeping previous route:', error?.message)
 					}
 					setIsRouteLoading(false)
