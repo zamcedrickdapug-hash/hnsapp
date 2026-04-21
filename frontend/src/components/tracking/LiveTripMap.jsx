@@ -12,7 +12,8 @@ const ROUTE_LAYER_ID = 'trip-road-route'
 const OSRM_RATE_LIMIT_COOLDOWN_MS = 60000
 const OSRM_UNAVAILABLE_COOLDOWN_MS = 120000
 const OSRM_REQUEST_TIMEOUT_MS = 10000
-const ROUTE_REQUEST_DEBOUNCE_MS = 3000
+const ROUTE_REQUEST_DEBOUNCE_MS = 800
+const ROUTE_REQUEST_DEBOUNCE_FIRST_MS = 0
 const ENABLE_OSRM_NEAREST_SNAP = false
 const MIN_ROUTE_DISTANCE_DEGREES = 0.00005
 
@@ -391,7 +392,10 @@ export default function LiveTripMap({
 			return undefined
 		}
 
-		// Debounce — wait for position to settle before firing a route request
+		// Skip debounce on first fetch (routePath is empty) so the route
+		// appears immediately when GPS positions first become available.
+		const delay = routePath.length === 0 ? ROUTE_REQUEST_DEBOUNCE_FIRST_MS : ROUTE_REQUEST_DEBOUNCE_MS
+
 		debounceTimerRef.current = setTimeout(() => {
 			const abortController = new AbortController()
 			setIsRouteLoading(true)
@@ -411,14 +415,14 @@ export default function LiveTripMap({
 				})
 
 			return () => abortController.abort()
-		}, ROUTE_REQUEST_DEBOUNCE_MS)
+		}, delay)
 
 		return () => {
 			if (debounceTimerRef.current) {
 				clearTimeout(debounceTimerRef.current)
 			}
 		}
-	}, [effectiveVanPosition, pickupPosition, plannedRouteGeoJson, routeMode, showRoute])
+	}, [effectiveVanPosition, pickupPosition, plannedRouteGeoJson, routeMode, routePath.length, showRoute])
 
 	useEffect(() => {
 		if (!isMapLoaded || !mapRef.current) return
