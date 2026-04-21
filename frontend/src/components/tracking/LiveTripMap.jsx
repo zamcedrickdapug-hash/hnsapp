@@ -9,11 +9,15 @@ const DEFAULT_ZOOM = 14
 const MAP_STYLE = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json'
 const OSRM_PROFILES = ['driving']
 const ROUTE_LAYER_ID = 'trip-road-route'
-const OSRM_RATE_LIMIT_COOLDOWN_MS = 30000
+const OSRM_RATE_LIMIT_COOLDOWN_MS = 60000
 const OSRM_UNAVAILABLE_COOLDOWN_MS = 120000
-const OSRM_REQUEST_TIMEOUT_MS = 8000
+const OSRM_REQUEST_TIMEOUT_MS = 10000
+const ROUTE_REQUEST_DEBOUNCE_MS = 3000
 const ENABLE_OSRM_NEAREST_SNAP = false
 const MIN_ROUTE_DISTANCE_DEGREES = 0.00005
+
+// Use globalThis.Map to avoid conflict with react-map-gl's Map import
+const requestCache = new globalThis.Map()
 
 let osrmBackoffUntil = 0
 
@@ -41,47 +45,10 @@ function toLngLat(position) {
 }
 
 function isSameRoutePoint(first, second) {
-	if (!isValidLatLng(first) || !isValidLatLng(second)) {
-		return false
-	}
-
+	if (!isValidLatLng(first) || !isValidLatLng(second)) return false
 	const latDiff = Math.abs(Number(first[0]) - Number(second[0]))
 	const lngDiff = Math.abs(Number(first[1]) - Number(second[1]))
-
 	return latDiff <= MIN_ROUTE_DISTANCE_DEGREES && lngDiff <= MIN_ROUTE_DISTANCE_DEGREES
-}
-
-function buildGridFallbackPath(pickupPosition, vanPosition) {
-	if (!isValidLatLng(pickupPosition) || !isValidLatLng(vanPosition)) {
-		return []
-	}
-
-	const pickupLat = Number(pickupPosition[0])
-	const pickupLng = Number(pickupPosition[1])
-	const vanLat = Number(vanPosition[0])
-	const vanLng = Number(vanPosition[1])
-
-	const latDelta = Math.abs(vanLat - pickupLat)
-	const lngDelta = Math.abs(vanLng - pickupLng)
-
-	if (latDelta <= 0.00004 || lngDelta <= 0.00004) {
-		return [toLngLat(pickupPosition), toLngLat(vanPosition)]
-	}
-
-	// Two-step Manhattan path avoids diagonal cuts when routing API is down.
-	if (lngDelta >= latDelta) {
-		return [
-			[pickupLng, pickupLat],
-			[vanLng, pickupLat],
-			[vanLng, vanLat],
-		]
-	}
-
-	return [
-		[pickupLng, pickupLat],
-		[pickupLng, vanLat],
-		[vanLng, vanLat],
-	]
 }
 
 function createRateLimitError() {
@@ -134,7 +101,6 @@ async function fetchWithTimeout(endpoint, signal, options = {}) {
 			markOsrmUnavailable()
 			throw createServiceUnavailableError()
 		}
-
 		throw error
 	} finally {
 		clearTimeout(timeoutId)
@@ -146,7 +112,6 @@ async function fetchWithTimeout(endpoint, signal, options = {}) {
 
 async function snapToRoad(position, profile, signal) {
 	throwIfOsrmBackoffActive()
-
 	const latitude = position[0]
 	const longitude = position[1]
 	const endpoint = `https://router.project-osrm.org/nearest/v1/${profile}/${longitude},${latitude}?number=1`
@@ -156,23 +121,19 @@ async function snapToRoad(position, profile, signal) {
 		markOsrmRateLimited()
 		throw createRateLimitError()
 	}
-
 	if (!response.ok) {
 		if (response.status >= 500) {
 			markOsrmUnavailable()
 			throw createServiceUnavailableError()
 		}
-
 		throw new Error('Nearest road lookup failed')
 	}
 
 	const payload = await response.json()
 	const snapped = payload?.waypoints?.[0]?.location
-
 	if (!Array.isArray(snapped) || snapped.length < 2) {
 		throw new Error('No snapped road point')
 	}
-
 	return [snapped[1], snapped[0]]
 }
 
@@ -191,19 +152,16 @@ async function fetchRoadPathByProfile(pickupPosition, vanPosition, profile, sign
 		markOsrmRateLimited()
 		throw createRateLimitError()
 	}
-
 	if (!response.ok) {
 		if (response.status >= 500) {
 			markOsrmUnavailable()
 			throw createServiceUnavailableError()
 		}
-
 		throw new Error('Routing service unavailable')
 	}
 
 	const payload = await response.json()
 	const coordinates = payload?.routes?.[0]?.geometry?.coordinates
-
 	if (!Array.isArray(coordinates) || coordinates.length === 0) {
 		throw new Error('No route geometry returned')
 	}
@@ -214,73 +172,80 @@ async function fetchRoadPathByProfile(pickupPosition, vanPosition, profile, sign
 }
 
 async function fetchRoadPathViaBackend(pickupPosition, vanPosition, signal) {
-	if (isSameRoutePoint(pickupPosition, vanPosition)) {
-		return []
-	}
+	if (isSameRoutePoint(pickupPosition, vanPosition)) return []
 
 	const pickupLat = Number(pickupPosition[0])
 	const pickupLng = Number(pickupPosition[1])
 	const vanLat = Number(vanPosition[0])
 	const vanLng = Number(vanPosition[1])
 
-	const response = await fetchWithTimeout('/api/routing/route', signal, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({
-			start: [pickupLat, pickupLng],
-			end: [vanLat, vanLng],
-		}),
+	// Deduplicate in-flight requests for the same coordinates
+	const cacheKey = `${pickupLat.toFixed(5)},${pickupLng.toFixed(5)},${vanLat.toFixed(5)},${vanLng.toFixed(5)}`
+	if (requestCache.has(cacheKey)) {
+		return requestCache.get(cacheKey)
+	}
+
+	const promise = (async () => {
+		const response = await fetchWithTimeout('/api/routing/route', signal, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				start: [pickupLat, pickupLng],
+				end: [vanLat, vanLng],
+			}),
+		})
+
+		if (!response.ok) {
+			if (response.status === 429) {
+				markOsrmRateLimited()
+				throw createRateLimitError()
+			}
+			if (response.status >= 500) {
+				markOsrmUnavailable()
+				throw createServiceUnavailableError()
+			}
+			throw new Error('Backend routing request failed')
+		}
+
+		const payload = await response.json()
+		const coordinates = payload?.route?.coordinates
+		if (!Array.isArray(coordinates) || coordinates.length < 2) {
+			throw new Error('No route geometry returned from backend')
+		}
+
+		return coordinates
+			.filter((point) => Array.isArray(point) && point.length >= 2)
+			.map(([longitude, latitude]) => [Number(longitude), Number(latitude)])
+	})()
+
+	requestCache.set(cacheKey, promise)
+	promise.finally(() => {
+		setTimeout(() => requestCache.delete(cacheKey), 5000)
 	})
 
-	if (!response.ok) {
-		if (response.status === 429) {
-			markOsrmRateLimited()
-			throw createRateLimitError()
-		}
-
-		if (response.status >= 500) {
-			markOsrmUnavailable()
-			throw createServiceUnavailableError()
-		}
-
-		throw new Error('Backend routing request failed')
-	}
-
-	const payload = await response.json()
-	const coordinates = payload?.route?.coordinates
-
-	if (!Array.isArray(coordinates) || coordinates.length < 2) {
-		throw new Error('No route geometry returned from backend')
-	}
-
-	return coordinates
-		.filter((point) => Array.isArray(point) && point.length >= 2)
-		.map(([longitude, latitude]) => [Number(longitude), Number(latitude)])
+	return promise
 }
 
 async function fetchRoadPath(pickupPosition, vanPosition, signal) {
+	// Try backend first (single attempt — no spam retries)
 	try {
 		const backendPath = await fetchRoadPathViaBackend(pickupPosition, vanPosition, signal)
-		if (backendPath.length > 1) {
-			return backendPath
+		if (backendPath.length > 1) return backendPath
+	} catch (error) {
+		if (signal?.aborted) throw error
+		// If rate limited, don't fall through to direct OSRM — both share the same upstream
+		if (isRateLimitError(error) || isServiceUnavailableError(error)) {
+			throw error
 		}
-	} catch {
-		// Fallback to direct OSRM call when backend route endpoint is unavailable.
 	}
 
+	// Try direct OSRM only if backend failed for a non-rate-limit reason
 	for (const profile of OSRM_PROFILES) {
 		try {
 			const path = await fetchRoadPathByProfile(pickupPosition, vanPosition, profile, signal)
-
-			if (path.length > 1) {
-				return path
-			}
+			if (path.length > 1) return path
 		} catch (error) {
-			if (isRateLimitError(error) || isServiceUnavailableError(error)) {
-				break
-			}
-
-			// Try next profile silently.
+			if (isRateLimitError(error) || isServiceUnavailableError(error)) break
 		}
 	}
 
@@ -300,19 +265,17 @@ export default function LiveTripMap({
 	const mapRef = useRef(null)
 	const hasAutoFramedRef = useRef(false)
 	const userHasAdjustedCameraRef = useRef(false)
+	const debounceTimerRef = useRef(null)
 	const [isMapLoaded, setIsMapLoaded] = useState(false)
 	const [showPickupPopup, setShowPickupPopup] = useState(false)
 	const [showVanPopup, setShowVanPopup] = useState(false)
 	const [snappedVanPosition, setSnappedVanPosition] = useState(null)
 	const [routePath, setRoutePath] = useState([])
 	const [isRouteLoading, setIsRouteLoading] = useState(false)
-	const [isRouteFallback, setIsRouteFallback] = useState(false)
 
 	const validPoints = useMemo(() => {
 		const points = []
-		if (isValidLatLng(pickupPosition)) {
-			points.push(pickupPosition)
-		}
+		if (isValidLatLng(pickupPosition)) points.push(pickupPosition)
 		if (isValidLatLng(snappedVanPosition)) {
 			points.push(snappedVanPosition)
 		} else if (isValidLatLng(vanPosition)) {
@@ -324,82 +287,42 @@ export default function LiveTripMap({
 	const effectiveVanPosition = isValidLatLng(snappedVanPosition) ? snappedVanPosition : vanPosition
 
 	const plannedRouteGeoJson = useMemo(() => {
-		if (!showRoute || !Array.isArray(plannedRoute) || plannedRoute.length < 2) {
-			return null
-		}
-
+		if (!showRoute || !Array.isArray(plannedRoute) || plannedRoute.length < 2) return null
 		const coordinates = plannedRoute
 			.filter((point) => isValidLatLng(point))
 			.map((point) => toLngLat(point))
-
-		if (coordinates.length < 2) {
-			return null
-		}
-
+		if (coordinates.length < 2) return null
 		return {
 			type: 'Feature',
 			properties: {},
-			geometry: {
-				type: 'LineString',
-				coordinates,
-			},
+			geometry: { type: 'LineString', coordinates },
 		}
 	}, [plannedRoute, showRoute])
 
 	const routeGeoJson = useMemo(() => {
-		if (plannedRouteGeoJson) {
-			return plannedRouteGeoJson
-		}
-
-		if (!showRoute || routePath.length < 2) {
-			return null
-		}
-
+		if (plannedRouteGeoJson) return plannedRouteGeoJson
+		if (!showRoute || routePath.length < 2) return null
 		return {
 			type: 'Feature',
 			properties: {},
-			geometry: {
-				type: 'LineString',
-				coordinates: routePath,
-			},
+			geometry: { type: 'LineString', coordinates: routePath },
 		}
 	}, [plannedRouteGeoJson, routePath, showRoute])
 
-	const routeLayerStyle = useMemo(() => {
-		if (!isRouteFallback) {
-			return ROUTE_LAYER_STYLE
-		}
-
-		return {
-			...ROUTE_LAYER_STYLE,
-			paint: {
-				...ROUTE_LAYER_STYLE.paint,
-				'line-dasharray': [2, 1.5],
-			},
-		}
-	}, [isRouteFallback])
-
 	const routeBoundsPoints = useMemo(() => {
-		if (!Array.isArray(plannedRoute) || plannedRoute.length === 0) {
-			return []
-		}
-
+		if (!Array.isArray(plannedRoute) || plannedRoute.length === 0) return []
 		const first = plannedRoute[0]
 		const last = plannedRoute[plannedRoute.length - 1]
 		const points = []
-
-		if (isValidLatLng(first)) {
-			points.push(first)
-		}
-
-		if (isValidLatLng(last)) {
-			points.push(last)
-		}
-
+		if (isValidLatLng(first)) points.push(first)
+		if (isValidLatLng(last)) points.push(last)
 		return points
 	}, [plannedRoute])
 
-	const boundsPoints = useMemo(() => [...validPoints, ...routeBoundsPoints], [routeBoundsPoints, validPoints])
+	const boundsPoints = useMemo(
+		() => [...validPoints, ...routeBoundsPoints],
+		[routeBoundsPoints, validPoints],
+	)
 
 	const mapCenter = Array.isArray(center) ? center : boundsPoints[0] || DEFAULT_CENTER
 	const initialViewState = useMemo(
@@ -426,117 +349,91 @@ export default function LiveTripMap({
 					}
 					return
 				} catch (error) {
-					if (isRateLimitError(error) || isServiceUnavailableError(error)) {
-						break
-					}
-
-					// Try next profile.
+					if (isRateLimitError(error) || isServiceUnavailableError(error)) break
 				}
 			}
-
-			if (!resolved) {
-				setSnappedVanPosition(vanPosition)
-			}
+			if (!resolved) setSnappedVanPosition(vanPosition)
 		}
 
 		resolveSnappedPosition()
-
-		return () => {
-			abortController.abort()
-		}
+		return () => abortController.abort()
 	}, [routeMode, vanPosition])
 
 	useEffect(() => {
-		if (!showRoute) {
-			setRoutePath([])
+		if (debounceTimerRef.current) {
+			clearTimeout(debounceTimerRef.current)
+		}
+
+		if (!showRoute || plannedRouteGeoJson) {
 			setIsRouteLoading(false)
-			setIsRouteFallback(false)
 			return undefined
 		}
 
-		if (plannedRouteGeoJson) {
+		if (
+			!isValidLatLng(pickupPosition) ||
+			!isValidLatLng(effectiveVanPosition) ||
+			isSameRoutePoint(pickupPosition, effectiveVanPosition) ||
+			routeMode !== 'road'
+		) {
 			setRoutePath([])
 			setIsRouteLoading(false)
-			setIsRouteFallback(false)
 			return undefined
 		}
 
-		if (!isValidLatLng(pickupPosition) || !isValidLatLng(effectiveVanPosition)) {
-			setRoutePath([])
-			setIsRouteLoading(false)
-			setIsRouteFallback(false)
-			return undefined
-		}
+		// Debounce — wait for position to settle before firing a route request
+		debounceTimerRef.current = setTimeout(() => {
+			const abortController = new AbortController()
+			setIsRouteLoading(true)
 
-		if (isSameRoutePoint(pickupPosition, effectiveVanPosition)) {
-			setRoutePath([])
-			setIsRouteLoading(false)
-			setIsRouteFallback(false)
-			return undefined
-		}
+			fetchRoadPath(pickupPosition, effectiveVanPosition, abortController.signal)
+				.then((path) => {
+					if (path && path.length > 1) {
+						// Only update if the new path is a real road route
+						setRoutePath(path)
+					}
+					setIsRouteLoading(false)
+				})
+				.catch((error) => {
+					if (!abortController.signal.aborted) {
+						// Keep the previous road route displayed — do NOT replace with
+						// a straight-line fallback. Just quietly stop the loading state.
+						console.warn('Route fetch failed, keeping previous route:', error?.message)
+					}
+					setIsRouteLoading(false)
+				})
 
-		if (routeMode !== 'road') {
-			setRoutePath([])
-			setIsRouteLoading(false)
-			setIsRouteFallback(false)
-			return undefined
-		}
-
-		const abortController = new AbortController()
-		setIsRouteLoading(true)
-		setIsRouteFallback(false)
-
-		fetchRoadPath(pickupPosition, effectiveVanPosition, abortController.signal)
-			.then((path) => {
-				setRoutePath(path)
-				setIsRouteLoading(false)
-				setIsRouteFallback(false)
-			})
-			.catch(() => {
-				setRoutePath(buildGridFallbackPath(pickupPosition, effectiveVanPosition))
-				setIsRouteLoading(false)
-				setIsRouteFallback(true)
-			})
+			return () => abortController.abort()
+		}, ROUTE_REQUEST_DEBOUNCE_MS)
 
 		return () => {
-			setIsRouteLoading(false)
-			abortController.abort()
+			if (debounceTimerRef.current) {
+				clearTimeout(debounceTimerRef.current)
+			}
 		}
 	}, [effectiveVanPosition, pickupPosition, plannedRouteGeoJson, routeMode, showRoute])
 
 	useEffect(() => {
-		if (!isMapLoaded || !mapRef.current) {
-			return
-		}
+		if (!isMapLoaded || !mapRef.current) return
 
 		mapRef.current.resize()
 
-		if (userHasAdjustedCameraRef.current) {
-			return
-		}
-
-		if (boundsPoints.length === 0) {
-			return
-		}
+		if (userHasAdjustedCameraRef.current || boundsPoints.length === 0) return
 
 		if (boundsPoints.length === 1) {
-			const target = boundsPoints[0]
-			mapRef.current.flyTo({ center: toLngLat(target), zoom: 15, duration: 900 })
+			mapRef.current.flyTo({ center: toLngLat(boundsPoints[0]), zoom: 15, duration: 900 })
 			hasAutoFramedRef.current = true
 			return
 		}
 
 		const latitudes = boundsPoints.map((point) => point[0])
 		const longitudes = boundsPoints.map((point) => point[1])
-		const southWest = [Math.min(...longitudes), Math.min(...latitudes)]
-		const northEast = [Math.max(...longitudes), Math.max(...latitudes)]
-
-		mapRef.current.fitBounds([southWest, northEast], {
-			padding: 58,
-			maxZoom: 16,
-			duration: 900,
-		})
-
+		mapRef.current.fitBounds(
+			[
+				[Math.min(...longitudes), Math.min(...latitudes)],
+				[Math.max(...longitudes), Math.max(...latitudes)],
+			],
+			{ padding: 58, maxZoom: 16, duration: 900 },
+		)
 		hasAutoFramedRef.current = true
 	}, [boundsPoints, isMapLoaded])
 
@@ -548,34 +445,26 @@ export default function LiveTripMap({
 				mapStyle={MAP_STYLE}
 				initialViewState={initialViewState}
 				onLoad={() => setIsMapLoaded(true)}
-				onDragStart={() => {
-					if (hasAutoFramedRef.current) {
-						userHasAdjustedCameraRef.current = true
-					}
-				}}
-				onZoomStart={() => {
-					if (hasAutoFramedRef.current) {
-						userHasAdjustedCameraRef.current = true
-					}
-				}}
-				onRotateStart={() => {
-					if (hasAutoFramedRef.current) {
-						userHasAdjustedCameraRef.current = true
-					}
-				}}
+				onDragStart={() => { if (hasAutoFramedRef.current) userHasAdjustedCameraRef.current = true }}
+				onZoomStart={() => { if (hasAutoFramedRef.current) userHasAdjustedCameraRef.current = true }}
+				onRotateStart={() => { if (hasAutoFramedRef.current) userHasAdjustedCameraRef.current = true }}
 				attributionControl={true}
 				reuseMaps={true}
 				className="trip-map__container"
 			>
 				{routeGeoJson ? (
 					<Source id="trip-route-source" type="geojson" data={routeGeoJson}>
-						<Layer {...routeLayerStyle} />
+						<Layer {...ROUTE_LAYER_STYLE} />
 					</Source>
 				) : null}
 
 				{isValidLatLng(pickupPosition) ? (
 					<Marker latitude={pickupPosition[0]} longitude={pickupPosition[1]} anchor="center">
-						<button type="button" className="trip-map-marker trip-map-marker--pickup" onClick={() => setShowPickupPopup((current) => !current)}>
+						<button
+							type="button"
+							className="trip-map-marker trip-map-marker--pickup"
+							onClick={() => setShowPickupPopup((current) => !current)}
+						>
 							<span>P</span>
 						</button>
 					</Marker>
@@ -595,7 +484,11 @@ export default function LiveTripMap({
 
 				{isValidLatLng(effectiveVanPosition) ? (
 					<Marker latitude={effectiveVanPosition[0]} longitude={effectiveVanPosition[1]} anchor="center">
-						<button type="button" className="trip-map-marker trip-map-marker--van" onClick={() => setShowVanPopup((current) => !current)}>
+						<button
+							type="button"
+							className="trip-map-marker trip-map-marker--van"
+							onClick={() => setShowVanPopup((current) => !current)}
+						>
 							<span>V</span>
 						</button>
 					</Marker>
@@ -614,9 +507,8 @@ export default function LiveTripMap({
 				) : null}
 			</Map>
 
-			{showRoute && isRouteLoading ? <div className="trip-map__status">Refreshing road route...</div> : null}
-			{showRoute && !isRouteLoading && isRouteFallback ? (
-				<div className="trip-map__status">Road routing unavailable, showing fallback guide line.</div>
+			{showRoute && isRouteLoading ? (
+				<div className="trip-map__status">Refreshing road route...</div>
 			) : null}
 		</div>
 	)
