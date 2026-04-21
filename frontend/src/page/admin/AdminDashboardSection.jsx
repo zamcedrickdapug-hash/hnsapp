@@ -13,7 +13,7 @@ function formatDate(dateValue) {
   return new Date(dateValue).toLocaleString()
 }
 
-export default function AdminDashboardSection({ locations, loading, error, onRefresh }) {
+export default function AdminDashboardSection({ locations, loading, error, onRefresh, socketConnected = false }) {
   const mapRef = useRef(null)
   const [selectedLocationId, setSelectedLocationId] = useState('')
 
@@ -73,6 +73,9 @@ export default function AdminDashboardSection({ locations, loading, error, onRef
         <div>
           <h2>Driver World Map</h2>
           <p>Track real-time location of all active drivers and inspect trip context.</p>
+          <p className="feedback" style={{ marginTop: 6 }}>
+            Live: <strong>{socketConnected ? 'Connected' : 'Disconnected'}</strong>
+          </p>
         </div>
 
         <button type="button" onClick={onRefresh} disabled={loading}>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { io } from 'socket.io-client'
 import { apiFetch } from '../../api'
 import AdminApplySection from './AdminApplySection'
 import AdminDashboardSection from './AdminDashboardSection'
@@ -14,6 +15,7 @@ const defaultUserFilters = {
 
 export default function AdminPanel({ token, user, onLogout }) {
   const [activeSection, setActiveSection] = useState('dashboard')
+  const [socketConnected, setSocketConnected] = useState(false)
 
   const [registrations, setRegistrations] = useState([])
   const [statusFilter, setStatusFilter] = useState('pending')
@@ -171,6 +173,55 @@ export default function AdminPanel({ token, user, onLogout }) {
     }
   }, [activeSection, loadDriverLocations])
 
+  useEffect(() => {
+    if (!token || activeSection !== 'dashboard') {
+      return undefined
+    }
+
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || window.location.origin
+    const socket = io(socketUrl, {
+      path: '/socket.io',
+      auth: { token },
+      transports: ['websocket', 'polling'],
+    })
+
+    const handleConnect = () => setSocketConnected(true)
+    const handleDisconnect = () => setSocketConnected(false)
+
+    socket.on('connect', handleConnect)
+    socket.on('disconnect', handleDisconnect)
+
+    socket.on('driver:location-updated', (payload) => {
+      const driverId = String(payload?.driverId || '')
+      const location = payload?.location
+      if (!driverId || !location) return
+
+      setLocations((current) => {
+        const next = Array.isArray(current) ? [...current] : []
+        const index = next.findIndex((item) => String(item.driverId) === driverId)
+        const patch = {
+          driverId,
+          ...(payload?.requestId ? { requestId: String(payload.requestId) } : {}),
+          ...(payload?.tripStatus ? { tripStatus: payload.tripStatus } : {}),
+          location,
+        }
+
+        if (index >= 0) {
+          next[index] = { ...next[index], ...patch }
+          return next
+        }
+
+        return next
+      })
+    })
+
+    return () => {
+      socket.off('connect', handleConnect)
+      socket.off('disconnect', handleDisconnect)
+      socket.disconnect()
+    }
+  }, [activeSection, token])
+
   const handleUpdateRegistrationStatus = async (registrationId, nextStatus) => {
     setRegistrationActioningId(registrationId)
     setRegistrationError('')
@@ -309,6 +360,7 @@ export default function AdminPanel({ token, user, onLogout }) {
             loading={locationsLoading}
             error={locationsError}
             onRefresh={() => loadDriverLocations()}
+            socketConnected={socketConnected}
           />
         ) : null}
 

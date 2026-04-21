@@ -311,6 +311,50 @@ router.patch('/van-requests/:requestId/requester-location', requireParent, async
   }
 });
 
+router.patch('/van-requests/:requestId/pickup-confirm', requireParent, async (req, res) => {
+  try {
+    const rideRequest = await VanRequest.findOne({
+      _id: req.params.requestId,
+      parent: req.user._id,
+    });
+
+    if (!rideRequest) {
+      return res.status(404).json({ message: 'Ride request not found.' });
+    }
+
+    if (!['accepted', 'arrived'].includes(rideRequest.status)) {
+      return res.status(409).json({ message: 'Pickup confirmation is only allowed for active pickup trips.' });
+    }
+
+    if (!rideRequest.pickupConfirmedByParentAt) {
+      rideRequest.pickupConfirmedByParentAt = new Date();
+      await rideRequest.save();
+    }
+
+    const populatedRequest = await VanRequest.findById(rideRequest._id)
+      .populate('parent', 'fullName phone')
+      .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber');
+
+    const io = getIo();
+    if (io) {
+      const eventPayload = { request: populatedRequest };
+      io.to(buildTripRoomName(rideRequest._id)).emit('trip:request-updated', eventPayload);
+      io.to(buildUserRoomName(req.user._id)).emit('trip:request-updated', eventPayload);
+
+      if (populatedRequest?.driver?._id) {
+        io.to(buildUserRoomName(populatedRequest.driver._id)).emit('trip:request-updated', eventPayload);
+      }
+    }
+
+    return res.status(200).json({
+      message: 'Pickup confirmation recorded.',
+      request: populatedRequest,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: 'Unable to confirm pickup right now.' });
+  }
+});
+
 router.get('/van-requests', requireParent, async (req, res) => {
   try {
     const requests = await VanRequest.find({ parent: req.user._id })

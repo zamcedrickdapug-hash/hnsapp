@@ -139,11 +139,24 @@ router.patch('/requests/:requestId/location', async (req, res) => {
       return res.status(409).json({ message: 'Location updates are only allowed for active requests.' });
     }
 
-    rideRequest.liveLocation = {
+    const nextLiveLocation = {
       latitude,
       longitude,
       updatedAt: new Date(),
     };
+
+    await User.updateOne(
+      { _id: req.user._id },
+      {
+        $set: {
+          lastKnownLocation: {
+            ...nextLiveLocation,
+          },
+        },
+      }
+    );
+
+    rideRequest.liveLocation = nextLiveLocation;
 
     const hasRequesterLocation =
       Number.isFinite(Number(rideRequest.requesterLocation?.latitude)) &&
@@ -158,24 +171,64 @@ router.patch('/requests/:requestId/location', async (req, res) => {
 
     await rideRequest.save();
 
+    await VanRequest.updateMany(
+      {
+        driver: req.user._id,
+        _id: { $ne: rideRequest._id },
+        status: { $in: ['accepted', 'arrived', 'picked_up'] },
+      },
+      {
+        $set: {
+          liveLocation: nextLiveLocation,
+        },
+      }
+    );
+
     const io = getIo();
     if (io) {
+      const otherActiveRequests = await VanRequest.find({
+        driver: req.user._id,
+        _id: { $ne: rideRequest._id },
+        status: { $in: ['accepted', 'arrived', 'picked_up'] },
+      }).select('_id parent status');
+
       io.to(buildTripRoomName(rideRequest._id)).emit('trip:location-updated', {
         requestId: String(rideRequest._id),
-        liveLocation: rideRequest.liveLocation,
+        liveLocation: nextLiveLocation,
         status: rideRequest.status,
       });
 
       io.to(buildUserRoomName(rideRequest.parent)).emit('trip:location-updated', {
         requestId: String(rideRequest._id),
-        liveLocation: rideRequest.liveLocation,
+        liveLocation: nextLiveLocation,
         status: rideRequest.status,
       });
 
       io.to(buildUserRoomName(req.user._id)).emit('trip:location-updated', {
         requestId: String(rideRequest._id),
-        liveLocation: rideRequest.liveLocation,
+        liveLocation: nextLiveLocation,
         status: rideRequest.status,
+      });
+
+      io.to('admins').emit('driver:location-updated', {
+        driverId: String(req.user._id),
+        requestId: String(rideRequest._id),
+        tripStatus: rideRequest.status,
+        location: nextLiveLocation,
+      });
+
+      otherActiveRequests.forEach((item) => {
+        io.to(buildTripRoomName(item._id)).emit('trip:location-updated', {
+          requestId: String(item._id),
+          liveLocation: nextLiveLocation,
+          status: item.status,
+        });
+
+        io.to(buildUserRoomName(item.parent)).emit('trip:location-updated', {
+          requestId: String(item._id),
+          liveLocation: nextLiveLocation,
+          status: item.status,
+        });
       });
     }
 

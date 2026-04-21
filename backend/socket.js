@@ -77,6 +77,10 @@ const initSocketServer = (server) => {
   });
 
   ioInstance.on('connection', (socket) => {
+    if (socket.user?.role === 'admin') {
+      socket.join('admins');
+    }
+
     socket.on('trip:subscribe', async (payload = {}, ack) => {
       try {
         const requestId = payload?.requestId;

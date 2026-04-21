@@ -232,62 +232,63 @@ router.delete('/users/:userId', requireAdmin, async (req, res) => {
 });
 
 router.get('/driver-locations', requireAdmin, async (req, res) => {
+  const drivers = await User.find({ role: 'driver', status: 'approved' })
+    .select('fullName email phone status accountState driver.vehicleType driver.plateNumber lastKnownLocation')
+    .sort({ fullName: 1 });
+
   const requestsWithLocation = await VanRequest.find({
     driver: { $ne: null },
     liveLocation: { $ne: null },
+    status: { $in: ['accepted', 'arrived', 'picked_up'] },
   })
-    .populate('driver', 'fullName email phone status accountState driver.vehicleType driver.plateNumber')
+    .select('driver status liveLocation studentName schoolName updatedAt')
     .sort({ 'liveLocation.updatedAt': -1, updatedAt: -1 });
 
-  const seenDriverIds = new Set();
-  const locations = [];
-
+  const latestRequestByDriverId = new Map();
   for (const item of requestsWithLocation) {
-    const driver = item.driver;
-
-    if (!driver?._id) {
+    const driverId = String(item.driver || '');
+    if (!driverId || latestRequestByDriverId.has(driverId)) {
       continue;
     }
-
-    const driverId = String(driver._id);
-    if (seenDriverIds.has(driverId)) {
-      continue;
-    }
-
-    const latitude = Number(item.liveLocation?.latitude);
-    const longitude = Number(item.liveLocation?.longitude);
-
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-      continue;
-    }
-
-    seenDriverIds.add(driverId);
-
-    locations.push({
-      driverId,
-      driverName: driver.fullName,
-      driverEmail: driver.email,
-      phone: driver.phone,
-      status: driver.status,
-      accountState: driver.accountState || 'active',
-      vehicleType: driver.driver?.vehicleType || '',
-      plateNumber: driver.driver?.plateNumber || '',
-      requestId: item._id,
-      tripStatus: item.status,
-      studentName: item.studentName,
-      schoolName: item.schoolName,
-      location: {
-        latitude,
-        longitude,
-        updatedAt: item.liveLocation?.updatedAt || item.updatedAt,
-      },
-    });
+    latestRequestByDriverId.set(driverId, item);
   }
 
-  return res.status(200).json({
-    locations,
-    total: locations.length,
-  });
+  const locations = drivers
+    .map((driver) => {
+      const driverId = String(driver._id);
+      const latestTrip = latestRequestByDriverId.get(driverId) || null;
+      const fallbackLocation = driver.lastKnownLocation;
+      const preferredLocation = latestTrip?.liveLocation || fallbackLocation;
+
+      const latitude = Number(preferredLocation?.latitude);
+      const longitude = Number(preferredLocation?.longitude);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        return null;
+      }
+
+      return {
+        driverId,
+        driverName: driver.fullName,
+        driverEmail: driver.email,
+        phone: driver.phone,
+        status: driver.status,
+        accountState: driver.accountState || 'active',
+        vehicleType: driver.driver?.vehicleType || '',
+        plateNumber: driver.driver?.plateNumber || '',
+        requestId: latestTrip?._id || null,
+        tripStatus: latestTrip?.status || null,
+        studentName: latestTrip?.studentName || '',
+        schoolName: latestTrip?.schoolName || '',
+        location: {
+          latitude,
+          longitude,
+          updatedAt: preferredLocation?.updatedAt || latestTrip?.updatedAt,
+        },
+      };
+    })
+    .filter(Boolean);
+
+  return res.status(200).json({ locations, total: locations.length });
 });
 
 module.exports = router;

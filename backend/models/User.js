@@ -145,6 +145,26 @@ const pushSubscriptionSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const lastKnownLocationSchema = new mongoose.Schema(
+  {
+    latitude: {
+      type: Number,
+      min: -90,
+      max: 90,
+    },
+    longitude: {
+      type: Number,
+      min: -180,
+      max: 180,
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+);
+
 const userSchema = new mongoose.Schema(
   {
     role: {
@@ -209,6 +229,10 @@ const userSchema = new mongoose.Schema(
     pushSubscriptions: {
       type: [pushSubscriptionSchema],
       default: [],
+    },
+    lastKnownLocation: {
+      type: lastKnownLocationSchema,
+      default: null,
     },
   },
   {

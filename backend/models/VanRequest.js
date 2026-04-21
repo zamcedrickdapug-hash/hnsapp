@@ -104,6 +104,14 @@ const vanRequestSchema = new mongoose.Schema(
       type: requesterLocationSchema,
       default: null,
     },
+    pickupConfirmedByParentAt: {
+      type: Date,
+      default: null,
+    },
+    pickedUpAt: {
+      type: Date,
+      default: null,
+    },
     acceptedAt: {
       type: Date,
       default: null,
