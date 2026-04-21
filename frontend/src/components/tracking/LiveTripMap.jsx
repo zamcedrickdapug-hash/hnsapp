@@ -118,7 +118,7 @@ function markOsrmUnavailable() {
 	osrmBackoffUntil = Math.max(osrmBackoffUntil, Date.now() + OSRM_UNAVAILABLE_COOLDOWN_MS)
 }
 
-async function fetchWithTimeout(endpoint, signal) {
+async function fetchWithTimeout(endpoint, signal, options = {}) {
 	const timeoutController = new AbortController()
 	const timeoutId = setTimeout(() => timeoutController.abort(), OSRM_REQUEST_TIMEOUT_MS)
 
@@ -128,7 +128,7 @@ async function fetchWithTimeout(endpoint, signal) {
 	}
 
 	try {
-		return await fetch(endpoint, { signal: timeoutController.signal })
+		return await fetch(endpoint, { ...options, signal: timeoutController.signal })
 	} catch (error) {
 		if (error?.name === 'AbortError' || error instanceof TypeError) {
 			markOsrmUnavailable()
@@ -223,14 +223,14 @@ async function fetchRoadPathViaBackend(pickupPosition, vanPosition, signal) {
 	const vanLat = Number(vanPosition[0])
 	const vanLng = Number(vanPosition[1])
 
-	const params = new URLSearchParams({
-		pickupLat: String(pickupLat),
-		pickupLng: String(pickupLng),
-		vanLat: String(vanLat),
-		vanLng: String(vanLng),
+	const response = await fetchWithTimeout('/api/routing/route', signal, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({
+			start: [pickupLat, pickupLng],
+			end: [vanLat, vanLng],
+		}),
 	})
-
-	const response = await fetchWithTimeout(`/api/routing/route?${params.toString()}`, signal)
 
 	if (!response.ok) {
 		if (response.status === 429) {
@@ -247,7 +247,7 @@ async function fetchRoadPathViaBackend(pickupPosition, vanPosition, signal) {
 	}
 
 	const payload = await response.json()
-	const coordinates = payload?.coordinates
+	const coordinates = payload?.route?.coordinates
 
 	if (!Array.isArray(coordinates) || coordinates.length < 2) {
 		throw new Error('No route geometry returned from backend')

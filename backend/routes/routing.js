@@ -58,27 +58,39 @@ function osrmFetch(path) {
     })
 }
 
-// GET /api/routing/route?pickupLat=&pickupLng=&vanLat=&vanLng=
-router.get('/route', async (req, res) => {
-    const pickupLat = Number(req.query.pickupLat)
-    const pickupLng = Number(req.query.pickupLng)
-    const vanLat    = Number(req.query.vanLat)
-    const vanLng    = Number(req.query.vanLng)
+// POST /api/routing/route
+// Body: { "start": [lat, lng], "end": [lat, lng] }
+router.post('/route', async (req, res) => {
+    const { start, end } = req.body
+
+    if (!Array.isArray(start) || !Array.isArray(end)) {
+        return res.status(400).json({ message: 'start and end coordinates (as [lat, lng] arrays) are required.' })
+    }
+
+    const pickupLat = Number(start[0])
+    const pickupLng = Number(start[1])
+    const vanLat = Number(end[0])
+    const vanLng = Number(end[1])
 
     if (
         !Number.isFinite(pickupLat) || !Number.isFinite(pickupLng) ||
-        !Number.isFinite(vanLat)    || !Number.isFinite(vanLng)
+        !Number.isFinite(vanLat) || !Number.isFinite(vanLng)
     ) {
-        return res.status(400).json({ message: 'Valid pickupLat, pickupLng, vanLat, vanLng are required.' })
+        return res.status(400).json({ message: 'Valid start and end coordinates are required.' })
     }
 
     if (isSameRoutePoint(pickupLat, pickupLng, vanLat, vanLng)) {
         return res.status(200).json({
-            coordinates: [
-                [pickupLng, pickupLat],
-                [vanLng, vanLat],
-            ],
-            profile: 'stationary',
+            success: true,
+            route: {
+                coordinates: [
+                    [pickupLng, pickupLat],
+                    [vanLng, vanLat],
+                ],
+                distance: 0,
+                duration: 0,
+                profile: 'stationary',
+            }
         })
     }
 
@@ -91,6 +103,8 @@ router.get('/route', async (req, res) => {
             const path = `/route/v1/${profile}/${pickupLng},${pickupLat};${vanLng},${vanLat}?overview=full&geometries=geojson`
             const payload = await osrmFetch(path)
             const coordinates = payload?.routes?.[0]?.geometry?.coordinates
+            const distance = payload?.routes?.[0]?.distance
+            const duration = payload?.routes?.[0]?.duration
 
             if (!Array.isArray(coordinates) || coordinates.length < 2) {
                 continue
@@ -104,7 +118,15 @@ router.get('/route', async (req, res) => {
                 continue
             }
 
-            return res.status(200).json({ coordinates: cleaned, profile })
+            return res.status(200).json({
+                success: true,
+                route: {
+                    coordinates: cleaned,
+                    distance: distance || 0,
+                    duration: duration || 0,
+                    profile
+                }
+            })
         } catch (error) {
             if (error.code === 'RATE_LIMIT') {
                 rateLimitBackoffUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS
