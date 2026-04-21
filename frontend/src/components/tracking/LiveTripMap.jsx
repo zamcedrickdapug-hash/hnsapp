@@ -9,13 +9,15 @@ const DEFAULT_ZOOM = 14
 const MAP_STYLE = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json'
 const OSRM_PROFILES = ['driving']
 const ROUTE_LAYER_ID = 'trip-road-route'
-const OSRM_RATE_LIMIT_COOLDOWN_MS = 30000
+const OSRM_RATE_LIMIT_COOLDOWN_MS = 60000
 const OSRM_UNAVAILABLE_COOLDOWN_MS = 120000
 const OSRM_REQUEST_TIMEOUT_MS = 8000
+const ROUTE_REQUEST_DEBOUNCE_MS = 2000
 const ENABLE_OSRM_NEAREST_SNAP = false
 const MIN_ROUTE_DISTANCE_DEGREES = 0.00005
 
 let osrmBackoffUntil = 0
+const requestCache = new Map()
 
 const ROUTE_LAYER_STYLE = {
 	id: ROUTE_LAYER_ID,
@@ -213,7 +215,7 @@ async function fetchRoadPathByProfile(pickupPosition, vanPosition, profile, sign
 		.map(([longitude, latitude]) => [Number(longitude), Number(latitude)])
 }
 
-async function fetchRoadPathViaBackend(pickupPosition, vanPosition, signal) {
+async function fetchRoadPathViaBackend(pickupPosition, vanPosition, signal, maxRetries = 5) {
 	if (isSameRoutePoint(pickupPosition, vanPosition)) {
 		return []
 	}
@@ -223,51 +225,114 @@ async function fetchRoadPathViaBackend(pickupPosition, vanPosition, signal) {
 	const vanLat = Number(vanPosition[0])
 	const vanLng = Number(vanPosition[1])
 
-	const response = await fetchWithTimeout('/api/routing/route', signal, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({
-			start: [pickupLat, pickupLng],
-			end: [vanLat, vanLng],
-		}),
+	const cacheKey = `${pickupLat.toFixed(5)},${pickupLng.toFixed(5)},${vanLat.toFixed(5)},${vanLng.toFixed(5)}`
+
+	// Check if request is already in-flight
+	if (requestCache.has(cacheKey)) {
+		return requestCache.get(cacheKey)
+	}
+
+	// Create a new promise for this request
+	const requestPromise = (async () => {
+		for (let attempt = 0; attempt < maxRetries; attempt++) {
+			if (signal?.aborted) {
+				throw new Error('Request aborted')
+			}
+
+			try {
+				const response = await fetchWithTimeout('/api/routing/route', signal, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						start: [pickupLat, pickupLng],
+						end: [vanLat, vanLng],
+					}),
+				})
+
+				if (!response.ok) {
+					if (response.status === 429) {
+						markOsrmRateLimited()
+						// More aggressive retry with longer waits
+						if (attempt < maxRetries - 1) {
+							const waitTime = Math.min(30000, 3000 * Math.pow(1.5, attempt))
+							await new Promise(resolve => setTimeout(resolve, waitTime))
+							continue
+						}
+						throw createRateLimitError()
+					}
+
+					if (response.status >= 500) {
+						markOsrmUnavailable()
+						// Retry on server error
+						if (attempt < maxRetries - 1) {
+							const waitTime = 2000 * (attempt + 1)
+							await new Promise(resolve => setTimeout(resolve, waitTime))
+							continue
+						}
+						throw createServiceUnavailableError()
+					}
+
+					throw new Error('Backend routing request failed')
+				}
+
+				const payload = await response.json()
+				const coordinates = payload?.route?.coordinates
+
+				if (!Array.isArray(coordinates) || coordinates.length < 2) {
+					throw new Error('No route geometry returned from backend')
+				}
+
+				return coordinates
+					.filter((point) => Array.isArray(point) && point.length >= 2)
+					.map(([longitude, latitude]) => [Number(longitude), Number(latitude)])
+			} catch (error) {
+				if (attempt === maxRetries - 1) {
+					throw error
+				}
+				// Retry on timeout or network error
+				if (isServiceUnavailableError(error) || error?.message?.includes('timed out')) {
+					const waitTime = 2000 * (attempt + 1)
+					await new Promise(resolve => setTimeout(resolve, waitTime))
+				} else if (!isRateLimitError(error)) {
+					throw error
+				}
+			}
+		}
+	})()
+
+	// Cache the promise
+	requestCache.set(cacheKey, requestPromise)
+
+	// Clear cache after request completes
+	requestPromise.finally(() => {
+		setTimeout(() => requestCache.delete(cacheKey), 2000)
 	})
 
-	if (!response.ok) {
-		if (response.status === 429) {
-			markOsrmRateLimited()
-			throw createRateLimitError()
-		}
-
-		if (response.status >= 500) {
-			markOsrmUnavailable()
-			throw createServiceUnavailableError()
-		}
-
-		throw new Error('Backend routing request failed')
-	}
-
-	const payload = await response.json()
-	const coordinates = payload?.route?.coordinates
-
-	if (!Array.isArray(coordinates) || coordinates.length < 2) {
-		throw new Error('No route geometry returned from backend')
-	}
-
-	return coordinates
-		.filter((point) => Array.isArray(point) && point.length >= 2)
-		.map(([longitude, latitude]) => [Number(longitude), Number(latitude)])
+	return requestPromise
 }
 
 async function fetchRoadPath(pickupPosition, vanPosition, signal) {
-	try {
-		const backendPath = await fetchRoadPathViaBackend(pickupPosition, vanPosition, signal)
-		if (backendPath.length > 1) {
-			return backendPath
+	// Always try backend first with multiple retries
+	for (let backendAttempt = 0; backendAttempt < 2; backendAttempt++) {
+		try {
+			const backendPath = await fetchRoadPathViaBackend(pickupPosition, vanPosition, signal)
+			if (backendPath.length > 1) {
+				return backendPath
+			}
+		} catch (error) {
+			if (signal?.aborted) {
+				throw error
+			}
+			// Only try OSRM if backend fails catastrophically
+			if (backendAttempt < 1 && isRateLimitError(error)) {
+				// Wait longer and retry backend
+				await new Promise(resolve => setTimeout(resolve, 15000))
+				continue
+			}
 		}
-	} catch {
-		// Fallback to direct OSRM call when backend route endpoint is unavailable.
 	}
 
+	// Try direct OSRM as last resort
 	for (const profile of OSRM_PROFILES) {
 		try {
 			const path = await fetchRoadPathByProfile(pickupPosition, vanPosition, profile, signal)
@@ -301,6 +366,7 @@ export default function LiveTripMap({
 	const mapRef = useRef(null)
 	const hasAutoFramedRef = useRef(false)
 	const userHasAdjustedCameraRef = useRef(false)
+	const debounceTimerRef = useRef(null)
 	const [isMapLoaded, setIsMapLoaded] = useState(false)
 	const [showPickupPopup, setShowPickupPopup] = useState(false)
 	const [showVanPopup, setShowVanPopup] = useState(false)
@@ -514,43 +580,55 @@ export default function LiveTripMap({
 			return undefined
 		}
 
-		const abortController = new AbortController()
-		setIsRouteLoading(true)
-		setIsRouteFallback(false)
+		// Debounce route calculation to prevent excessive requests
+		if (debounceTimerRef.current) {
+			clearTimeout(debounceTimerRef.current)
+		}
 
-		fetchRoadPath(pickupPosition, effectiveVanPosition, abortController.signal)
-			.then(async (path) => {
-				setRoutePath(path)
-				setIsRouteLoading(false)
-				setIsRouteFallback(false)
+		debounceTimerRef.current = setTimeout(() => {
+			const abortController = new AbortController()
+			setIsRouteLoading(true)
+			setIsRouteFallback(false)
 
-				// Save route to database if requestId is available
-				if (requestId && path.length > 1) {
-					try {
-						await fetch(`/api/routing/save/${requestId}`, {
-							method: 'POST',
-							headers: { 'Content-Type': 'application/json' },
-							body: JSON.stringify({
-								coordinates: path,
-								distance: 0,
-								duration: 0,
-								profile: 'driving',
-							}),
-						})
-					} catch (error) {
-						// Silently fail - route is already displayed
+			fetchRoadPath(pickupPosition, effectiveVanPosition, abortController.signal)
+				.then(async (path) => {
+					if (path && path.length > 1) {
+						setRoutePath(path)
+						setIsRouteFallback(false)
+
+						// Save route to database if requestId is available
+						if (requestId) {
+							try {
+								await fetch(`/api/routing/save/${requestId}`, {
+									method: 'POST',
+									headers: { 'Content-Type': 'application/json' },
+									body: JSON.stringify({
+										coordinates: path,
+										distance: 0,
+										duration: 0,
+										profile: 'driving',
+									}),
+								})
+							} catch (error) {
+								// Silently fail - route is already displayed
+							}
+						}
 					}
-				}
-			})
-			.catch(() => {
-				setRoutePath(buildGridFallbackPath(pickupPosition, effectiveVanPosition))
-				setIsRouteLoading(false)
-				setIsRouteFallback(true)
-			})
+					setIsRouteLoading(false)
+				})
+				.catch((error) => {
+					// Don't show fallback route - just wait or keep previous route
+					console.warn('Route calculation failed, will retry:', error?.message)
+					setIsRouteLoading(false)
+					// Leave route path as-is (either empty or previously loaded route)
+					// Don't set isRouteFallback - this prevents the grid fallback from showing
+				})
+		}, ROUTE_REQUEST_DEBOUNCE_MS)
 
 		return () => {
-			setIsRouteLoading(false)
-			abortController.abort()
+			if (debounceTimerRef.current) {
+				clearTimeout(debounceTimerRef.current)
+			}
 		}
 	}, [effectiveVanPosition, pickupPosition, plannedRouteGeoJson, routeMode, showRoute, isCachedRoute, requestId])
 
