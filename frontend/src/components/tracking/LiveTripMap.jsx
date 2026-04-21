@@ -296,6 +296,7 @@ export default function LiveTripMap({
 	routeMode = 'road',
 	height = 320,
 	className = '',
+	requestId = null,
 }) {
 	const mapRef = useRef(null)
 	const hasAutoFramedRef = useRef(false)
@@ -307,6 +308,7 @@ export default function LiveTripMap({
 	const [routePath, setRoutePath] = useState([])
 	const [isRouteLoading, setIsRouteLoading] = useState(false)
 	const [isRouteFallback, setIsRouteFallback] = useState(false)
+	const [isCachedRoute, setIsCachedRoute] = useState(false)
 
 	const validPoints = useMemo(() => {
 		const points = []
@@ -447,6 +449,30 @@ export default function LiveTripMap({
 	}, [routeMode, vanPosition])
 
 	useEffect(() => {
+		if (!requestId) {
+			return undefined
+		}
+
+		const loadSavedRoute = async () => {
+			try {
+				const response = await fetch(`/api/routing/saved/${requestId}`)
+				if (response.ok) {
+					const data = await response.json()
+					if (data.route?.coordinates && Array.isArray(data.route.coordinates) && data.route.coordinates.length > 1) {
+						setRoutePath(data.route.coordinates)
+						setIsCachedRoute(true)
+						setIsRouteLoading(false)
+					}
+				}
+			} catch (error) {
+				// Silently fail - will recalculate if needed
+			}
+		}
+
+		loadSavedRoute()
+	}, [requestId])
+
+	useEffect(() => {
 		if (!showRoute) {
 			setRoutePath([])
 			setIsRouteLoading(false)
@@ -456,6 +482,12 @@ export default function LiveTripMap({
 
 		if (plannedRouteGeoJson) {
 			setRoutePath([])
+			setIsRouteLoading(false)
+			setIsRouteFallback(false)
+			return undefined
+		}
+
+		if (isCachedRoute) {
 			setIsRouteLoading(false)
 			setIsRouteFallback(false)
 			return undefined
@@ -487,10 +519,28 @@ export default function LiveTripMap({
 		setIsRouteFallback(false)
 
 		fetchRoadPath(pickupPosition, effectiveVanPosition, abortController.signal)
-			.then((path) => {
+			.then(async (path) => {
 				setRoutePath(path)
 				setIsRouteLoading(false)
 				setIsRouteFallback(false)
+
+				// Save route to database if requestId is available
+				if (requestId && path.length > 1) {
+					try {
+						await fetch(`/api/routing/save/${requestId}`, {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({
+								coordinates: path,
+								distance: 0,
+								duration: 0,
+								profile: 'driving',
+							}),
+						})
+					} catch (error) {
+						// Silently fail - route is already displayed
+					}
+				}
 			})
 			.catch(() => {
 				setRoutePath(buildGridFallbackPath(pickupPosition, effectiveVanPosition))
@@ -502,7 +552,7 @@ export default function LiveTripMap({
 			setIsRouteLoading(false)
 			abortController.abort()
 		}
-	}, [effectiveVanPosition, pickupPosition, plannedRouteGeoJson, routeMode, showRoute])
+	}, [effectiveVanPosition, pickupPosition, plannedRouteGeoJson, routeMode, showRoute, isCachedRoute, requestId])
 
 	useEffect(() => {
 		if (!isMapLoaded || !mapRef.current) {

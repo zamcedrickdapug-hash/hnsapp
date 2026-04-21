@@ -104,6 +104,28 @@ const vanRequestSchema = new mongoose.Schema(
       type: requesterLocationSchema,
       default: null,
     },
+    routeCoordinates: {
+      type: [[Number]],
+      default: null,
+    },
+    routeMetadata: {
+      distance: {
+        type: Number,
+        default: null,
+      },
+      duration: {
+        type: Number,
+        default: null,
+      },
+      profile: {
+        type: String,
+        default: null,
+      },
+      calculatedAt: {
+        type: Date,
+        default: null,
+      },
+    },
     acceptedAt: {
       type: Date,
       default: null,

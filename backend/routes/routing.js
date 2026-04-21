@@ -1,5 +1,6 @@
 const express = require('express')
 const https = require('https')
+const VanRequest = require('../models/VanRequest')
 
 const router = express.Router()
 
@@ -137,6 +138,73 @@ router.post('/route', async (req, res) => {
     }
 
     return res.status(503).json({ message: 'No road-aligned route could be found.' })
+})
+
+// GET /api/routing/saved/:requestId
+router.get('/saved/:requestId', async (req, res) => {
+    try {
+        const { requestId } = req.params
+        const request = await VanRequest.findById(requestId).select('routeCoordinates routeMetadata')
+
+        if (!request || !request.routeCoordinates) {
+            return res.status(404).json({ message: 'No saved route found.' })
+        }
+
+        return res.status(200).json({
+            success: true,
+            route: {
+                coordinates: request.routeCoordinates,
+                distance: request.routeMetadata?.distance || 0,
+                duration: request.routeMetadata?.duration || 0,
+                profile: request.routeMetadata?.profile || 'driving',
+                cached: true,
+            }
+        })
+    } catch (error) {
+        return res.status(500).json({ message: 'Error retrieving saved route.' })
+    }
+})
+
+// POST /api/routing/save/:requestId
+// Body: { "coordinates": [[lng, lat], ...], "distance": 1000, "duration": 60, "profile": "driving" }
+router.post('/save/:requestId', async (req, res) => {
+    try {
+        const { requestId } = req.params
+        const { coordinates, distance, duration, profile } = req.body
+
+        if (!Array.isArray(coordinates) || coordinates.length < 2) {
+            return res.status(400).json({ message: 'Valid coordinates array is required.' })
+        }
+
+        const request = await VanRequest.findByIdAndUpdate(
+            requestId,
+            {
+                routeCoordinates: coordinates,
+                'routeMetadata.distance': distance || 0,
+                'routeMetadata.duration': duration || 0,
+                'routeMetadata.profile': profile || 'driving',
+                'routeMetadata.calculatedAt': new Date(),
+            },
+            { new: true }
+        ).select('routeCoordinates routeMetadata')
+
+        if (!request) {
+            return res.status(404).json({ message: 'Request not found.' })
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Route saved successfully.',
+            route: {
+                coordinates: request.routeCoordinates,
+                distance: request.routeMetadata?.distance || 0,
+                duration: request.routeMetadata?.duration || 0,
+                profile: request.routeMetadata?.profile || 'driving',
+            }
+        })
+    } catch (error) {
+        return res.status(500).json({ message: 'Error saving route.' })
+    }
 })
 
 module.exports = router
