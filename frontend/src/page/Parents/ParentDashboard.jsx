@@ -636,6 +636,26 @@ export default function ParentDashboard({ token, user, onLogout }) {
 	const requesterCoordinatesText = formatCoordinates(requesterPosition)
 
 	const canPreviewDriver = Boolean(activeRideRequest?.driver)
+	const canConfirmPickedUp = Boolean(activeRideRequest && ['accepted', 'arrived'].includes(activeRideRequest.status))
+	const hasConfirmedPickedUp = Boolean(activeRideRequest?.pickupConfirmedByParentAt)
+
+	const handleConfirmPickedUp = async () => {
+		if (!activeRideRequest?._id) return
+		setError('')
+
+		try {
+			await apiFetch(`/api/parents/van-requests/${activeRideRequest._id}/pickup-confirm`, {
+				method: 'PATCH',
+				headers: {
+					Authorization: `Bearer ${token}`,
+				},
+			})
+
+			await fetchRequests({ silent: true })
+		} catch (requestError) {
+			setError(requestError.message || 'Unable to confirm pickup right now.')
+		}
+	}
 
 	return (
 		<section className={`parent-shell ${isSidebarOpen ? 'sidebar-open' : 'sidebar-collapsed'}`}>
@@ -804,6 +824,14 @@ export default function ParentDashboard({ token, user, onLogout }) {
 									
 									<Button variant="secondary" onClick={() => setShowDriverPreview((current) => !current)} disabled={!canPreviewDriver}>
 										Preview Driver Info
+									</Button>
+
+									<Button
+										variant="secondary"
+										onClick={handleConfirmPickedUp}
+										disabled={!canConfirmPickedUp || hasConfirmedPickedUp}
+									>
+										{hasConfirmedPickedUp ? 'Picked up confirmed' : 'Confirm picked up'}
 									</Button>
 
 									<div className="quick-actions-panel">

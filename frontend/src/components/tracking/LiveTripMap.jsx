@@ -267,6 +267,7 @@ async function fetchRoadPath(pickupPosition, vanPosition, signal) {
 export default function LiveTripMap({
 	center,
 	pickupPosition,
+	pickupPositions = null,
 	vanPosition,
 	plannedRoute = [],
 	showRoute = false,
@@ -281,20 +282,39 @@ export default function LiveTripMap({
 	const [isMapLoaded, setIsMapLoaded] = useState(false)
 	const [showPickupPopup, setShowPickupPopup] = useState(false)
 	const [showVanPopup, setShowVanPopup] = useState(false)
+	const [activePickupPopupId, setActivePickupPopupId] = useState('')
 	const [snappedVanPosition, setSnappedVanPosition] = useState(null)
 	const [routePath, setRoutePath] = useState([])
 	const [isRouteLoading, setIsRouteLoading] = useState(false)
 
+	const normalizedPickupPins = useMemo(() => {
+		if (!Array.isArray(pickupPositions) || pickupPositions.length === 0) {
+			return isValidLatLng(pickupPosition) ? [{ id: 'pickup', position: pickupPosition, label: 'P' }] : []
+		}
+
+		return pickupPositions
+			.map((item) => {
+				const position = item?.position
+				if (!isValidLatLng(position)) return null
+				return {
+					id: String(item?.id || ''),
+					position,
+					label: String(item?.label || 'P'),
+				}
+			})
+			.filter((item) => item && item.id)
+	}, [pickupPosition, pickupPositions])
+
 	const validPoints = useMemo(() => {
 		const points = []
-		if (isValidLatLng(pickupPosition)) points.push(pickupPosition)
+		normalizedPickupPins.forEach((pin) => points.push(pin.position))
 		if (isValidLatLng(snappedVanPosition)) {
 			points.push(snappedVanPosition)
 		} else if (isValidLatLng(vanPosition)) {
 			points.push(vanPosition)
 		}
 		return points
-	}, [pickupPosition, snappedVanPosition, vanPosition])
+	}, [normalizedPickupPins, snappedVanPosition, vanPosition])
 
 	const effectiveVanPosition = isValidLatLng(snappedVanPosition) ? snappedVanPosition : vanPosition
 
@@ -470,29 +490,43 @@ export default function LiveTripMap({
 					</Source>
 				) : null}
 
-				{isValidLatLng(pickupPosition) ? (
-					<Marker latitude={pickupPosition[0]} longitude={pickupPosition[1]} anchor="center">
+				{normalizedPickupPins.map((pin) => (
+					<Marker
+						key={pin.id}
+						latitude={pin.position[0]}
+						longitude={pin.position[1]}
+						anchor="center"
+					>
 						<button
 							type="button"
 							className="trip-map-marker trip-map-marker--pickup"
-							onClick={() => setShowPickupPopup((current) => !current)}
+							onClick={() => {
+								setShowPickupPopup(false)
+								setActivePickupPopupId((current) => (current === pin.id ? '' : pin.id))
+							}}
 						>
-							<span>P</span>
+							<span>{pin.label}</span>
 						</button>
 					</Marker>
-				) : null}
+				))}
 
-				{showPickupPopup && isValidLatLng(pickupPosition) ? (
-					<Popup
-						latitude={pickupPosition[0]}
-						longitude={pickupPosition[1]}
-						anchor="top"
-						closeButton={false}
-						onClose={() => setShowPickupPopup(false)}
-					>
-						Pickup request location
-					</Popup>
-				) : null}
+				{activePickupPopupId
+					? (() => {
+							const pin = normalizedPickupPins.find((item) => item.id === activePickupPopupId)
+							if (!pin) return null
+							return (
+								<Popup
+									latitude={pin.position[0]}
+									longitude={pin.position[1]}
+									anchor="top"
+									closeButton={false}
+									onClose={() => setActivePickupPopupId('')}
+								>
+									Pickup request location
+								</Popup>
+							)
+					  })()
+					: null}
 
 				{isValidLatLng(effectiveVanPosition) ? (
 					<Marker latitude={effectiveVanPosition[0]} longitude={effectiveVanPosition[1]} anchor="center">

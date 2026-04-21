@@ -105,6 +105,9 @@ export default function DriverDashboard({ token, user, onLogout }) {
 	const [photoName, setPhotoName] = useState('No file selected')
 	const [driverIdName, setDriverIdName] = useState('No file selected')
 	const watchIdRef = useRef(null)
+	const [isPickedUpModalOpen, setIsPickedUpModalOpen] = useState(false)
+	const [optimizedRoute, setOptimizedRoute] = useState([])
+	const [routeStops, setRouteStops] = useState([])
 
 	const [profileData, setProfileData] = useState(() => {
 		const storageKey = `hns_driver_profile_${user.id}`
@@ -271,7 +274,72 @@ export default function DriverDashboard({ token, user, onLogout }) {
 		() => (selectedTrip?.status === 'picked_up' ? SCHOOL_LOCATION : selectedTripRequesterPosition),
 		[selectedTrip?.status, SCHOOL_LOCATION, selectedTripRequesterPosition],
 	)
+	const activePickupPins = useMemo(() => {
+		return acceptedRequests
+			.filter((item) => ['accepted', 'arrived'].includes(item.status))
+			.map((item, index) => {
+				const position = asLatLng(item.requesterLocation)
+				if (!position) return null
+				const initial = String(item.parent?.fullName || '').trim().slice(0, 1).toUpperCase() || `${index + 1}`
+				return { id: String(item._id), position, label: initial }
+			})
+			.filter(Boolean)
+	}, [acceptedRequests])
 	const selectedTripMapCenter = selectedTripVanPosition || selectedTripRequesterPosition || DEFAULT_MAP_CENTER
+	useEffect(() => {
+		if (!selectedTripVanPosition) {
+			setOptimizedRoute([])
+			setRouteStops([])
+			return
+		}
+
+		const pickups = acceptedRequests
+			.filter((item) => ['accepted', 'arrived'].includes(item.status))
+			.map((item) => asLatLng(item.requesterLocation))
+			.filter(Boolean)
+
+		if (pickups.length === 0) {
+			setOptimizedRoute([])
+			setRouteStops([])
+			return
+		}
+
+		const abortController = new AbortController()
+
+		apiFetch('/api/routing/multi-route', {
+			method: 'POST',
+			headers: {
+				Authorization: `Bearer ${token}`,
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				start: selectedTripVanPosition,
+				pickups,
+				end: SCHOOL_LOCATION,
+			}),
+			signal: abortController.signal,
+		})
+			.then((payload) => {
+				const coordinates = payload?.route?.coordinates
+				if (!Array.isArray(coordinates) || coordinates.length < 2) {
+					setOptimizedRoute([])
+				} else {
+					// backend returns [lng,lat] – convert to [lat,lng]
+					setOptimizedRoute(
+						coordinates
+							.filter((point) => Array.isArray(point) && point.length >= 2)
+							.map(([lng, lat]) => [Number(lat), Number(lng)]),
+					)
+				}
+				setRouteStops(Array.isArray(payload?.stops) ? payload.stops : [])
+			})
+			.catch(() => {
+				setOptimizedRoute([])
+				setRouteStops([])
+			})
+
+		return () => abortController.abort()
+	}, [acceptedRequests, SCHOOL_LOCATION, selectedTripVanPosition, token])
 
 	useEffect(() => {
 		if (acceptedRequests.length === 0) {
@@ -428,13 +496,14 @@ export default function DriverDashboard({ token, user, onLogout }) {
 		return gpsStatus === 'Active'
 	}, [gpsStatus, selectedTrip])
 
-	const handlePickedUp = async () => {
-		if (!selectedTrip) return
+	const handlePickedUp = async (requestId) => {
+		const resolvedRequestId = String(requestId || '')
+		if (!resolvedRequestId) return
 		setError('')
 		setRequestMessage('')
 
 		try {
-			await apiFetch(`/api/driver/requests/${selectedTrip._id}/picked-up`, {
+			await apiFetch(`/api/driver/requests/${resolvedRequestId}/picked-up`, {
 				method: 'PATCH',
 				headers: {
 					Authorization: `Bearer ${token}`,
@@ -442,6 +511,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 			})
 
 			setRequestMessage('Marked as picked up. Navigation target switched to school.')
+			setIsPickedUpModalOpen(false)
 			await fetchRequests({ silent: true })
 		} catch (requestError) {
 			setError(requestError.message || 'Unable to mark student as picked up right now.')
@@ -549,7 +619,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 										</Button>
 										<Button
 											variant="secondary"
-											onClick={handlePickedUp}
+											onClick={() => setIsPickedUpModalOpen(true)}
 											disabled={!canMarkPickedUp}
 										>
 											Picked up student
@@ -576,14 +646,70 @@ export default function DriverDashboard({ token, user, onLogout }) {
 									<LiveTripMap
 										center={selectedTripMapCenter}
 										pickupPosition={selectedTripDestinationPosition}
+										pickupPositions={activePickupPins}
 										vanPosition={selectedTripVanPosition}
-										showRoute={Boolean(selectedTripDestinationPosition && selectedTripVanPosition)}
+										plannedRoute={optimizedRoute}
+										showRoute={Boolean(selectedTripVanPosition && (optimizedRoute.length > 1 || selectedTripDestinationPosition))}
 										routeMode="road"
 										height={370}
 									/>
 								</div>
 							</CardContent>
 						</Card>
+
+						{isPickedUpModalOpen ? (
+							<div
+								className="notifications-modal-backdrop"
+								onClick={() => setIsPickedUpModalOpen(false)}
+							>
+								<div
+									className="notifications-modal"
+									role="dialog"
+									aria-modal="true"
+									aria-label="Select picked up request"
+									onClick={(event) => event.stopPropagation()}
+								>
+									<div className="notifications-modal__header">
+										<h3>Mark picked up</h3>
+										<button
+											type="button"
+											className="notifications-modal__close"
+											onClick={() => setIsPickedUpModalOpen(false)}
+											aria-label="Close"
+										>
+											<span className="material-symbols-rounded" aria-hidden="true">
+												close
+											</span>
+										</button>
+									</div>
+
+									<div className="notifications-modal__body">
+										{acceptedRequests.filter((item) => ['accepted', 'arrived'].includes(item.status)).length === 0 ? (
+											<p className="driver-state-text">No active pickup trips.</p>
+										) : (
+											acceptedRequests
+												.filter((item) => ['accepted', 'arrived'].includes(item.status))
+												.map((item) => (
+													<div key={item._id} className="notification-item">
+														<div>
+															<h4>{item.parent?.fullName || 'Parent'}</h4>
+															<p>Student: {item.studentName || 'N/A'}</p>
+															<p>Pickup: {item.pickupZone || 'N/A'}</p>
+															<small>
+																Parent confirmed:{' '}
+																{item.pickupConfirmedByParentAt ? formatDate(item.pickupConfirmedByParentAt) : 'No'}
+															</small>
+														</div>
+														<Button size="sm" variant="secondary" onClick={() => handlePickedUp(item._id)}>
+															Mark Picked Up
+														</Button>
+													</div>
+												))
+										)}
+									</div>
+								</div>
+							</div>
+						) : null}
 
 						{loading ? <p className="driver-state-text">Loading driver requests...</p> : null}
 						{error ? <p className="driver-state-text driver-state-text--error">{error}</p> : null}
