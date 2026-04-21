@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Map, { Layer, Marker, Popup, Source } from 'react-map-gl/maplibre'
+import MapGL, { Layer, Marker, Popup, Source } from 'react-map-gl/maplibre'
 import maplibregl from 'maplibre-gl'
 import './maplibre-gl.css'
 import './LiveTripMap.css'
