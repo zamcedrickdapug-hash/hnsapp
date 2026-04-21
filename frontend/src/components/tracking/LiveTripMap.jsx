@@ -15,6 +15,7 @@ const OSRM_REQUEST_TIMEOUT_MS = 8000
 const ROUTE_REQUEST_DEBOUNCE_MS = 2000
 const ENABLE_OSRM_NEAREST_SNAP = false
 const MIN_ROUTE_DISTANCE_DEGREES = 0.00005
+const MIN_REAL_ROUTE_POINTS = 5
 
 let osrmBackoffUntil = 0
 const requestCache = new Map()
@@ -70,7 +71,6 @@ function buildGridFallbackPath(pickupPosition, vanPosition) {
 		return [toLngLat(pickupPosition), toLngLat(vanPosition)]
 	}
 
-	// Two-step Manhattan path avoids diagonal cuts when routing API is down.
 	if (lngDelta >= latDelta) {
 		return [
 			[pickupLng, pickupLat],
@@ -227,12 +227,10 @@ async function fetchRoadPathViaBackend(pickupPosition, vanPosition, signal, maxR
 
 	const cacheKey = `${pickupLat.toFixed(5)},${pickupLng.toFixed(5)},${vanLat.toFixed(5)},${vanLng.toFixed(5)}`
 
-	// Check if request is already in-flight
 	if (requestCache.has(cacheKey)) {
 		return requestCache.get(cacheKey)
 	}
 
-	// Create a new promise for this request
 	const requestPromise = (async () => {
 		for (let attempt = 0; attempt < maxRetries; attempt++) {
 			if (signal?.aborted) {
@@ -252,7 +250,6 @@ async function fetchRoadPathViaBackend(pickupPosition, vanPosition, signal, maxR
 				if (!response.ok) {
 					if (response.status === 429) {
 						markOsrmRateLimited()
-						// More aggressive retry with longer waits
 						if (attempt < maxRetries - 1) {
 							const waitTime = Math.min(30000, 3000 * Math.pow(1.5, attempt))
 							await new Promise(resolve => setTimeout(resolve, waitTime))
@@ -263,7 +260,6 @@ async function fetchRoadPathViaBackend(pickupPosition, vanPosition, signal, maxR
 
 					if (response.status >= 500) {
 						markOsrmUnavailable()
-						// Retry on server error
 						if (attempt < maxRetries - 1) {
 							const waitTime = 2000 * (attempt + 1)
 							await new Promise(resolve => setTimeout(resolve, waitTime))
@@ -289,7 +285,6 @@ async function fetchRoadPathViaBackend(pickupPosition, vanPosition, signal, maxR
 				if (attempt === maxRetries - 1) {
 					throw error
 				}
-				// Retry on timeout or network error
 				if (isServiceUnavailableError(error) || error?.message?.includes('timed out')) {
 					const waitTime = 2000 * (attempt + 1)
 					await new Promise(resolve => setTimeout(resolve, waitTime))
@@ -300,10 +295,8 @@ async function fetchRoadPathViaBackend(pickupPosition, vanPosition, signal, maxR
 		}
 	})()
 
-	// Cache the promise
 	requestCache.set(cacheKey, requestPromise)
 
-	// Clear cache after request completes
 	requestPromise.finally(() => {
 		setTimeout(() => requestCache.delete(cacheKey), 2000)
 	})
@@ -312,7 +305,6 @@ async function fetchRoadPathViaBackend(pickupPosition, vanPosition, signal, maxR
 }
 
 async function fetchRoadPath(pickupPosition, vanPosition, signal) {
-	// Always try backend first with multiple retries
 	for (let backendAttempt = 0; backendAttempt < 2; backendAttempt++) {
 		try {
 			const backendPath = await fetchRoadPathViaBackend(pickupPosition, vanPosition, signal)
@@ -323,16 +315,13 @@ async function fetchRoadPath(pickupPosition, vanPosition, signal) {
 			if (signal?.aborted) {
 				throw error
 			}
-			// Only try OSRM if backend fails catastrophically
 			if (backendAttempt < 1 && isRateLimitError(error)) {
-				// Wait longer and retry backend
 				await new Promise(resolve => setTimeout(resolve, 15000))
 				continue
 			}
 		}
 	}
 
-	// Try direct OSRM as last resort
 	for (const profile of OSRM_PROFILES) {
 		try {
 			const path = await fetchRoadPathByProfile(pickupPosition, vanPosition, profile, signal)
@@ -344,8 +333,6 @@ async function fetchRoadPath(pickupPosition, vanPosition, signal) {
 			if (isRateLimitError(error) || isServiceUnavailableError(error)) {
 				break
 			}
-
-			// Try next profile silently.
 		}
 	}
 
@@ -475,6 +462,13 @@ export default function LiveTripMap({
 		[mapCenter],
 	)
 
+	// FIX 1: Reset cached route flag and path whenever positions change so road
+	// recalculation is never permanently blocked by a stale cached straight line.
+	useEffect(() => {
+		setIsCachedRoute(false)
+		setRoutePath([])
+	}, [pickupPosition, vanPosition])
+
 	useEffect(() => {
 		if (!isValidLatLng(vanPosition) || routeMode !== 'road' || !ENABLE_OSRM_NEAREST_SNAP) {
 			setSnappedVanPosition(vanPosition)
@@ -497,8 +491,6 @@ export default function LiveTripMap({
 					if (isRateLimitError(error) || isServiceUnavailableError(error)) {
 						break
 					}
-
-					// Try next profile.
 				}
 			}
 
@@ -514,6 +506,9 @@ export default function LiveTripMap({
 		}
 	}, [routeMode, vanPosition])
 
+	// FIX 2: Only trust a saved route if it has enough points to be a real road
+	// path. A 2-point saved straight-line fallback will be ignored and
+	// recalculated fresh.
 	useEffect(() => {
 		if (!requestId) {
 			return undefined
@@ -524,7 +519,11 @@ export default function LiveTripMap({
 				const response = await fetch(`/api/routing/saved/${requestId}`)
 				if (response.ok) {
 					const data = await response.json()
-					if (data.route?.coordinates && Array.isArray(data.route.coordinates) && data.route.coordinates.length > 1) {
+					if (
+						data.route?.coordinates &&
+						Array.isArray(data.route.coordinates) &&
+						data.route.coordinates.length >= MIN_REAL_ROUTE_POINTS
+					) {
 						setRoutePath(data.route.coordinates)
 						setIsCachedRoute(true)
 						setIsRouteLoading(false)
@@ -553,7 +552,10 @@ export default function LiveTripMap({
 			return undefined
 		}
 
-		if (isCachedRoute) {
+		// FIX 3: Only skip recalculation if the cached route is a real road path
+		// (enough points). If positions changed, isCachedRoute is already false
+		// due to FIX 1 so this guard will not block recalculation.
+		if (isCachedRoute && routePath.length >= MIN_REAL_ROUTE_POINTS) {
 			setIsRouteLoading(false)
 			setIsRouteFallback(false)
 			return undefined
@@ -580,7 +582,6 @@ export default function LiveTripMap({
 			return undefined
 		}
 
-		// Debounce route calculation to prevent excessive requests
 		if (debounceTimerRef.current) {
 			clearTimeout(debounceTimerRef.current)
 		}
@@ -596,8 +597,9 @@ export default function LiveTripMap({
 						setRoutePath(path)
 						setIsRouteFallback(false)
 
-						// Save route to database if requestId is available
-						if (requestId) {
+						// FIX 4: Only save routes that are real road paths, not
+						// straight-line fallbacks, so the cache is never poisoned.
+						if (requestId && path.length >= MIN_REAL_ROUTE_POINTS) {
 							try {
 								await fetch(`/api/routing/save/${requestId}`, {
 									method: 'POST',
@@ -617,11 +619,8 @@ export default function LiveTripMap({
 					setIsRouteLoading(false)
 				})
 				.catch((error) => {
-					// Don't show fallback route - just wait or keep previous route
 					console.warn('Route calculation failed, will retry:', error?.message)
 					setIsRouteLoading(false)
-					// Leave route path as-is (either empty or previously loaded route)
-					// Don't set isRouteFallback - this prevents the grid fallback from showing
 				})
 		}, ROUTE_REQUEST_DEBOUNCE_MS)
 
@@ -630,7 +629,7 @@ export default function LiveTripMap({
 				clearTimeout(debounceTimerRef.current)
 			}
 		}
-	}, [effectiveVanPosition, pickupPosition, plannedRouteGeoJson, routeMode, showRoute, isCachedRoute, requestId])
+	}, [effectiveVanPosition, pickupPosition, plannedRouteGeoJson, routeMode, showRoute, isCachedRoute, routePath.length, requestId])
 
 	useEffect(() => {
 		if (!isMapLoaded || !mapRef.current) {

@@ -167,13 +167,16 @@ router.get('/saved/:requestId', async (req, res) => {
 
 // POST /api/routing/save/:requestId
 // Body: { "coordinates": [[lng, lat], ...], "distance": 1000, "duration": 60, "profile": "driving" }
+// POST /api/routing/save/:requestId
 router.post('/save/:requestId', async (req, res) => {
     try {
         const { requestId } = req.params
         const { coordinates, distance, duration, profile } = req.body
 
-        if (!Array.isArray(coordinates) || coordinates.length < 2) {
-            return res.status(400).json({ message: 'Valid coordinates array is required.' })
+        // FIX 4: Reject straight-line/fallback paths so the cache is never
+        // poisoned with a non-road route.
+        if (!Array.isArray(coordinates) || coordinates.length < 5) {
+            return res.status(400).json({ message: 'Route too short — not a valid road path.' })
         }
 
         const request = await VanRequest.findByIdAndUpdate(
