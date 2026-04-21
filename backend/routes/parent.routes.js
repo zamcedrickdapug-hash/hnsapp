@@ -194,7 +194,7 @@ router.post('/van-requests', requireParent, async (req, res) => {
 
     const activeRequest = await VanRequest.findOne({
       parent: req.user._id,
-      status: { $in: ['searching', 'accepted'] },
+      status: { $in: ['searching', 'accepted', 'arrived', 'picked_up'] },
     }).select('_id status');
 
     if (activeRequest) {
@@ -275,7 +275,7 @@ router.patch('/van-requests/:requestId/requester-location', requireParent, async
       return res.status(404).json({ message: 'Ride request not found.' });
     }
 
-    if (!['searching', 'accepted'].includes(rideRequest.status)) {
+    if (!['searching', 'accepted', 'arrived', 'picked_up'].includes(rideRequest.status)) {
       return res
         .status(409)
         .json({ message: 'Requester location updates are only allowed for active requests.' });

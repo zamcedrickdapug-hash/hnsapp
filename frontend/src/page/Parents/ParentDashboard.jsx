@@ -48,8 +48,16 @@ function deriveTripStatus(request) {
 		return request.liveLocation ? 'On the way' : 'Waiting for pickup'
 	}
 
-	if (request.status === 'completed') {
+	if (request.status === 'arrived') {
 		return 'Arrived'
+	}
+
+	if (request.status === 'picked_up') {
+		return 'Picked up'
+	}
+
+	if (request.status === 'completed') {
+		return 'Arrived at school'
 	}
 
 	if (request.status === 'cancelled') {
@@ -61,6 +69,10 @@ function deriveTripStatus(request) {
 
 function getStatusClass(status) {
 	if (status === 'Arrived') {
+		return 'arrived'
+	}
+
+	if (status === 'Arrived at school') {
 		return 'arrived'
 	}
 
@@ -317,7 +329,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
 	}, [])
 
 	const activeRideRequest = useMemo(
-		() => requests.find((item) => ['searching', 'accepted'].includes(item.status)) || null,
+		() => requests.find((item) => ['searching', 'accepted', 'arrived', 'picked_up'].includes(item.status)) || null,
 		[requests],
 	)
 
@@ -353,10 +365,15 @@ export default function ParentDashboard({ token, user, onLogout }) {
 
 	const currentTripStatus = deriveTripStatus(activeRideRequest)
 
+	const SCHOOL_LOCATION = useMemo(() => [14.81298106386082, 121.07158042431617], [])
 	const requesterPosition = useMemo(() => asLatLng(activeRideRequest?.requesterLocation), [activeRideRequest])
 	const vanPosition = useMemo(() => asLatLng(activeRideRequest?.liveLocation), [activeRideRequest])
 	const mapCenter = vanPosition || requesterPosition || [14.5995, 120.9842]
-	const trackTarget = vanPosition || requesterPosition
+	const destinationPosition =
+		activeRideRequest?.status === 'picked_up' || activeRideRequest?.status === 'completed'
+			? SCHOOL_LOCATION
+			: requesterPosition
+	const trackTarget = vanPosition || destinationPosition
 	const trackLiveLink = trackTarget
 		? `https://www.google.com/maps/search/?api=1&query=${trackTarget[0]},${trackTarget[1]}`
 		: ''
@@ -428,7 +445,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
 		}
 
 		const activeRequestId = String(activeRideRequest?._id || '')
-		const isRequestActive = ['searching', 'accepted'].includes(activeRideRequest?.status)
+		const isRequestActive = ['searching', 'accepted', 'arrived', 'picked_up'].includes(activeRideRequest?.status)
 
 		if (!activeRequestId || !isRequestActive) {
 			if (requesterWatchIdRef.current !== null) {
@@ -608,7 +625,8 @@ export default function ParentDashboard({ token, user, onLogout }) {
 				: activeRideRequest.status === 'accepted'
 					? 'Accepted'
 					: activeRideRequest.status
-	const etaLabel = currentTripStatus === 'On the way' ? '8 mins' : currentTripStatus === 'Arrived' ? 'Arrived' : 'Pending'
+	const etaLabel =
+		currentTripStatus === 'On the way' ? '8 mins' : currentTripStatus === 'Arrived' ? 'Arrived' : 'Pending'
 
 	const safeDriverName = activeRideRequest?.driver?.fullName || 'Driver not assigned'
 	const safeDriverPhone = activeRideRequest?.driver?.phone || 'Hidden'
@@ -748,9 +766,9 @@ export default function ParentDashboard({ token, user, onLogout }) {
 									<LiveTripMap
 										className="tracking-map"
 										center={mapCenter}
-										pickupPosition={requesterPosition}
+										pickupPosition={destinationPosition}
 										vanPosition={vanPosition}
-										showRoute={Boolean(vanPosition && requesterPosition)}
+										showRoute={Boolean(vanPosition && destinationPosition)}
 										routeMode="road"
 										height={350}
 									/>

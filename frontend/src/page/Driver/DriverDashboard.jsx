@@ -71,6 +71,24 @@ function asLatLng(location) {
 	return [latitude, longitude]
 }
 
+function distanceInMeters(first, second) {
+	if (!Array.isArray(first) || !Array.isArray(second) || first.length < 2 || second.length < 2) return Infinity
+	const lat1 = Number(first[0])
+	const lon1 = Number(first[1])
+	const lat2 = Number(second[0])
+	const lon2 = Number(second[1])
+	if (![lat1, lon1, lat2, lon2].every((value) => Number.isFinite(value))) return Infinity
+
+	const R = 6371000
+	const toRad = (deg) => (deg * Math.PI) / 180
+	const dLat = toRad(lat2 - lat1)
+	const dLon = toRad(lon2 - lon1)
+	const a =
+		Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+		Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
+	return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
 export default function DriverDashboard({ token, user, onLogout }) {
 	const socketRef = useRef(null)
 	const [activeSection, setActiveSection] = useState('dashboard')
@@ -213,7 +231,10 @@ export default function DriverDashboard({ token, user, onLogout }) {
 	)
 
 	const acceptedRequests = useMemo(
-		() => requests.filter((item) => item.status === 'accepted' && item.driver?._id === user.id),
+		() =>
+			requests.filter(
+				(item) => ['accepted', 'arrived', 'picked_up'].includes(item.status) && item.driver?._id === user.id,
+			),
 		[requests, user.id],
 	)
 
@@ -243,8 +264,13 @@ export default function DriverDashboard({ token, user, onLogout }) {
 		[acceptedRequests, selectedRequestId],
 	)
 
+	const SCHOOL_LOCATION = useMemo(() => [14.81298106386082, 121.07158042431617], [])
 	const selectedTripRequesterPosition = useMemo(() => asLatLng(selectedTrip?.requesterLocation), [selectedTrip])
 	const selectedTripVanPosition = useMemo(() => asLatLng(selectedTrip?.liveLocation), [selectedTrip])
+	const selectedTripDestinationPosition = useMemo(
+		() => (selectedTrip?.status === 'picked_up' ? SCHOOL_LOCATION : selectedTripRequesterPosition),
+		[selectedTrip?.status, SCHOOL_LOCATION, selectedTripRequesterPosition],
+	)
 	const selectedTripMapCenter = selectedTripVanPosition || selectedTripRequesterPosition || DEFAULT_MAP_CENTER
 
 	useEffect(() => {
@@ -396,6 +422,36 @@ export default function DriverDashboard({ token, user, onLogout }) {
 		setGpsStatus('Inactive')
 	}
 
+	const canMarkPickedUp = useMemo(() => {
+		if (!selectedTrip) return false
+		if (selectedTrip.status !== 'arrived') return false
+		if (gpsStatus !== 'Active') return false
+		const driverPos = selectedTripVanPosition
+		const pickupPos = selectedTripRequesterPosition
+		if (!driverPos || !pickupPos) return false
+		return distanceInMeters(driverPos, pickupPos) <= 60
+	}, [gpsStatus, selectedTrip, selectedTripRequesterPosition, selectedTripVanPosition])
+
+	const handlePickedUp = async () => {
+		if (!selectedTrip) return
+		setError('')
+		setRequestMessage('')
+
+		try {
+			await apiFetch(`/api/driver/requests/${selectedTrip._id}/picked-up`, {
+				method: 'PATCH',
+				headers: {
+					Authorization: `Bearer ${token}`,
+				},
+			})
+
+			setRequestMessage('Marked as picked up. Navigation target switched to school.')
+			await fetchRequests({ silent: true })
+		} catch (requestError) {
+			setError(requestError.message || 'Unable to mark student as picked up right now.')
+		}
+	}
+
 	const saveDriverSettings = async (event) => {
 		event.preventDefault()
 		setSavingProfile(true)
@@ -495,6 +551,13 @@ export default function DriverDashboard({ token, user, onLogout }) {
 										<Button variant="destructive" onClick={stopGps}>
 											Stop GPS
 										</Button>
+										<Button
+											variant="secondary"
+											onClick={handlePickedUp}
+											disabled={!canMarkPickedUp}
+										>
+											Picked up student
+										</Button>
 									</div>
 								</div>
 
@@ -516,9 +579,9 @@ export default function DriverDashboard({ token, user, onLogout }) {
 								<div className="driver-gps-map">
 									<LiveTripMap
 										center={selectedTripMapCenter}
-										pickupPosition={selectedTripRequesterPosition}
+										pickupPosition={selectedTripDestinationPosition}
 										vanPosition={selectedTripVanPosition}
-										showRoute={Boolean(selectedTripRequesterPosition && selectedTripVanPosition)}
+										showRoute={Boolean(selectedTripDestinationPosition && selectedTripVanPosition)}
 										routeMode="road"
 										height={370}
 									/>

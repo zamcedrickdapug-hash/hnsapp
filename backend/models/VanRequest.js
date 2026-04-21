@@ -92,7 +92,7 @@ const vanRequestSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['searching', 'accepted', 'cancelled', 'completed'],
+      enum: ['searching', 'accepted', 'arrived', 'picked_up', 'cancelled', 'completed'],
       default: 'searching',
       index: true,
     },

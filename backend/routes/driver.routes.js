@@ -7,6 +7,28 @@ const { sendPushToUserIds } = require('../utils/pushNotifications');
 
 const router = express.Router();
 
+const distanceInMeters = (first, second) => {
+  const lat1 = Number(first?.latitude);
+  const lon1 = Number(first?.longitude);
+  const lat2 = Number(second?.latitude);
+  const lon2 = Number(second?.longitude);
+
+  if (![lat1, lon1, lat2, lon2].every((value) => Number.isFinite(value))) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const R = 6371000;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+const ARRIVED_RADIUS_METERS = 60;
+
 const ensureDriver = (req, res, next) => {
   if (!req.user || req.user.role !== 'driver') {
     return res.status(403).json({ message: 'Driver access is required.' });
@@ -113,8 +135,8 @@ router.patch('/requests/:requestId/location', async (req, res) => {
       return res.status(403).json({ message: 'You are not assigned to this request.' });
     }
 
-    if (rideRequest.status !== 'accepted') {
-      return res.status(409).json({ message: 'Location updates are only allowed for accepted requests.' });
+    if (!['accepted', 'arrived', 'picked_up'].includes(rideRequest.status)) {
+      return res.status(409).json({ message: 'Location updates are only allowed for active requests.' });
     }
 
     rideRequest.liveLocation = {
@@ -122,6 +144,17 @@ router.patch('/requests/:requestId/location', async (req, res) => {
       longitude,
       updatedAt: new Date(),
     };
+
+    const hasRequesterLocation =
+      Number.isFinite(Number(rideRequest.requesterLocation?.latitude)) &&
+      Number.isFinite(Number(rideRequest.requesterLocation?.longitude));
+
+    if (rideRequest.status === 'accepted' && hasRequesterLocation) {
+      const distanceToPickup = distanceInMeters({ latitude, longitude }, rideRequest.requesterLocation);
+      if (distanceToPickup <= ARRIVED_RADIUS_METERS) {
+        rideRequest.status = 'arrived';
+      }
+    }
 
     await rideRequest.save();
 
@@ -152,6 +185,52 @@ router.patch('/requests/:requestId/location', async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ message: 'Unable to update location right now.' });
+  }
+});
+
+router.patch('/requests/:requestId/picked-up', async (req, res) => {
+  try {
+    const rideRequest = await VanRequest.findById(req.params.requestId).populate('parent', '_id fullName');
+
+    if (!rideRequest) {
+      return res.status(404).json({ message: 'Ride request not found.' });
+    }
+
+    if (!rideRequest.driver || String(rideRequest.driver) !== String(req.user._id)) {
+      return res.status(403).json({ message: 'You are not assigned to this request.' });
+    }
+
+    if (rideRequest.status !== 'arrived') {
+      return res.status(409).json({ message: 'Trip must be arrived at pickup before marking as picked up.' });
+    }
+
+    rideRequest.status = 'picked_up';
+    await rideRequest.save();
+
+    const populatedRequest = await VanRequest.findById(rideRequest._id)
+      .populate('parent', 'fullName phone')
+      .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber');
+
+    const io = getIo();
+    if (io) {
+      const eventPayload = { request: populatedRequest };
+      io.to(buildTripRoomName(rideRequest._id)).emit('trip:request-updated', eventPayload);
+      io.to(buildUserRoomName(rideRequest.parent?._id)).emit('trip:request-updated', eventPayload);
+      io.to(buildUserRoomName(req.user._id)).emit('trip:request-updated', eventPayload);
+
+      io.to(buildTripRoomName(rideRequest._id)).emit('trip:location-updated', {
+        requestId: String(rideRequest._id),
+        liveLocation: rideRequest.liveLocation,
+        status: rideRequest.status,
+      });
+    }
+
+    return res.status(200).json({
+      message: 'Trip marked as picked up.',
+      request: populatedRequest,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: 'Unable to update trip status right now.' });
   }
 });
 
