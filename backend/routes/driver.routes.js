@@ -138,6 +138,12 @@ router.patch('/requests/:requestId/location', async (req, res) => {
         liveLocation: rideRequest.liveLocation,
         status: rideRequest.status,
       });
+
+      io.to(buildUserRoomName(req.user._id)).emit('trip:location-updated', {
+        requestId: String(rideRequest._id),
+        liveLocation: rideRequest.liveLocation,
+        status: rideRequest.status,
+      });
     }
 
     return res.status(200).json({

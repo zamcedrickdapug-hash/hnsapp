@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
 import { apiFetch } from '../../api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
@@ -118,8 +118,36 @@ function getCurrentRequesterLocation() {
 	})
 }
 
+function hasMovedEnough(previousLocation, nextLocation) {
+	if (!previousLocation) {
+		return true
+	}
+
+	const previousLatitude = Number(previousLocation.latitude)
+	const previousLongitude = Number(previousLocation.longitude)
+	const nextLatitude = Number(nextLocation.latitude)
+	const nextLongitude = Number(nextLocation.longitude)
+
+	if (
+		!Number.isFinite(previousLatitude) ||
+		!Number.isFinite(previousLongitude) ||
+		!Number.isFinite(nextLatitude) ||
+		!Number.isFinite(nextLongitude)
+	) {
+		return true
+	}
+
+	return (
+		Math.abs(previousLatitude - nextLatitude) > 0.00002 ||
+		Math.abs(previousLongitude - nextLongitude) > 0.00002
+	)
+}
+
 export default function ParentDashboard({ token, user, onLogout }) {
 	const socketRef = useRef(null)
+	const requesterWatchIdRef = useRef(null)
+	const lastRequesterSyncAtRef = useRef(0)
+	const lastRequesterLocationRef = useRef(null)
 	const [notifications, setNotifications] = useState([])
 	const [requests, setRequests] = useState([])
 	const [loading, setLoading] = useState(false)
@@ -380,6 +408,88 @@ export default function ParentDashboard({ token, user, onLogout }) {
 
 	const accountStatusLabel =
 		user.status === 'approved' ? 'Verified' : user.status === 'reviewing' ? 'Pending Approval' : 'Pending Approval'
+
+	const syncRequesterLocation = useCallback(
+		async (requestId, requesterLocation) => {
+			await apiFetch(`/api/parents/van-requests/${requestId}/requester-location`, {
+				method: 'PATCH',
+				headers: {
+					Authorization: `Bearer ${token}`,
+				},
+				body: JSON.stringify(requesterLocation),
+			})
+		},
+		[token],
+	)
+
+	useEffect(() => {
+		if (typeof window === 'undefined' || !navigator.geolocation) {
+			return undefined
+		}
+
+		const activeRequestId = String(activeRideRequest?._id || '')
+		const isRequestActive = ['searching', 'accepted'].includes(activeRideRequest?.status)
+
+		if (!activeRequestId || !isRequestActive) {
+			if (requesterWatchIdRef.current !== null) {
+				navigator.geolocation.clearWatch(requesterWatchIdRef.current)
+				requesterWatchIdRef.current = null
+			}
+
+			lastRequesterSyncAtRef.current = 0
+			lastRequesterLocationRef.current = null
+			return undefined
+		}
+
+		const geolocationOptions = { enableHighAccuracy: true, maximumAge: 8000, timeout: 10000 }
+
+		const syncPosition = (position) => {
+			const nextLocation = {
+				latitude: position.coords.latitude,
+				longitude: position.coords.longitude,
+				accuracy: position.coords.accuracy,
+			}
+
+			setRequests((current) =>
+				current.map((item) =>
+					String(item._id) === activeRequestId
+						? {
+								...item,
+								requesterLocation: {
+									...nextLocation,
+									capturedAt: new Date().toISOString(),
+								},
+						  }
+						: item,
+				),
+			)
+
+			const now = Date.now()
+			const shouldSyncBecauseTime = now - lastRequesterSyncAtRef.current >= 5000
+			const shouldSyncBecauseMoved = hasMovedEnough(lastRequesterLocationRef.current, nextLocation)
+
+			if (!shouldSyncBecauseTime && !shouldSyncBecauseMoved) {
+				return
+			}
+
+			lastRequesterSyncAtRef.current = now
+			lastRequesterLocationRef.current = nextLocation
+
+			syncRequesterLocation(activeRequestId, nextLocation).catch(() => {})
+		}
+
+		navigator.geolocation.getCurrentPosition(syncPosition, () => {}, geolocationOptions)
+
+		const watchId = navigator.geolocation.watchPosition(syncPosition, () => {}, geolocationOptions)
+		requesterWatchIdRef.current = watchId
+
+		return () => {
+			navigator.geolocation.clearWatch(watchId)
+			if (requesterWatchIdRef.current === watchId) {
+				requesterWatchIdRef.current = null
+			}
+		}
+	}, [activeRideRequest?._id, activeRideRequest?.status, syncRequesterLocation])
 
 	const markRead = async (notificationId) => {
 		if (String(notificationId).startsWith('local-')) {

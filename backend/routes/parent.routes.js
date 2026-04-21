@@ -9,6 +9,7 @@ const VanRequest = require('../models/VanRequest');
 const { requireApplicant, requireParent } = require('../middleware/auth');
 const { validateRegistrationPayload } = require('../utils/validation');
 const { sendPushToUserIds } = require('../utils/pushNotifications');
+const { getIo, buildTripRoomName, buildUserRoomName } = require('../socket');
 
 const router = express.Router();
 
@@ -212,6 +213,10 @@ router.post('/van-requests', requireParent, async (req, res) => {
       status: 'searching',
     });
 
+    const populatedRequest = await VanRequest.findById(rideRequest._id)
+      .populate('parent', 'fullName phone')
+      .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber');
+
     req.user.notifications.push({
       title: 'Searching for driver',
       message: 'Your school van request is now searching for an available driver.',
@@ -231,12 +236,78 @@ router.post('/van-requests', requireParent, async (req, res) => {
       },
     }).catch(() => {});
 
+    const io = getIo();
+    if (io) {
+      const eventPayload = {
+        request: populatedRequest,
+      };
+
+      io.to(buildTripRoomName(rideRequest._id)).emit('trip:request-updated', eventPayload);
+      io.to(buildUserRoomName(req.user._id)).emit('trip:request-updated', eventPayload);
+      activeDriverIds.forEach((driverId) => {
+        io.to(buildUserRoomName(driverId)).emit('trip:request-updated', eventPayload);
+      });
+    }
+
     return res.status(201).json({
       message: 'School van request submitted successfully.',
-      request: rideRequest,
+      request: populatedRequest,
     });
   } catch (error) {
     return res.status(500).json({ message: 'Unable to submit ride request right now.' });
+  }
+});
+
+router.patch('/van-requests/:requestId/requester-location', requireParent, async (req, res) => {
+  try {
+    const requesterLocation = parseRequesterLocation(req.body);
+
+    if (!requesterLocation) {
+      return res.status(400).json({ message: 'Valid requester location is required.' });
+    }
+
+    const rideRequest = await VanRequest.findOne({
+      _id: req.params.requestId,
+      parent: req.user._id,
+    });
+
+    if (!rideRequest) {
+      return res.status(404).json({ message: 'Ride request not found.' });
+    }
+
+    if (!['searching', 'accepted'].includes(rideRequest.status)) {
+      return res
+        .status(409)
+        .json({ message: 'Requester location updates are only allowed for active requests.' });
+    }
+
+    rideRequest.requesterLocation = requesterLocation;
+    await rideRequest.save();
+
+    const populatedRequest = await VanRequest.findById(rideRequest._id)
+      .populate('parent', 'fullName phone')
+      .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber');
+
+    const io = getIo();
+    if (io) {
+      const eventPayload = {
+        request: populatedRequest,
+      };
+
+      io.to(buildTripRoomName(rideRequest._id)).emit('trip:request-updated', eventPayload);
+      io.to(buildUserRoomName(req.user._id)).emit('trip:request-updated', eventPayload);
+
+      if (populatedRequest?.driver?._id) {
+        io.to(buildUserRoomName(populatedRequest.driver._id)).emit('trip:request-updated', eventPayload);
+      }
+    }
+
+    return res.status(200).json({
+      message: 'Requester location updated successfully.',
+      request: populatedRequest,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: 'Unable to update requester location right now.' });
   }
 });
 

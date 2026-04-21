@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { io } from 'socket.io-client'
 import { apiFetch } from '../../api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
@@ -71,6 +72,7 @@ function asLatLng(location) {
 }
 
 export default function DriverDashboard({ token, user, onLogout }) {
+	const socketRef = useRef(null)
 	const [activeSection, setActiveSection] = useState('dashboard')
 	const [requests, setRequests] = useState([])
 	const [loading, setLoading] = useState(false)
@@ -137,6 +139,67 @@ export default function DriverDashboard({ token, user, onLogout }) {
 	}, [token])
 
 	useEffect(() => {
+		if (!token) {
+			return undefined
+		}
+
+		const socketUrl = import.meta.env.VITE_SOCKET_URL || window.location.origin
+		const socket = io(socketUrl, {
+			path: '/socket.io',
+			auth: { token },
+			transports: ['websocket', 'polling'],
+		})
+
+		socketRef.current = socket
+
+		socket.on('trip:request-updated', (eventPayload) => {
+			const nextRequest = eventPayload?.request
+			const nextRequestId = String(nextRequest?._id || '')
+
+			if (!nextRequestId) {
+				return
+			}
+
+			setRequests((current) => {
+				const exists = current.some((item) => String(item._id) === nextRequestId)
+
+				if (!exists) {
+					return [nextRequest, ...current]
+				}
+
+				return current.map((item) => (String(item._id) === nextRequestId ? { ...item, ...nextRequest } : item))
+			})
+		})
+
+		socket.on('trip:location-updated', (eventPayload) => {
+			const requestId = String(eventPayload?.requestId || '')
+			const liveLocation = eventPayload?.liveLocation
+			const nextStatus = eventPayload?.status
+
+			if (!requestId || !liveLocation) {
+				return
+			}
+
+			setRequests((current) =>
+				current.map((item) =>
+					String(item._id) === requestId
+						? {
+								...item,
+								liveLocation,
+								...(nextStatus ? { status: nextStatus } : {}),
+						  }
+						: item,
+				),
+			)
+		})
+
+		return () => {
+			socket.disconnect()
+			socketRef.current = null
+		}
+	}, [token])
+
+	useEffect(() => {
 		return () => {
 			if (watchIdRef.current !== null) {
 				navigator.geolocation.clearWatch(watchIdRef.current)
@@ -153,6 +216,16 @@ export default function DriverDashboard({ token, user, onLogout }) {
 		() => requests.filter((item) => item.status === 'accepted' && item.driver?._id === user.id),
 		[requests, user.id],
 	)
+
+	useEffect(() => {
+		if (!socketRef.current || acceptedRequests.length === 0) {
+			return
+		}
+
+		acceptedRequests.forEach((item) => {
+			socketRef.current.emit('trip:subscribe', { requestId: item._id })
+		})
+	}, [acceptedRequests])
 
 	useEffect(() => {
 		if (acceptedRequests.length === 0) {
@@ -445,11 +518,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 										center={selectedTripMapCenter}
 										pickupPosition={selectedTripRequesterPosition}
 										vanPosition={selectedTripVanPosition}
-										showRoute={Boolean(
-											gpsStatus !== 'Inactive' &&
-											selectedTripRequesterPosition &&
-											selectedTripVanPosition,
-										)}
+										showRoute={Boolean(selectedTripRequesterPosition && selectedTripVanPosition)}
 										routeMode="road"
 										height={370}
 									/>
