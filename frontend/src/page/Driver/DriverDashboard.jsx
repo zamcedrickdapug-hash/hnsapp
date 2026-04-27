@@ -19,6 +19,7 @@ const defaultProfile = {
 	driverAddress: '',
 }
 const DEFAULT_MAP_CENTER = [14.5995, 120.9842]
+const ARRIVED_RADIUS_METERS = 60
 
 function formatDate(dateValue) {
 	if (!dateValue) {
@@ -425,6 +426,25 @@ export default function DriverDashboard({ token, user, onLogout }) {
 					: item,
 			),
 		)
+
+		// If this trip is already picked up, check if we're near the school and mark arrival
+		try {
+			if (selectedTrip && selectedTrip.status === 'picked_up') {
+				const dist = distanceInMeters([latitude, longitude], SCHOOL_LOCATION)
+				if (Number.isFinite(dist) && dist <= ARRIVED_RADIUS_METERS) {
+					// notify backend that driver arrived at school
+					apiFetch(`/api/driver/requests/${trackingRequestId}/arrived-school`, {
+						method: 'PATCH',
+						headers: { Authorization: `Bearer ${token}` },
+					}).then(() => {
+						setRequestMessage('Arrived at school. Parent has been notified.')
+						fetchRequests({ silent: true }).catch(() => {})
+					}).catch(() => {})
+				}
+			}
+		} catch (e) {
+			// ignore
+		}
 	}
 
 	const startGps = async () => {
@@ -513,6 +533,10 @@ export default function DriverDashboard({ token, user, onLogout }) {
 			setRequestMessage('Marked as picked up. Navigation target switched to school.')
 			setIsPickedUpModalOpen(false)
 			await fetchRequests({ silent: true })
+			// Start GPS automatically so driver can share live location with parent after pickup
+			if (gpsStatus !== 'Active') {
+				startGps().catch(() => {})
+			}
 		} catch (requestError) {
 			setError(requestError.message || 'Unable to mark student as picked up right now.')
 		}

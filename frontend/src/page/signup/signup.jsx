@@ -28,6 +28,8 @@ const initialForm = {
 export default function SignupPage() {
 	const [form, setForm] = useState(initialForm);
 	const [validIdFile, setValidIdFile] = useState(null);
+	const [showPassword, setShowPassword] = useState(false);
+	const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 	const [submitting, setSubmitting] = useState(false);
 	const [errors, setErrors] = useState([]);
 	const [success, setSuccess] = useState('');
@@ -121,18 +123,38 @@ export default function SignupPage() {
 
 					<label>
 						Password
-						<Input name="password" type="password" value={form.password} onChange={handleChange} required />
+						<div className="password-input-wrapper">
+							<Input name="password" type={showPassword ? 'text' : 'password'} value={form.password} onChange={handleChange} required />
+							<button
+								type="button"
+								className="password-toggle"
+								onClick={() => setShowPassword(!showPassword)}
+								aria-label={showPassword ? 'Hide password' : 'Show password'}
+							>
+								{showPassword ? '👁️' : '👁️‍🗨️'}
+							</button>
+						</div>
 					</label>
 
 					<label>
 						Confirm Password
-						<Input
-							name="confirmPassword"
-							type="password"
-							value={form.confirmPassword}
-							onChange={handleChange}
-							required
-						/>
+						<div className="password-input-wrapper">
+							<Input
+								name="confirmPassword"
+								type={showConfirmPassword ? 'text' : 'password'}
+								value={form.confirmPassword}
+								onChange={handleChange}
+								required
+							/>
+							<button
+								type="button"
+								className="password-toggle"
+								onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+								aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+							>
+								{showConfirmPassword ? '👁️' : '👁️‍🗨️'}
+							</button>
+						</div>
 					</label>
 
 					<label>

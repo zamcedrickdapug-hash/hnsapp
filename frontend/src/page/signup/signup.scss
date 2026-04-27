@@ -53,6 +53,42 @@
 		background: rgba(7, 20, 58, 0.95);
 	}
 
+	.password-input-wrapper {
+		position: relative;
+		display: flex;
+		align-items: center;
+
+		input {
+			flex: 1;
+			padding-right: 2.5rem;
+		}
+
+		.password-toggle {
+			position: absolute;
+			right: 0.7rem;
+			background: none;
+			border: none;
+			cursor: pointer;
+			font-size: 1.2rem;
+			padding: 0.3rem;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			color: #8f9ec9;
+			transition: color 0.2s ease;
+
+			&:hover {
+				color: #f2f6ff;
+			}
+
+			&:focus {
+				outline: 2px solid rgba(74, 137, 255, 0.55);
+				outline-offset: 2px;
+				border-radius: 6px;
+			}
+		}
+	}
+
 	input::placeholder {
 		color: #8f9ec9;
 	}

@@ -9,6 +9,7 @@ export default function LoginPage({ onLoggedIn }) {
 	const [accountType, setAccountType] = useState('parent');
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
+	const [showPassword, setShowPassword] = useState(false);
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState('');
 	const [statusMessage, setStatusMessage] = useState('');
@@ -73,13 +74,23 @@ export default function LoginPage({ onLoggedIn }) {
 
 				<label>
 					Password
-					<Input
-						type="password"
-						value={password}
-						onChange={(event) => setPassword(event.target.value)}
-						placeholder="Enter your password"
-						required
-					/>
+					<div className="password-input-wrapper">
+						<Input
+							type={showPassword ? 'text' : 'password'}
+							value={password}
+							onChange={(event) => setPassword(event.target.value)}
+							placeholder="Enter your password"
+							required
+						/>
+						<button
+							type="button"
+							className="password-toggle"
+							onClick={() => setShowPassword(!showPassword)}
+							aria-label={showPassword ? 'Hide password' : 'Show password'}
+						>
+							{showPassword ? '👁️' : '👁️‍🗨️'}
+						</button>
+					</div>
 				</label>
 
 				<Button type="submit" disabled={submitting}>

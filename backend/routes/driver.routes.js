@@ -287,6 +287,71 @@ router.patch('/requests/:requestId/picked-up', async (req, res) => {
   }
 });
 
+// Mark that the driver arrived at school (complete trip)
+router.patch('/requests/:requestId/arrived-school', async (req, res) => {
+  try {
+    const rideRequest = await VanRequest.findById(req.params.requestId).populate('parent', '_id fullName');
+
+    if (!rideRequest) {
+      return res.status(404).json({ message: 'Ride request not found.' });
+    }
+
+    if (!rideRequest.driver || String(rideRequest.driver) !== String(req.user._id)) {
+      return res.status(403).json({ message: 'You are not assigned to this request.' });
+    }
+
+    if (rideRequest.status !== 'picked_up') {
+      return res.status(409).json({ message: 'Trip must be in picked_up state to mark arrival at school.' });
+    }
+
+    rideRequest.status = 'completed';
+    await rideRequest.save();
+
+    const populatedRequest = await VanRequest.findById(rideRequest._id)
+      .populate('parent', 'fullName phone')
+      .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber');
+
+    // notify parent via in-app notification
+    const parent = await User.findById(rideRequest.parent?._id);
+    if (parent) {
+      parent.notifications.push({
+        title: 'Driver arrived at school',
+        message: `${req.user.fullName} has arrived at the school with the student.`,
+        status: 'info',
+      });
+      await parent.save();
+
+      // send push
+      sendPushToUserIds([String(parent._id)], {
+        title: 'Driver arrived at school',
+        body: `${req.user.fullName} has arrived at the school with the student.`,
+        data: {
+          type: 'driver-arrived-school',
+          requestId: String(rideRequest._id),
+        },
+      }).catch(() => {});
+    }
+
+    const io = getIo();
+    if (io) {
+      const eventPayload = { request: populatedRequest };
+      io.to(buildTripRoomName(rideRequest._id)).emit('trip:request-updated', eventPayload);
+      io.to(buildUserRoomName(rideRequest.parent?._id)).emit('trip:request-updated', eventPayload);
+      io.to(buildUserRoomName(req.user._id)).emit('trip:request-updated', eventPayload);
+
+      io.to(buildTripRoomName(rideRequest._id)).emit('trip:location-updated', {
+        requestId: String(rideRequest._id),
+        liveLocation: rideRequest.liveLocation,
+        status: rideRequest.status,
+      });
+    }
+
+    return res.status(200).json({ message: 'Driver arrival at school recorded.', request: populatedRequest });
+  } catch (error) {
+    return res.status(500).json({ message: 'Unable to update trip status right now.' });
+  }
+});
+
 router.patch('/profile', async (req, res) => {
   try {
     const nextPhone = String(req.body?.phone || '').trim();
