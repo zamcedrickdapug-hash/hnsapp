@@ -5,251 +5,200 @@ import { Input } from '../../components/ui/input';
 import { Select } from '../../components/ui/select';
 import './signup.scss';
 
-const initialForm = {
-	role: 'parent',
-	fullName: '',
-	email: '',
-	phone: '',
-	homeAddress: '',
-	password: '',
-	confirmPassword: '',
-	studentFullName: '',
-	age: '',
-	gradeLevel: '',
-	studentNumber: '',
-	schoolName: '',
-	licenseNumber: '',
-	licenseExpiry: '',
-	vehicleType: '',
-	plateNumber: '',
-	yearsOfExperience: '',
+const SIGNUP_STEPS = {
+	CONTACT: 'contact',
+	VERIFY: 'verify',
+	COMPLETE: 'complete',
 };
 
-export default function SignupPage() {
-	const [form, setForm] = useState(initialForm);
-	const [validIdFile, setValidIdFile] = useState(null);
-	const [showPassword, setShowPassword] = useState(false);
-	const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+export default function SignupPage({ onLoggedIn }) {
+	const [step, setStep] = useState(SIGNUP_STEPS.CONTACT);
+	const [accountType, setAccountType] = useState('parent');
+	const [contactMethod, setContactMethod] = useState('email'); // 'email' or 'phone'
+	const [contact, setContact] = useState('');
+	const [code, setCode] = useState('');
+	const [fullName, setFullName] = useState('');
 	const [submitting, setSubmitting] = useState(false);
 	const [errors, setErrors] = useState([]);
-	const [success, setSuccess] = useState('');
+	const [successMessage, setSuccessMessage] = useState('');
 
-	const handleChange = (event) => {
-		const { name, value } = event.target;
-
-		setForm((current) => ({
-			...current,
-			[name]: value,
-		}));
-	};
-
-	const handleSubmit = async (event) => {
+	const handleSendCode = async (event) => {
 		event.preventDefault();
-
 		setSubmitting(true);
 		setErrors([]);
-		setSuccess('');
-
-		const payload = new FormData();
-
-		Object.entries(form).forEach(([key, value]) => {
-			payload.append(key, String(value || '').trim());
-		});
-
-		if (validIdFile) {
-			payload.append('validId', validIdFile);
-		}
 
 		try {
-			const response = await apiFetch('/api/parents/register', {
+			const response = await apiFetch('/api/auth/send-code', {
 				method: 'POST',
-				body: payload,
+				body: JSON.stringify({
+					contact: contact.trim(),
+					accountType,
+				}),
 			});
 
-			setSuccess(response.message || 'Registration submitted successfully.');
-			setForm(initialForm);
-			setValidIdFile(null);
+			setSuccessMessage(response.message || 'Verification code sent!');
+			setStep(SIGNUP_STEPS.VERIFY);
 		} catch (requestError) {
-			if (Array.isArray(requestError?.data?.errors)) {
-				setErrors(requestError.data.errors);
-			} else {
-				setErrors([requestError.message || 'Unable to submit registration.']);
-			}
+			setErrors([requestError.message || 'Failed to send verification code.']);
 		} finally {
 			setSubmitting(false);
 		}
 	};
 
+	const handleVerifyCode = async (event) => {
+		event.preventDefault();
+		setSubmitting(true);
+		setErrors([]);
+
+		if (!fullName.trim()) {
+			setErrors(['Please enter your full name.']);
+			setSubmitting(false);
+			return;
+		}
+
+		try {
+			const response = await apiFetch('/api/auth/verify-code', {
+				method: 'POST',
+				body: JSON.stringify({
+					contact: contact.trim(),
+					code: code.trim(),
+					fullName: fullName.trim(),
+					accountType,
+				}),
+			});
+
+			setSuccessMessage('Account created successfully!');
+			onLoggedIn(response);
+		} catch (requestError) {
+			setErrors([requestError.message || 'Failed to verify code.']);
+		} finally {
+			setSubmitting(false);
+		}
+	};
+
+	const handleBackToContact = () => {
+		setStep(SIGNUP_STEPS.CONTACT);
+		setCode('');
+		setFullName('');
+		setErrors([]);
+		setSuccessMessage('');
+	};
+
 	return (
 		<section className="signup-page">
 			<h2>Create Account</h2>
-			
 
-			<form className="registration-form" onSubmit={handleSubmit}>
-				<fieldset>
-					<legend>Account Role</legend>
-
+			{step === SIGNUP_STEPS.CONTACT && (
+				<form className="auth-form" onSubmit={handleSendCode}>
 					<label>
-						Role
-						<Select name="role" value={form.role} onChange={handleChange}>
+						Account Type
+						<Select value={accountType} onChange={(event) => setAccountType(event.target.value)}>
 							<option value="parent">Parent</option>
 							<option value="driver">Driver</option>
 						</Select>
 					</label>
-				</fieldset>
-
-				<fieldset>
-					<legend>{form.role === 'parent' ? 'Parent Information' : 'Driver Information'}</legend>
 
 					<label>
-						Full Name
-						<Input name="fullName" value={form.fullName} onChange={handleChange} required />
-					</label>
-
-					<label>
-						Email Address
-						<Input name="email" type="email" value={form.email} onChange={handleChange} required />
-					</label>
-
-					<label>
-						Phone Number
-						<Input name="phone" value={form.phone} onChange={handleChange} required />
-					</label>
-
-					<label>
-						Home Address
-						<Input name="homeAddress" value={form.homeAddress} onChange={handleChange} required />
-					</label>
-
-					<label>
-						Password
-						<div className="password-input-wrapper">
-							<Input name="password" type={showPassword ? 'text' : 'password'} value={form.password} onChange={handleChange} required />
+						Sign up with
+						<div className="contact-method-selector">
 							<button
 								type="button"
-								className="password-toggle"
-								onClick={() => setShowPassword(!showPassword)}
-								aria-label={showPassword ? 'Hide password' : 'Show password'}
+								className={`method-btn ${contactMethod === 'email' ? 'active' : ''}`}
+								onClick={() => setContactMethod('email')}
 							>
-								{showPassword ? '👁️' : '👁️‍🗨️'}
+								Email
+							</button>
+							<button
+								type="button"
+								className={`method-btn ${contactMethod === 'phone' ? 'active' : ''}`}
+								onClick={() => setContactMethod('phone')}
+							>
+								Phone
 							</button>
 						</div>
 					</label>
 
 					<label>
-						Confirm Password
-						<div className="password-input-wrapper">
-							<Input
-								name="confirmPassword"
-								type={showConfirmPassword ? 'text' : 'password'}
-								value={form.confirmPassword}
-								onChange={handleChange}
-								required
-							/>
-							<button
-								type="button"
-								className="password-toggle"
-								onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-								aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-							>
-								{showConfirmPassword ? '👁️' : '👁️‍🗨️'}
-							</button>
-						</div>
-					</label>
-
-					<label>
-						Valid ID (Image or PDF)
+						{contactMethod === 'email' ? 'Email Address' : 'Phone Number'}
 						<Input
-							type="file"
-							accept=".jpg,.jpeg,.png,.webp,.pdf"
-							onChange={(event) => setValidIdFile(event.target.files?.[0] || null)}
+							type={contactMethod === 'email' ? 'email' : 'tel'}
+							value={contact}
+							onChange={(event) => setContact(event.target.value)}
+							placeholder={
+								contactMethod === 'email'
+									? 'name@example.com'
+									: '+1 (555) 123-4567'
+							}
 							required
 						/>
 					</label>
-				</fieldset>
 
-				{form.role === 'parent' ? (
-					<fieldset>
-						<legend>Student Information</legend>
+					<Button type="submit" disabled={submitting}>
+						{submitting ? 'Sending Code...' : 'Send Verification Code'}
+					</Button>
+				</form>
+			)}
 
-						<label>
-							Student Full Name
-							<Input name="studentFullName" value={form.studentFullName} onChange={handleChange} required />
-						</label>
+			{step === SIGNUP_STEPS.VERIFY && (
+				<form className="auth-form" onSubmit={handleVerifyCode}>
+					<p className="info-text">
+						We sent a verification code to{' '}
+						<strong>
+							{contactMethod === 'email'
+								? contact
+								: `your phone (${contact})`}
+						</strong>
+					</p>
 
-						<label>
-							Age
-							<Input name="age" type="number" min="3" max="25" value={form.age} onChange={handleChange} required />
-						</label>
+					<label>
+						Full Name
+						<Input
+							type="text"
+							value={fullName}
+							onChange={(event) => setFullName(event.target.value)}
+							placeholder="Enter your full name"
+							required
+						/>
+					</label>
 
-						<label>
-							Grade Level
-							<Input name="gradeLevel" value={form.gradeLevel} onChange={handleChange} required />
-						</label>
+					<label>
+						Verification Code
+						<Input
+							type="text"
+							value={code}
+							onChange={(event) => setCode(event.target.value)}
+							placeholder="Enter 6-digit code"
+							maxLength="6"
+							required
+						/>
+					</label>
 
-						<label>
-							Student Number
-							<Input name="studentNumber" value={form.studentNumber} onChange={handleChange} required />
-						</label>
+					<Button type="submit" disabled={submitting}>
+						{submitting ? 'Verifying...' : 'Verify & Create Account'}
+					</Button>
 
-						<label>
-							School Name
-							<Input name="schoolName" value={form.schoolName} onChange={handleChange} required />
-						</label>
-					</fieldset>
-				) : (
-					<fieldset>
-						<legend>Driver Verification Details</legend>
+					<button
+						type="button"
+						className="back-button"
+						onClick={handleBackToContact}
+						disabled={submitting}
+					>
+						← Back
+					</button>
+				</form>
+			)}
 
-						<label>
-							License Number
-							<Input name="licenseNumber" value={form.licenseNumber} onChange={handleChange} required />
-						</label>
-
-						<label>
-							License Expiry Date
-							<Input name="licenseExpiry" type="date" value={form.licenseExpiry} onChange={handleChange} required />
-						</label>
-
-						<label>
-							Vehicle Type
-							<Input name="vehicleType" value={form.vehicleType} onChange={handleChange} required />
-						</label>
-
-						<label>
-							Plate Number
-							<Input name="plateNumber" value={form.plateNumber} onChange={handleChange} required />
-						</label>
-
-						<label>
-							Years of Experience
-							<Input
-								name="yearsOfExperience"
-								type="number"
-								min="0"
-								max="60"
-								value={form.yearsOfExperience}
-								onChange={handleChange}
-								required
-							/>
-						</label>
-					</fieldset>
-				)}
-
-				<Button type="submit" disabled={submitting}>
-					{submitting ? 'Submitting Application...' : 'Submit Registration'}
-				</Button>
-			</form>
-
-			{errors.length > 0 ? (
+			{errors.length > 0 && (
 				<ul className="errors">
-					{errors.map((error) => (
-						<li key={error}>{error}</li>
+					{errors.map((error, index) => (
+						<li key={index}>{error}</li>
 					))}
 				</ul>
-			) : null}
+			)}
 
-			{success ? <p className="success">{success}</p> : null}
+			{successMessage && (
+				<p className="success">{successMessage}</p>
+			)}
 		</section>
 	);
 }

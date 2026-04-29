@@ -8,6 +8,13 @@ const {
   isValidSubscription,
   normalizeSubscription,
 } = require('../utils/pushNotifications');
+const {
+  generateVerificationCode,
+  sendSmsCode,
+  sendEmailCode,
+  isValidPhoneNumber,
+  isValidEmail,
+} = require('../utils/verification');
 
 const router = express.Router();
 
@@ -88,6 +95,188 @@ router.post('/login', async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ message: 'Unable to login at the moment.' });
+  }
+});
+
+// Send verification code via SMS or Email
+router.post('/send-code', async (req, res) => {
+  try {
+    const contact = (req.body?.contact || '').trim();
+    const accountType = req.body?.accountType || 'parent';
+
+    if (!contact) {
+      return res.status(400).json({ message: 'Email or phone number is required.' });
+    }
+
+    if (!['parent', 'driver', 'admin'].includes(accountType)) {
+      return res.status(400).json({ message: 'Invalid account type.' });
+    }
+
+    const isPhone = isValidPhoneNumber(contact);
+    const isEmail = isValidEmail(contact);
+
+    if (!isPhone && !isEmail) {
+      return res.status(400).json({ message: 'Please provide a valid email address or phone number.' });
+    }
+
+    // Generate verification code
+    const code = generateVerificationCode();
+    const expiresIn = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Find or create user
+    let user;
+    const query = isPhone ? { phone: contact } : { email: contact.toLowerCase() };
+
+    user = await User.findOne(query);
+
+    if (!user) {
+      // For new users, create a temporary user entry
+      user = new User({
+        email: isEmail ? contact.toLowerCase() : `temp-${Date.now()}@temp.com`,
+        phone: isPhone ? contact : '',
+        fullName: '', // Will be filled in during verify-code
+        role: accountType,
+        signupMethod: isPhone ? 'phone' : 'email',
+        verificationCode: code,
+        verificationCodeExpires: expiresIn,
+      });
+    } else {
+      // Update existing user's verification code
+      user.verificationCode = code;
+      user.verificationCodeExpires = expiresIn;
+      user.signupMethod = isPhone ? 'phone' : 'email';
+    }
+
+    // Save user with verification code
+    await user.save();
+
+    // Send code via SMS or Email
+    let sendResult;
+    if (isPhone) {
+      sendResult = await sendSmsCode(contact, code);
+    } else {
+      sendResult = await sendEmailCode(contact, code);
+    }
+
+    if (!sendResult.success) {
+      return res.status(500).json({
+        message: `Failed to send ${isPhone ? 'SMS' : 'email'} code. Please try again.`,
+      });
+    }
+
+    return res.status(200).json({
+      message: `Verification code sent to your ${isPhone ? 'phone number' : 'email address'}.`,
+      contactType: isPhone ? 'phone' : 'email',
+      isDevelopment: sendResult.isDevelopment,
+      ...(sendResult.isDevelopment && { code }), // Only in development
+    });
+  } catch (error) {
+    console.error('Send code error:', error);
+    return res.status(500).json({ message: 'Unable to send verification code at this moment.' });
+  }
+});
+
+// Verify code and login/signup
+router.post('/verify-code', async (req, res) => {
+  try {
+    const { contact, code, fullName, accountType } = req.body;
+
+    if (!contact || !code) {
+      return res.status(400).json({ message: 'Contact and verification code are required.' });
+    }
+
+    if (!['parent', 'driver', 'admin'].includes(accountType)) {
+      return res.status(400).json({ message: 'Invalid account type.' });
+    }
+
+    const isPhone = isValidPhoneNumber(contact);
+    const isEmail = isValidEmail(contact);
+
+    if (!isPhone && !isEmail) {
+      return res.status(400).json({ message: 'Please provide a valid email address or phone number.' });
+    }
+
+    // Find user
+    const query = isPhone ? { phone: contact } : { email: contact.toLowerCase() };
+    const user = await User.findOne(query).select('+verificationCode +verificationCodeExpires');
+
+    if (!user || !user.verificationCode) {
+      return res.status(401).json({ message: 'No verification code found. Please request a new code.' });
+    }
+
+    // Check if code is expired
+    if (new Date() > user.verificationCodeExpires) {
+      user.verificationCode = null;
+      user.verificationCodeExpires = null;
+      await user.save();
+      return res.status(401).json({ message: 'Verification code has expired. Please request a new code.' });
+    }
+
+    // Check if code matches
+    if (user.verificationCode !== code) {
+      return res.status(401).json({ message: 'Invalid verification code.' });
+    }
+
+    // Check if this is a new signup (fullName provided means signup)
+    if (fullName && !user.fullName) {
+      // This is a new user signup
+      user.fullName = fullName.trim();
+      user.isVerified = true;
+      user.status = accountType === 'admin' ? 'approved' : 'pending'; // Admins approved, others pending
+    } else if (!user.fullName) {
+      // Existing user login
+      user.isVerified = true;
+    }
+
+    // Clear verification code
+    user.verificationCode = null;
+    user.verificationCodeExpires = null;
+    user.role = accountType;
+
+    // Check account status for existing users
+    if (['parent', 'driver'].includes(user.role) && user.status !== 'approved' && fullName) {
+      // New signup - will be pending
+      // This is OK
+    } else if (['parent', 'driver'].includes(user.role) && user.status !== 'approved' && !fullName) {
+      // Existing user trying to login but not approved yet
+      await user.save();
+      return res.status(403).json({
+        message: 'Your account is not active yet. Please wait for admin verification.',
+        accountStatus: user.status,
+      });
+    }
+
+    // Check if account is suspended or banned
+    if (['suspended', 'banned'].includes(String(user.accountState || 'active'))) {
+      return res.status(403).json({
+        message:
+          user.accountState === 'banned'
+            ? 'Your account has been banned. Please contact support.'
+            : 'Your account has been suspended. Please contact support.',
+        accountState: user.accountState,
+      });
+    }
+
+    await user.save();
+
+    // Generate JWT token
+    const token = jwt.sign(
+      {
+        userId: user._id,
+        role: user.role,
+      },
+      process.env.JWT_SECRET || 'development-secret-key',
+      { expiresIn: '7d' }
+    );
+
+    return res.status(200).json({
+      token,
+      user: buildAuthPayload(user),
+      isNewUser: !!fullName,
+    });
+  } catch (error) {
+    console.error('Verify code error:', error);
+    return res.status(500).json({ message: 'Unable to verify code at this moment.' });
   }
 });
 

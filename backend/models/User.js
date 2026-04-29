@@ -194,8 +194,26 @@ const userSchema = new mongoose.Schema(
     },
     passwordHash: {
       type: String,
-      required: true,
       select: false,
+    },
+    signupMethod: {
+      type: String,
+      enum: ['email', 'phone'],
+      default: 'email',
+    },
+    verificationCode: {
+      type: String,
+      select: false,
+      default: null,
+    },
+    verificationCodeExpires: {
+      type: Date,
+      select: false,
+      default: null,
+    },
+    isVerified: {
+      type: Boolean,
+      default: false,
     },
     student: {
       type: studentSchema,
