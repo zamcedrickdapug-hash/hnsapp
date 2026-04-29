@@ -17,54 +17,14 @@ const weeklySchedule = [
 ]
 
 const defaultSettings = {
-	// Account Settings
-	fullName: '',
-	email: '',
-	phone: '',
-	// Student Information
+	parentDisplayName: '',
+	contactNumber: '',
 	studentName: '',
-	studentAge: '',
-	studentGrade: '',
+	studentGradeSection: '',
 	schoolName: '',
-	specialNeeds: '',
-	// Locations
-	homeAddress: '',
-	homeAddressDetails: '',
-	schoolAddress: '',
-	schoolAddressDetails: '',
-	frequentStop1: '',
-	frequentStop1Details: '',
-	// Payment & Preferences
-	preferredPaymentMethod: 'cash',
-	savePaymentMethod: false,
-	// Ride Preferences
-	preferredPickupTime: '06:30',
-	preferredDropoffTime: '16:30',
-	rideSpecialInstructions: '',
-	preferredDriverRating: 'all',
-	childrenBeltReminder: true,
-	// Safety Settings
-	emergencyContact1Name: '',
-	emergencyContact1Phone: '',
-	emergencyContact2Name: '',
-	emergencyContact2Phone: '',
-	shareLocationWithEmergency: false,
-	sosEnabled: true,
-	// Notifications
-	pushNotifications: true,
-	smsNotifications: false,
-	emailNotifications: true,
-	whatsappNotifications: false,
-	rideReminders: true,
-	// Preferences
-	preferredLanguage: 'en',
-	darkMode: false,
-	showRideMap: true,
-	// Privacy & Security
-	profileVisibility: 'private',
-	allowThirdPartyData: false,
-	twoFactorEnabled: false,
-	showAccountActivity: false,
+	pickupZone: '',
+	emergencyContact: '',
+	notes: '',
 }
 
 function formatDate(dateValue) {
@@ -423,20 +383,23 @@ export default function ParentDashboard({ token, user, onLogout }) {
 			{
 				type: 'Pickup',
 				time: '6:30 AM',
-					location: 'Home location',
-				},
-				{
-					type: 'Drop-off',
-					time: '7:20 AM',
-					location: 'School',
-				},
-				{
-					type: 'Return',
-					time: '4:30 PM',
-					location: 'Home location',
-				},
-			],
-			[],
+				location: settingsData.pickupZone || 'Set pickup zone in settings',
+			},
+			{
+				type: 'Drop-off',
+				time: '7:20 AM',
+				location: settingsData.schoolName || 'Set school name in settings',
+			},
+			{
+				type: 'Return',
+				time: '4:30 PM',
+				location: settingsData.pickupZone || 'Set pickup zone in settings',
+			},
+		],
+		[settingsData.pickupZone, settingsData.schoolName],
+	)
+
+	const tripHistory = useMemo(
 		() =>
 			requests.map((item) => {
 				const pickupTime = new Date(item.createdAt)
@@ -1012,443 +975,84 @@ export default function ParentDashboard({ token, user, onLogout }) {
 						</CardHeader>
 						<CardContent>
 							<form className="settings-form" onSubmit={saveSettings}>
-								{/* Account Settings Section */}
-								<div className="settings-section">
-									<h3 className="settings-section-title">Account Settings</h3>
-									<div className="settings-grid">
-										<label>
-											<span>Full Name</span>
-											<Input
-												value={settingsData.fullName}
-												onChange={(event) => updateSettingsField('fullName', event.target.value)}
-												placeholder="Your full name"
-												required
-											/>
-										</label>
+								<label>
+									<span>Parent Display Name</span>
+									<Input
+										value={settingsData.parentDisplayName}
+										onChange={(event) => updateSettingsField('parentDisplayName', event.target.value)}
+										placeholder="Enter display name"
+										required
+									/>
+								</label>
 
-										<label>
-											<span>Email Address</span>
-											<Input
-												value={settingsData.email}
-												onChange={(event) => updateSettingsField('email', event.target.value)}
-												type="email"
-												placeholder="your.email@example.com"
-												required
-											/>
-										</label>
+								<label>
+									<span>Contact Number</span>
+									<Input
+										value={settingsData.contactNumber}
+										onChange={(event) => updateSettingsField('contactNumber', event.target.value)}
+										placeholder="09XXXXXXXXX"
+										required
+									/>
+								</label>
 
-										<label>
-											<span>Phone Number</span>
-											<Input
-												value={settingsData.phone}
-												onChange={(event) => updateSettingsField('phone', event.target.value)}
-												type="tel"
-												placeholder="09XXXXXXXXX"
-												required
-											/>
-										</label>
-									</div>
-								</div>
+								<label>
+									<span>Student Name</span>
+									<Input
+										value={settingsData.studentName}
+										onChange={(event) => updateSettingsField('studentName', event.target.value)}
+										placeholder="Enter student name"
+										required
+									/>
+								</label>
 
-								{/* Student Information Section */}
-								<div className="settings-section">
-									<h3 className="settings-section-title">Student Information</h3>
-									<div className="settings-grid">
-										<label>
-											<span>Student Name</span>
-											<Input
-												value={settingsData.studentName}
-												onChange={(event) => updateSettingsField('studentName', event.target.value)}
-												placeholder="Your child's full name"
-											/>
-										</label>
+								<label>
+									<span>Grade / Section</span>
+									<Input
+										value={settingsData.studentGradeSection}
+										onChange={(event) => updateSettingsField('studentGradeSection', event.target.value)}
+										placeholder="Example: Grade 5 - Rizal"
+										required
+									/>
+								</label>
 
-										<label>
-											<span>Student Age</span>
-											<Input
-												value={settingsData.studentAge}
-												onChange={(event) => updateSettingsField('studentAge', event.target.value)}
-												type="number"
-												placeholder="Age"
-												min="5"
-												max="18"
-											/>
-										</label>
+								<label>
+									<span>School Name</span>
+									<Input
+										value={settingsData.schoolName}
+										onChange={(event) => updateSettingsField('schoolName', event.target.value)}
+										placeholder="Enter school"
+										required
+									/>
+								</label>
 
-										<label>
-											<span>Grade / Section</span>
-											<Input
-												value={settingsData.studentGrade}
-												onChange={(event) => updateSettingsField('studentGrade', event.target.value)}
-												placeholder="e.g., Grade 5 - Rizal"
-											/>
-										</label>
+								<label>
+									<span>Pickup Zone (Barangay / Landmark only)</span>
+									<Input
+										value={settingsData.pickupZone}
+										onChange={(event) => updateSettingsField('pickupZone', event.target.value)}
+										placeholder="Example: Near Barangay Hall"
+										required
+									/>
+								</label>
 
-										<label>
-											<span>School Name</span>
-											<Input
-												value={settingsData.schoolName}
-												onChange={(event) => updateSettingsField('schoolName', event.target.value)}
-												placeholder="Name of the school"
-											/>
-										</label>
+								<label>
+									<span>Emergency Contact</span>
+									<Input
+										value={settingsData.emergencyContact}
+										onChange={(event) => updateSettingsField('emergencyContact', event.target.value)}
+										placeholder="09XXXXXXXXX"
+										required
+									/>
+								</label>
 
-										<label className="full-width">
-											<span>Special Needs / Allergies</span>
-											<textarea
-												value={settingsData.specialNeeds}
-												onChange={(event) => updateSettingsField('specialNeeds', event.target.value)}
-												placeholder="e.g., Peanut allergy, motion sickness, requires car seat"
-												rows="3"
-												className="settings-textarea"
-											/>
-										</label>
-									</div>
-								</div>
-
-								{/* Saved Locations Section */}
-								<div className="settings-section">
-									<h3 className="settings-section-title">Saved Locations</h3>
-									<div className="settings-grid">
-										<label>
-											<span>Home Address</span>
-											<Input
-												value={settingsData.homeAddress}
-												onChange={(event) => updateSettingsField('homeAddress', event.target.value)}
-												placeholder="e.g., 123 Main Street, Barangay"
-											/>
-										</label>
-
-										<label>
-											<span>Home Address Details</span>
-											<Input
-												value={settingsData.homeAddressDetails}
-												onChange={(event) => updateSettingsField('homeAddressDetails', event.target.value)}
-												placeholder="e.g., Gate code, building, unit number"
-											/>
-										</label>
-
-										<label>
-											<span>School Address</span>
-											<Input
-												value={settingsData.schoolAddress}
-												onChange={(event) => updateSettingsField('schoolAddress', event.target.value)}
-												placeholder="e.g., Main Gate, School Campus"
-											/>
-										</label>
-
-										<label>
-											<span>School Address Details</span>
-											<Input
-												value={settingsData.schoolAddressDetails}
-												onChange={(event) => updateSettingsField('schoolAddressDetails', event.target.value)}
-												placeholder="e.g., Near flagpole, Grade 5 entrance"
-											/>
-										</label>
-
-										<label>
-											<span>Frequent Stop 1</span>
-											<Input
-												value={settingsData.frequentStop1}
-												onChange={(event) => updateSettingsField('frequentStop1', event.target.value)}
-												placeholder="e.g., Tutor's house, After-school care"
-											/>
-										</label>
-
-										<label>
-											<span>Frequent Stop 1 Details</span>
-											<Input
-												value={settingsData.frequentStop1Details}
-												onChange={(event) => updateSettingsField('frequentStop1Details', event.target.value)}
-												placeholder="Additional location details"
-											/>
-										</label>
-									</div>
-								</div>
-
-								{/* Ride Preferences Section */}
-								<div className="settings-section">
-									<h3 className="settings-section-title">Ride Preferences</h3>
-									<div className="settings-grid">
-										<label>
-											<span>Preferred Pickup Time</span>
-											<Input
-												value={settingsData.preferredPickupTime}
-												onChange={(event) => updateSettingsField('preferredPickupTime', event.target.value)}
-												type="time"
-											/>
-										</label>
-
-										<label>
-											<span>Preferred Dropoff Time</span>
-											<Input
-												value={settingsData.preferredDropoffTime}
-												onChange={(event) => updateSettingsField('preferredDropoffTime', event.target.value)}
-												type="time"
-											/>
-										</label>
-
-										<label>
-											<span>Minimum Driver Rating</span>
-											<select
-												value={settingsData.preferredDriverRating}
-												onChange={(event) => updateSettingsField('preferredDriverRating', event.target.value)}
-												className="settings-select"
-											>
-												<option value="all">No preference</option>
-												<option value="4.8">4.8+ stars</option>
-												<option value="4.5">4.5+ stars</option>
-												<option value="4.0">4.0+ stars</option>
-											</select>
-										</label>
-
-										<label className="settings-checkbox">
-											<input
-												type="checkbox"
-												checked={settingsData.childrenBeltReminder}
-												onChange={(event) => updateSettingsField('childrenBeltReminder', event.target.checked)}
-											/>
-											<span>Remind driver about seatbelt use</span>
-										</label>
-
-										<label className="full-width">
-											<span>Special Instructions for Driver</span>
-											<textarea
-												value={settingsData.rideSpecialInstructions}
-												onChange={(event) => updateSettingsField('rideSpecialInstructions', event.target.value)}
-												placeholder="e.g., Take left exit, avoid busy streets, play soft music"
-												rows="3"
-												className="settings-textarea"
-											/>
-										</label>
-									</div>
-								</div>
-
-								{/* Payment & Preferences Section */}
-								<div className="settings-section">
-									<h3 className="settings-section-title">Payment & Preferences</h3>
-									<div className="settings-grid">
-										<label>
-											<span>Preferred Payment Method</span>
-											<select
-												value={settingsData.preferredPaymentMethod}
-												onChange={(event) => updateSettingsField('preferredPaymentMethod', event.target.value)}
-												className="settings-select"
-											>
-												<option value="cash">Cash</option>
-												<option value="card">Credit/Debit Card</option>
-												<option value="wallet">Digital Wallet (GCash/PayMaya)</option>
-												<option value="bank">Bank Transfer</option>
-											</select>
-										</label>
-
-										<label className="settings-checkbox">
-											<input
-												type="checkbox"
-												checked={settingsData.savePaymentMethod}
-												onChange={(event) => updateSettingsField('savePaymentMethod', event.target.checked)}
-											/>
-											<span>Save payment method for faster checkout</span>
-										</label>
-
-										<label className="settings-checkbox">
-											<input
-												type="checkbox"
-												checked={settingsData.showRideMap}
-												onChange={(event) => updateSettingsField('showRideMap', event.target.checked)}
-											/>
-											<span>Show ride map during trips</span>
-										</label>
-									</div>
-								</div>
-
-								{/* Safety Settings Section */}
-								<div className="settings-section">
-									<h3 className="settings-section-title">Safety Settings</h3>
-									<div className="settings-grid">
-										<label>
-											<span>Emergency Contact 1 - Name</span>
-											<Input
-												value={settingsData.emergencyContact1Name}
-												onChange={(event) => updateSettingsField('emergencyContact1Name', event.target.value)}
-												placeholder="Contact name"
-												required
-											/>
-										</label>
-
-										<label>
-											<span>Emergency Contact 1 - Phone</span>
-											<Input
-												value={settingsData.emergencyContact1Phone}
-												onChange={(event) => updateSettingsField('emergencyContact1Phone', event.target.value)}
-												type="tel"
-												placeholder="09XXXXXXXXX"
-												required
-											/>
-										</label>
-
-										<label>
-											<span>Emergency Contact 2 - Name</span>
-											<Input
-												value={settingsData.emergencyContact2Name}
-												onChange={(event) => updateSettingsField('emergencyContact2Name', event.target.value)}
-												placeholder="Contact name (optional)"
-											/>
-										</label>
-
-										<label>
-											<span>Emergency Contact 2 - Phone</span>
-											<Input
-												value={settingsData.emergencyContact2Phone}
-												onChange={(event) => updateSettingsField('emergencyContact2Phone', event.target.value)}
-												type="tel"
-												placeholder="09XXXXXXXXX (optional)"
-											/>
-										</label>
-
-										<label className="settings-checkbox full-width">
-											<input
-												type="checkbox"
-												checked={settingsData.shareLocationWithEmergency}
-												onChange={(event) => updateSettingsField('shareLocationWithEmergency', event.target.checked)}
-											/>
-											<span>Share live location with emergency contacts during rides</span>
-										</label>
-
-										<label className="settings-checkbox full-width">
-											<input
-												type="checkbox"
-												checked={settingsData.sosEnabled}
-												onChange={(event) => updateSettingsField('sosEnabled', event.target.checked)}
-											/>
-											<span>Enable SOS button during rides (quick call to emergency contacts)</span>
-										</label>
-									</div>
-								</div>
-
-								{/* Notifications Section */}
-								<div className="settings-section">
-									<h3 className="settings-section-title">Notifications</h3>
-									<div className="settings-grid">
-										<label className="settings-checkbox">
-											<input
-												type="checkbox"
-												checked={settingsData.pushNotifications}
-												onChange={(event) => updateSettingsField('pushNotifications', event.target.checked)}
-											/>
-											<span>Push Notifications</span>
-										</label>
-
-										<label className="settings-checkbox">
-											<input
-												type="checkbox"
-												checked={settingsData.smsNotifications}
-												onChange={(event) => updateSettingsField('smsNotifications', event.target.checked)}
-											/>
-											<span>SMS Notifications</span>
-										</label>
-
-										<label className="settings-checkbox">
-											<input
-												type="checkbox"
-												checked={settingsData.emailNotifications}
-												onChange={(event) => updateSettingsField('emailNotifications', event.target.checked)}
-											/>
-											<span>Email Notifications</span>
-										</label>
-
-										<label className="settings-checkbox">
-											<input
-												type="checkbox"
-												checked={settingsData.whatsappNotifications}
-												onChange={(event) => updateSettingsField('whatsappNotifications', event.target.checked)}
-											/>
-											<span>WhatsApp Notifications</span>
-										</label>
-
-										<label className="settings-checkbox">
-											<input
-												type="checkbox"
-												checked={settingsData.rideReminders}
-												onChange={(event) => updateSettingsField('rideReminders', event.target.checked)}
-											/>
-											<span>Ride Reminders (before scheduled pickups)</span>
-										</label>
-									</div>
-								</div>
-
-								{/* Preferences Section */}
-								<div className="settings-section">
-									<h3 className="settings-section-title">App Preferences</h3>
-									<div className="settings-grid">
-										<label>
-											<span>Preferred Language</span>
-											<select
-												value={settingsData.preferredLanguage}
-												onChange={(event) => updateSettingsField('preferredLanguage', event.target.value)}
-												className="settings-select"
-											>
-												<option value="en">English</option>
-												<option value="tl">Tagalog</option>
-											</select>
-										</label>
-
-										<label className="settings-checkbox">
-											<input
-												type="checkbox"
-												checked={settingsData.darkMode}
-												onChange={(event) => updateSettingsField('darkMode', event.target.checked)}
-											/>
-											<span>Dark Mode</span>
-										</label>
-									</div>
-								</div>
-
-								{/* Privacy & Security Section */}
-								<div className="settings-section">
-									<h3 className="settings-section-title">Privacy & Security</h3>
-									<div className="settings-grid">
-										<label>
-											<span>Profile Visibility</span>
-											<select
-												value={settingsData.profileVisibility}
-												onChange={(event) => updateSettingsField('profileVisibility', event.target.value)}
-												className="settings-select"
-											>
-												<option value="private">Private</option>
-												<option value="friends">Drivers Only</option>
-												<option value="public">Public</option>
-											</select>
-										</label>
-
-										<label className="settings-checkbox">
-											<input
-												type="checkbox"
-												checked={settingsData.twoFactorEnabled}
-												onChange={(event) => updateSettingsField('twoFactorEnabled', event.target.checked)}
-											/>
-											<span>Enable Two-Factor Authentication</span>
-										</label>
-
-										<label className="settings-checkbox">
-											<input
-												type="checkbox"
-												checked={settingsData.showAccountActivity}
-												onChange={(event) => updateSettingsField('showAccountActivity', event.target.checked)}
-											/>
-											<span>Show account activity & login history</span>
-										</label>
-
-										<label className="settings-checkbox">
-											<input
-												type="checkbox"
-												checked={settingsData.allowThirdPartyData}
-												onChange={(event) => updateSettingsField('allowThirdPartyData', event.target.checked)}
-											/>
-											<span>Allow third parties to use my data for analytics</span>
-										</label>
-									</div>
-								</div>
+								<label>
+									<span>Notes for Driver</span>
+									<Input
+										value={settingsData.notes}
+										onChange={(event) => updateSettingsField('notes', event.target.value)}
+										placeholder="Landmark or important reminder"
+									/>
+								</label>
 
 								<div className="settings-actions">
 									<Button type="submit">Save Settings</Button>
