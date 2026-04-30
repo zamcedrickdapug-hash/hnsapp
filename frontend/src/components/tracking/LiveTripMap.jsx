@@ -669,7 +669,7 @@ export default function LiveTripMap({
 
 	return (
 		<div className={`trip-map ${className}`.trim()} style={{ height }}>
-			<Map
+			<MapGL
 				ref={mapRef}
 				mapLib={maplibregl}
 				mapStyle={MAP_STYLE}
@@ -739,7 +739,7 @@ export default function LiveTripMap({
 						Driver live location
 					</Popup>
 				) : null}
-			</Map>
+			</MapGL>
 
 			{showRoute && isRouteLoading ? <div className="trip-map__status">Refreshing road route...</div> : null}
 			{showRoute && !isRouteLoading && isRouteFallback ? (
