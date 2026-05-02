@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Verification - H&S App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .code-input {
+            font-size: 20px;
+            letter-spacing: 10px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .info-box {
+            background-color: #f0f4ff;
+            border-left: 4px solid #667eea;
+            padding: 12px 15px;
+            margin-bottom: 20px;
+            border-radius: 3px;
+            font-size: 13px;
+            color: #555;
+        }
+
+        .info-box strong {
+            color: #333;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.3s;
+            margin-top: 20px;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .message {
+            margin-top: 20px;
+            padding: 12px 15px;
+            border-radius: 5px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .message.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+
+        .message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+
+        .loading {
+            display: none;
+        }
+
+        .loading.show {
+            display: inline-block;
+        }
+
+        .resend-link {
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        .resend-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .resend-link a:hover {
+            text-decoration: underline;
+        }
+
+        .resend-link.disabled {
+            display: none;
+        }
+
+        .timer {
+            color: #d9534f;
+            font-weight: bold;
+            margin-top: 10px;
+            text-align: center;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Verify Your Email</h1>
+            <p>We've sent a 6-digit verification code to your email address. Enter the code below to complete your registration.</p>
+        </div>
+
+        <form id="verificationForm">
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" name="email" required placeholder="your-email@gmail.com">
+            </div>
+
+            <div class="info-box">
+                <strong>Did not receive a code?</strong> Your account must be approved by an admin first. Check your email for the approval notification.
+            </div>
+
+            <div class="form-group">
+                <label for="verificationCode">Verification Code</label>
+                <input 
+                    type="text" 
+                    id="verificationCode" 
+                    name="verification_code" 
+                    class="code-input"
+                    maxlength="6" 
+                    placeholder="000000"
+                    pattern="[0-9]{6}"
+                    required
+                >
+            </div>
+
+            <div class="timer" id="timer"></div>
+
+            <button type="submit" id="submitBtn">
+                <span>Verify Email</span>
+                <span class="loading" id="loading">...</span>
+            </button>
+
+            <div id="message" class="message"></div>
+
+            <div class="resend-link" id="resendLink">
+                <p>Code expired? <a href="#" onclick="requestNewCode(event)">Request a new code</a></p>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        const API_BASE_URL = '/api'; // Adjust based on your API endpoint
+
+        // Auto-focus and format verification code input
+        document.getElementById('verificationCode').addEventListener('input', function(e) {
+            this.value = this.value.replace(/[^0-9]/g, '').slice(0, 6);
+        });
+
+        // Handle form submission
+        document.getElementById('verificationForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const email = document.getElementById('email').value.trim();
+            const verificationCode = document.getElementById('verificationCode').value.trim();
+
+            if (!email || !verificationCode) {
+                showMessage('Please fill in all fields', 'error');
+                return;
+            }
+
+            if (verificationCode.length !== 6) {
+                showMessage('Verification code must be exactly 6 digits', 'error');
+                return;
+            }
+
+            try {
+                setLoading(true);
+
+                const response = await fetch(`${API_BASE_URL}/verify`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        verification_code: verificationCode,
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    showMessage('✓ Email verified successfully! Redirecting to login...', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/login'; // Redirect to login page
+                    }, 2000);
+                } else {
+                    showMessage(data.message || 'Verification failed. Please try again.', 'error');
+                }
+            } catch (error) {
+                showMessage('Network error. Please check your connection and try again.', 'error');
+                console.error('Verification error:', error);
+            } finally {
+                setLoading(false);
+            }
+        });
+
+        function showMessage(text, type) {
+            const messageEl = document.getElementById('message');
+            messageEl.textContent = text;
+            messageEl.className = `message ${type}`;
+        }
+
+        function setLoading(isLoading) {
+            const btn = document.getElementById('submitBtn');
+            const loading = document.getElementById('loading');
+            
+            if (isLoading) {
+                btn.disabled = true;
+                loading.classList.add('show');
+            } else {
+                btn.disabled = false;
+                loading.classList.remove('show');
+            }
+        }
+
+        function requestNewCode(e) {
+            e.preventDefault();
+            showMessage('Please contact the admin to request a new verification code.', 'error');
+            // In production, you could implement an endpoint to resend the code
+        }
+
+        // Optional: Display code expiry timer if you track it on the client side
+        function initializeTimer(expirySeconds = 900) { // 15 minutes default
+            const timerEl = document.getElementById('timer');
+            
+            const updateTimer = () => {
+                const minutes = Math.floor(expirySeconds / 60);
+                const seconds = expirySeconds % 60;
+                
+                if (expirySeconds > 0) {
+                    timerEl.textContent = `Code expires in ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                    expirySeconds--;
+                    setTimeout(updateTimer, 1000);
+                } else {
+                    timerEl.textContent = 'Code has expired';
+                    document.getElementById('submitBtn').disabled = true;
+                }
+            };
+            
+            updateTimer();
+        }
+
+        // Uncomment and call if you want to show expiry timer
+        // initializeTimer();
+    </script>
+</body>
+</html>
