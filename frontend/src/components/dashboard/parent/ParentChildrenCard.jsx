@@ -1,0 +1,94 @@
+/**
+ * ParentChildrenCard Component
+ * ============================
+ * Displays student/child information card for parent dashboard
+ * 
+ * Architecture: Reusable component for displaying child details
+ * Shows: Child name, grade, school, status indicators
+ */
+
+import { motion } from 'framer-motion'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card'
+import { Button } from '../../ui/button'
+import { BookOpen, MapPin } from 'lucide-react'
+
+export function ParentChildrenCard({
+  studentName = 'Student Name',
+  studentGradeSection = 'Grade/Section',
+  schoolName = 'School Name',
+  pickupZone = 'Pickup Zone',
+  status = 'waiting',
+  onEditClick = () => {},
+  isLoading = false,
+}) {
+  const statusConfig = {
+    waiting: { color: 'text-gray-600', bg: 'bg-gray-50', label: 'Waiting' },
+    active: { color: 'text-blue-600', bg: 'bg-blue-50', label: 'In Transit' },
+    arrived: { color: 'text-green-600', bg: 'bg-green-50', label: 'Arrived' },
+    completed: { color: 'text-green-600', bg: 'bg-green-50', label: 'Completed' },
+  }
+
+  const statusInfo = statusConfig[status] || statusConfig.waiting
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="h-6 bg-gray-200 rounded w-2/3 animate-pulse" />
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="h-4 bg-gray-200 rounded w-1/2 animate-pulse" />
+          <div className="h-4 bg-gray-200 rounded w-2/3 animate-pulse" />
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.3 }}
+    >
+      <Card className="hover:shadow-lg transition-shadow">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between">
+            <div>
+              <CardTitle className="text-lg">{studentName}</CardTitle>
+              <CardDescription>{studentGradeSection}</CardDescription>
+            </div>
+            <div className={`px-3 py-1 rounded-full text-xs font-semibold ${statusInfo.bg} ${statusInfo.color}`}>
+              {statusInfo.label}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <p className="text-xs font-medium text-gray-600">School</p>
+            <div className="flex items-center gap-2 mt-1">
+              <BookOpen size={16} className="text-gray-400" />
+              <p className="font-medium text-gray-900">{schoolName}</p>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-medium text-gray-600">Pickup Zone</p>
+            <div className="flex items-center gap-2 mt-1">
+              <MapPin size={16} className="text-gray-400" />
+              <p className="font-medium text-gray-900">{pickupZone}</p>
+            </div>
+          </div>
+
+          <Button
+            onClick={onEditClick}
+            variant="outline"
+            size="sm"
+            className="w-full mt-2"
+          >
+            Edit Student Info
+          </Button>
+        </CardContent>
+      </Card>
+    </motion.div>
+  )
+}

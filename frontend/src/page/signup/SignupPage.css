@@ -1,0 +1,204 @@
+.driver-application-intro {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid rgba(109, 146, 201, 0.3);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(233, 243, 255, 0.9) 0%, rgba(245, 249, 255, 1) 100%);
+}
+
+.driver-application-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #dfeeff;
+  border: 1px solid #cfe0ff;
+  color: #174a96;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.driver-application-steps {
+  display: grid;
+  gap: 6px;
+  color: #23446d;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.signup-role-fieldset,
+.signup-section {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.signup-role-fieldset legend,
+.signup-section legend {
+  margin-bottom: 12px;
+  padding: 0;
+  color: #1b3557;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.signup-role-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.signup-role-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 76px;
+  padding: 12px 14px;
+  border: 1px solid #cfe0ff;
+  border-radius: 14px;
+  background: #f5f9ff;
+  color: #24436a;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.signup-role-option:hover {
+  transform: translateY(-1px);
+  border-color: #9bbdfd;
+}
+
+.signup-role-option--selected {
+  border-color: #4a8df0;
+  background: linear-gradient(180deg, #edf5ff 0%, #eaf2ff 100%);
+  color: #123258;
+  box-shadow: 0 10px 20px rgba(74, 141, 240, 0.08);
+}
+
+.signup-role-option:focus-within {
+  outline: 2px solid rgba(74, 141, 240, 0.4);
+  outline-offset: 3px;
+}
+
+.signup-role-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.signup-role-copy strong {
+  font-size: 0.96rem;
+}
+
+.signup-role-copy small {
+  font-size: 0.72rem;
+  color: #58708d;
+}
+
+.signup-role-option input[type='radio'] {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: #2d73d8;
+}
+
+.signup-role-fieldset:disabled .signup-role-option {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.signup-field-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.signup-section {
+  padding-top: 8px;
+}
+
+.signup-password {
+  position: relative;
+  min-width: 0;
+}
+
+.signup-password .auth-input {
+  padding-right: 76px;
+}
+
+.signup-password .signup-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: auto;
+  min-width: 54px;
+  min-height: 40px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #385b86;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.signup-password-toggle:focus-visible {
+  outline: 2px solid rgba(74, 141, 240, 0.4);
+  outline-offset: 0;
+}
+
+.signup-hint,
+.signup-copy,
+.signup-field-error {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.signup-hint,
+.signup-copy {
+  color: #506884;
+}
+
+.signup-field-error {
+  color: #b43838;
+}
+
+.signup-note {
+  border: 1px solid rgba(66, 122, 202, 0.3);
+  background: rgba(233, 243, 255, 0.9);
+  color: #183d68;
+}
+
+.auth-input[type='file'] {
+  min-width: 0;
+  padding: 10px;
+  font-size: 0.8125rem;
+}
+
+.auth-input[type='file']::file-selector-button {
+  margin-right: 10px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: #dfeeff;
+  color: #123258;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+@media (max-width: 520px) {
+  .signup-role-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

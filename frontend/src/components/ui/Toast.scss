@@ -1,0 +1,342 @@
+// Modern glassmorphism toast notification styles
+.toast-container {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+
+  &--top-right {
+    top: 20px;
+    right: 20px;
+    align-items: flex-end;
+  }
+
+  &--top-left {
+    top: 20px;
+    left: 20px;
+    align-items: flex-start;
+  }
+
+  &--top-center {
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    align-items: center;
+  }
+
+  &--bottom-right {
+    bottom: 20px;
+    right: 20px;
+    align-items: flex-end;
+  }
+
+  &--bottom-left {
+    bottom: 20px;
+    left: 20px;
+    align-items: flex-start;
+  }
+
+  &--bottom-center {
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    align-items: center;
+  }
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  min-width: 320px;
+  max-width: 420px;
+  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  overflow: hidden;
+
+  // Dark mode compatibility
+  @media (prefers-color-scheme: dark) {
+    background: rgba(30, 30, 30, 0.95);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4),
+      0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+  }
+
+  // Animation states
+  &--entering {
+    animation: slideInRight 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  &--exiting {
+    animation: slideOutRight 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+
+  // Hover effect
+  &:hover {
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15),
+      0 0 0 1px rgba(255, 255, 255, 0.3) inset;
+    transform: translateY(-2px);
+
+    @media (prefers-color-scheme: dark) {
+      background: rgba(40, 40, 40, 0.98);
+      box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+    }
+  }
+
+  // Color variants
+  &--blue {
+    border-left: 4px solid #3b82f6;
+
+    .toast__icon {
+      color: #3b82f6;
+    }
+  }
+
+  &--green {
+    border-left: 4px solid #10b981;
+
+    .toast__icon {
+      color: #10b981;
+    }
+  }
+
+  &--yellow {
+    border-left: 4px solid #f59e0b;
+
+    .toast__icon {
+      color: #f59e0b;
+    }
+  }
+
+  &--orange {
+    border-left: 4px solid #f97316;
+
+    .toast__icon {
+      color: #f97316;
+    }
+  }
+
+  &--red {
+    border-left: 4px solid #ef4444;
+
+    .toast__icon {
+      color: #ef4444;
+    }
+  }
+
+  // Priority variants
+  &--low {
+    opacity: 0.9;
+  }
+
+  &--normal {
+    opacity: 1;
+  }
+
+  &--high {
+    box-shadow: 0 12px 48px rgba(59, 130, 246, 0.2),
+      0 0 0 1px rgba(255, 255, 255, 0.3) inset;
+
+    @media (prefers-color-scheme: dark) {
+      box-shadow: 0 12px 48px rgba(59, 130, 246, 0.1),
+        0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+    }
+  }
+
+  &--urgent {
+    animation: pulse 1s infinite;
+    box-shadow: 0 12px 48px rgba(239, 68, 68, 0.3),
+      0 0 0 1px rgba(255, 255, 255, 0.3) inset;
+
+    @media (prefers-color-scheme: dark) {
+      box-shadow: 0 12px 48px rgba(239, 68, 68, 0.2),
+        0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+    }
+  }
+}
+
+.toast__icon {
+  font-size: 24px;
+  flex-shrink: 0;
+  animation: iconBounce 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.toast__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast__title {
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.4;
+  margin: 0 0 4px 0;
+  color: #1f2937;
+  word-break: break-word;
+
+  @media (prefers-color-scheme: dark) {
+    color: #f3f4f6;
+  }
+}
+
+.toast__message {
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 0;
+  color: #6b7280;
+  word-break: break-word;
+
+  @media (prefers-color-scheme: dark) {
+    color: #d1d5db;
+  }
+}
+
+.toast__time {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 6px;
+  font-weight: 500;
+
+  @media (prefers-color-scheme: dark) {
+    color: #6b7280;
+  }
+}
+
+.toast__close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 4px;
+  font-size: 18px;
+  line-height: 1;
+  transition: color 0.2s ease;
+  margin-left: 12px;
+
+  &:hover {
+    color: #1f2937;
+
+    @media (prefers-color-scheme: dark) {
+      color: #f3f4f6;
+    }
+  }
+
+  &:active {
+    transform: scale(0.9);
+  }
+}
+
+.toast__progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #3b82f6, #10b981);
+  animation: progressBar 5s linear forwards;
+
+  .toast--high & {
+    animation: progressBar 4s linear forwards;
+  }
+
+  .toast--urgent & {
+    background: linear-gradient(90deg, #ef4444, #f97316);
+    animation: progressBar 3s linear forwards;
+  }
+}
+
+// Animations
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(400px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(400px);
+  }
+}
+
+@keyframes iconBounce {
+  0% {
+    transform: scale(0.3) translateY(-10px);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes progressBar {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+// Responsive adjustments
+@media (max-width: 480px) {
+  .toast {
+    min-width: 280px;
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  .toast-container {
+    padding: 12px;
+
+    &--top-right,
+    &--top-left,
+    &--top-center {
+      top: 12px;
+    }
+
+    &--bottom-right,
+    &--bottom-left,
+    &--bottom-center {
+      bottom: 12px;
+    }
+  }
+}

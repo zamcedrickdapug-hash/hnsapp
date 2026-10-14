@@ -1,0 +1,25 @@
+{
+  "name": "H&S Booking System",
+  "short_name": "H&S App",
+  "description": "School van booking and live tracking for parents and drivers.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#02091a",
+  "theme_color": "#2f73f6",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

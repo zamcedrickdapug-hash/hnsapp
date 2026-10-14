@@ -1,0 +1,399 @@
+/* ============================================
+   TRIP STATUS PANEL STYLES
+   ============================================ */
+
+.trip-status-panel {
+	background: linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.6) 100%);
+	border: 1px solid rgba(148, 163, 184, 0.2);
+	border-radius: 12px;
+	padding: 16px;
+	backdrop-filter: blur(8px);
+	color: #e2e8f0;
+	gap: 12px;
+	display: flex;
+	flex-direction: column;
+}
+
+/* ============================================
+   STATUS HEADER
+   ============================================ */
+
+.status-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding-bottom: 12px;
+	border-bottom: 2px solid;
+	gap: 8px;
+}
+
+.status-badge {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 12px;
+	border-radius: 6px;
+	font-size: 0.875rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: #ffffff;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.status-icon {
+	display: inline-block;
+	font-weight: 700;
+	animation: statusPulse 2s ease-in-out infinite;
+}
+
+@keyframes statusPulse {
+	0%, 100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.6;
+	}
+}
+
+.status-text {
+	white-space: nowrap;
+}
+
+.demo-badge {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 8px;
+	border-radius: 4px;
+	font-size: 0.65rem;
+	font-weight: 600;
+	background: rgba(249, 115, 22, 0.15);
+	color: #fb923c;
+	border: 1px solid rgba(249, 115, 22, 0.3);
+}
+
+.demo-dot {
+	width: 4px;
+	height: 4px;
+	background: #fb923c;
+	border-radius: 50%;
+	animation: demoPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes demoPulse {
+	0%, 100% {
+		opacity: 0.6;
+	}
+	50% {
+		opacity: 1;
+	}
+}
+
+/* ============================================
+   STATUS GRID
+   ============================================ */
+
+.status-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+	gap: 10px;
+	margin: 8px 0;
+}
+
+.status-item {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 10px;
+	background: rgba(51, 65, 85, 0.4);
+	border-radius: 8px;
+	border: 1px solid rgba(148, 163, 184, 0.15);
+	transition: all 0.3s ease;
+}
+
+.status-item:hover {
+	background: rgba(51, 65, 85, 0.6);
+	border-color: rgba(148, 163, 184, 0.3);
+	transform: translateY(-2px);
+}
+
+.item-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	background: rgba(82, 163, 255, 0.15);
+	border-radius: 6px;
+	color: #52a3ff;
+	flex-shrink: 0;
+}
+
+.item-content {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.item-label {
+	font-size: 0.7rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: #94a3b8;
+}
+
+.item-value {
+	font-size: 0.95rem;
+	font-weight: 700;
+	color: #f1f5f9;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.eta-section .item-icon {
+	background: rgba(34, 197, 94, 0.15);
+	color: #22c55e;
+}
+
+.distance-section .item-icon {
+	background: rgba(59, 130, 246, 0.15);
+	color: #3b82f6;
+}
+
+.speed-section .item-icon {
+	background: rgba(168, 85, 247, 0.15);
+	color: #a855f7;
+}
+
+/* ============================================
+   PROGRESS SECTION
+   ============================================ */
+
+.progress-section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin: 4px 0;
+}
+
+.progress-bar {
+	position: relative;
+	width: 100%;
+	height: 6px;
+	background: rgba(51, 65, 85, 0.6);
+	border-radius: 999px;
+	overflow: hidden;
+	border: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.progress-fill {
+	height: 100%;
+	background: linear-gradient(90deg, #10b981 0%, #06d6a0 100%);
+	border-radius: 999px;
+	position: relative;
+	box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+}
+
+.progress-glow {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: radial-gradient(circle at right, rgba(16, 185, 129, 0.3), transparent);
+	pointer-events: none;
+	animation: progressGlow 2s ease-in-out infinite;
+}
+
+@keyframes progressGlow {
+	0%, 100% {
+		opacity: 0.3;
+	}
+	50% {
+		opacity: 0.6;
+	}
+}
+
+.progress-text {
+	font-size: 0.75rem;
+	font-weight: 600;
+	text-align: right;
+	color: #94a3b8;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+/* ============================================
+   VEHICLE INFO
+   ============================================ */
+
+.vehicle-info {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 10px;
+	background: rgba(51, 65, 85, 0.3);
+	border-radius: 8px;
+	border: 1px solid rgba(148, 163, 184, 0.15);
+	margin: 4px 0;
+}
+
+.vehicle-type-badge {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 50px;
+	padding: 6px 8px;
+	background: linear-gradient(135deg, #3f94ff 0%, #2e63d7 100%);
+	border-radius: 6px;
+	font-size: 0.65rem;
+	font-weight: 800;
+	color: #ffffff;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	box-shadow: 0 4px 8px rgba(62, 148, 255, 0.2);
+}
+
+.vehicle-details {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	flex: 1;
+	min-width: 0;
+}
+
+.driver-info,
+.plate-info {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 0.8rem;
+}
+
+.vehicle-details .label {
+	font-weight: 600;
+	color: #94a3b8;
+	text-transform: uppercase;
+	font-size: 0.7rem;
+	letter-spacing: 0.05em;
+}
+
+.vehicle-details .value {
+	font-weight: 600;
+	color: #e2e8f0;
+}
+
+.vehicle-details .font-mono {
+	font-family: 'Courier New', monospace;
+}
+
+/* ============================================
+   LOCATION INFO
+   ============================================ */
+
+.location-info {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 8px;
+	background: rgba(51, 65, 85, 0.2);
+	border-radius: 6px;
+	border-left: 3px solid rgba(148, 163, 184, 0.3);
+}
+
+.location-item {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	font-size: 0.8rem;
+}
+
+.location-type {
+	font-weight: 600;
+	text-transform: uppercase;
+	font-size: 0.7rem;
+	letter-spacing: 0.05em;
+	color: #94a3b8;
+}
+
+.location-coords {
+	font-family: 'Courier New', monospace;
+	font-size: 0.75rem;
+	color: #cbd5e1;
+	letter-spacing: -0.02em;
+}
+
+.location-item.pickup .location-type {
+	color: #10b981;
+}
+
+.location-item.destination .location-type {
+	color: #3b82f6;
+}
+
+/* ============================================
+   ACTION BUTTONS
+   ============================================ */
+
+.retry-button {
+	padding: 10px 16px;
+	background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+	border: 1px solid rgba(59, 130, 246, 0.3);
+	border-radius: 8px;
+	color: #ffffff;
+	font-size: 0.875rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+.retry-button:hover {
+	background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+	box-shadow: 0 6px 16px rgba(59, 130, 246, 0.3);
+	transform: translateY(-2px);
+}
+
+.retry-button:active {
+	transform: translateY(0);
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 640px) {
+	.trip-status-panel {
+		padding: 12px;
+		gap: 10px;
+	}
+
+	.status-grid {
+		grid-template-columns: 1fr 1fr;
+		gap: 8px;
+	}
+
+	.status-item {
+		padding: 8px;
+	}
+
+	.item-icon {
+		width: 24px;
+		height: 24px;
+	}
+
+	.vehicle-info {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.vehicle-type-badge {
+		align-self: flex-start;
+	}
+}

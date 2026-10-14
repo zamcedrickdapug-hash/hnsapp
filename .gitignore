@@ -1,0 +1,28 @@
+# Environment files (keep checked-in examples)
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# Dependencies and generated output
+**/node_modules/
+**/dist/
+**/build/
+**/coverage/
+*.log
+
+# Service-account credentials and private keys
+**/serviceAccount*.json
+**/service-account*.json
+**/firebase-adminsdk-*.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Private uploaded identification documents
+**/uploads/ids/
+**/uploads/identification/
+**/uploads/id-documents/

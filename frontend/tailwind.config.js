@@ -1,0 +1,147 @@
+  /** @type {import('tailwindcss').Config} */
+  export default {
+    content: [
+      "./index.html",
+      "./src/**/*.{js,ts,jsx,tsx}",
+    ],
+    theme: {
+      extend: {
+        colors: {
+          primary: {
+            50: '#f0f7ff',
+            100: '#e0eeff',
+            200: '#c7dfff',
+            300: '#a3c4ff',
+            400: '#7aa3ff',
+            500: '#0066ff', // Main brand color
+            600: '#0052cc',
+            700: '#0047b2',
+            800: '#003d99',
+            900: '#002966',
+          },
+          secondary: {
+            50: '#f0f9ff',
+            100: '#e0f2fe',
+            200: '#bae6fd',
+            300: '#7dd3fc',
+            400: '#38bdf8',
+            500: '#0ea5e9',
+            600: '#0284c7',
+            700: '#0369a1',
+            800: '#075985',
+            900: '#0c4a6e',
+          },
+          success: {
+            50: '#f0fdf4',
+            500: '#10b981',
+            600: '#059669',
+          },
+          warning: {
+            50: '#fffbeb',
+            500: '#f59e0b',
+            600: '#d97706',
+          },
+          error: {
+            50: '#fef2f2',
+            500: '#ef4444',
+            600: '#dc2626',
+          },
+          neutral: {
+            50: '#f9fafb',
+            100: '#f3f4f6',
+            200: '#e5e7eb',
+            300: '#d1d5db',
+            400: '#9ca3af',
+            500: '#6b7280',
+            600: '#4b5563',
+            700: '#374151',
+            800: '#1f2937',
+            900: '#111827',
+          },
+        },
+        fontFamily: {
+          sans: ['Manrope', 'Segoe UI', 'sans-serif'],
+          heading: ['Sora', 'Outfit', 'sans-serif'],
+        },
+        fontSize: {
+          xs: ['12px', { lineHeight: '1.5' }],
+          sm: ['14px', { lineHeight: '1.5' }],
+          base: ['16px', { lineHeight: '1.6' }],
+          lg: ['18px', { lineHeight: '1.6' }],
+          xl: ['20px', { lineHeight: '1.6' }],
+          '2xl': ['24px', { lineHeight: '1.35' }],
+          '3xl': ['30px', { lineHeight: '1.35' }],
+          '4xl': ['36px', { lineHeight: '1.25' }],
+          '5xl': ['48px', { lineHeight: '1.1' }],
+        },
+        spacing: {
+          xs: '4px',
+          sm: '8px',
+          md: '12px',
+          lg: '16px',
+          xl: '24px',
+          '2xl': '32px',
+          '3xl': '48px',
+          '4xl': '64px',
+        },
+        borderRadius: {
+          none: '0',
+          xs: '4px',
+          sm: '8px',
+          md: '12px',
+          lg: '16px',
+          xl: '24px',
+          full: '9999px',
+        },
+        animation: {
+          'fade-in': 'fadeIn 0.5s ease-in-out',
+          'slide-up': 'slideUp 0.5s ease-out',
+          'slide-down': 'slideDown 0.3s ease-out',
+          'scale-in': 'scaleIn 0.4s ease-out',
+          'bounce-gentle': 'bounceGentle 2s infinite',
+        },
+        keyframes: {
+          fadeIn: {
+            '0%': { opacity: '0' },
+            '100%': { opacity: '1' },
+          },
+          slideUp: {
+            '0%': { transform: 'translateY(20px)', opacity: '0' },
+            '100%': { transform: 'translateY(0)', opacity: '1' },
+          },
+          slideDown: {
+            '0%': { transform: 'translateY(-10px)', opacity: '0' },
+            '100%': { transform: 'translateY(0)', opacity: '1' },
+          },
+          scaleIn: {
+            '0%': { transform: 'scale(0.95)', opacity: '0' },
+            '100%': { transform: 'scale(1)', opacity: '1' },
+          },
+          bounceGentle: {
+            '0%, 100%': { transform: 'translateY(0)' },
+            '50%': { transform: 'translateY(-10px)' },
+          },
+        },
+        backgroundImage: {
+          'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+          'hero-gradient': 'linear-gradient(135deg, #0066ff 0%, #0047b2 100%)',
+          'hero-gradient-secondary': 'linear-gradient(135deg, #0052cc 0%, #003d99 100%)',
+        },
+        boxShadow: {
+          'sm': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+          'base': '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
+          'md': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+          'lg': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+          'xl': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          'card': '0 2px 8px rgba(0, 102, 255, 0.08)',
+          'card-hover': '0 12px 24px rgba(0, 102, 255, 0.15)',
+        },
+        transition: {
+          'fast': 'all 150ms ease-in-out',
+          'base': 'all 300ms ease-in-out',
+          'slow': 'all 500ms ease-in-out',
+        },
+      },
+    },
+    plugins: [],
+  }

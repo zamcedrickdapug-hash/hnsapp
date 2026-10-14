@@ -1,0 +1,595 @@
+// ============================================
+// H&S BOOKING SYSTEM - MODERN AUTH PAGE STYLES
+// ============================================
+
+// Color Variables
+$primary-color: #2563eb;
+$primary-dark: #1e40af;
+$primary-light: #3b82f6;
+$bg-dark: #0f172a;
+$bg-darker: #020617;
+$text-light: #f1f5f9;
+$text-muted: #cbd5e1;
+$border-color: rgba(148, 163, 184, 0.1);
+$border-light: rgba(148, 163, 184, 0.2);
+
+// Animation Keyframes
+@keyframes fadeInUp {
+	from {
+		opacity: 0;
+		transform: translateY(20px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes slideIn {
+	from {
+		opacity: 0;
+		transform: translateX(-20px);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(0);
+	}
+}
+
+@keyframes gradientShift {
+	0%, 100% {
+		background-position: 0% 50%;
+	}
+	50% {
+		background-position: 100% 50%;
+	}
+}
+
+// ============================================
+// PAGE LAYOUT
+// ============================================
+
+.auth-page-modern {
+	min-height: 100vh;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 1.5rem;
+	background: $bg-darker;
+	position: relative;
+	overflow: hidden;
+}
+
+// Gradient Background
+.auth-bg-gradient {
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(135deg, #0f172a 0%, #1e293b 25%, #0f172a 50%, #1e1b4b 75%, #0f172a 100%);
+	background-size: 200% 200%;
+	opacity: 0.5;
+	pointer-events: none;
+	animation: gradientShift 15s ease infinite;
+
+	&::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: radial-gradient(circle at 20% 50%, rgba(37, 99, 235, 0.15) 0%, transparent 50%),
+		            radial-gradient(circle at 80% 80%, rgba(59, 130, 246, 0.1) 0%, transparent 50%);
+		pointer-events: none;
+	}
+}
+
+// ============================================
+// CONTAINER & STRUCTURE
+// ============================================
+
+.auth-container {
+	position: relative;
+	z-index: 10;
+	width: 100%;
+	max-width: 480px;
+	animation: fadeInUp 0.6s ease-out;
+}
+
+.role-cards-container {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 0.75rem;
+	margin-bottom: 2rem;
+	animation: fadeInUp 0.6s ease-out 0.1s backwards;
+
+	@media (max-width: 480px) {
+		gap: 0.5rem;
+		margin-bottom: 1.5rem;
+	}
+}
+
+// ============================================
+// ROLE CARDS
+// ============================================
+
+.role-card {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	padding: 1.25rem 0.75rem;
+	background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.8));
+	border: 2px solid $border-light;
+	border-radius: 16px;
+	cursor: pointer;
+	transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+	position: relative;
+	overflow: hidden;
+
+	&::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(135deg, rgba(37, 99, 235, 0.2) 0%, transparent 100%);
+		opacity: 0;
+		transition: opacity 0.3s ease;
+		pointer-events: none;
+	}
+
+	&:hover {
+		transform: translateY(-4px);
+		border-color: $primary-light;
+		background: linear-gradient(135deg, rgba(37, 99, 235, 0.15), rgba(37, 99, 235, 0.08));
+		box-shadow: 0 8px 16px rgba(37, 99, 235, 0.2);
+
+		&::before {
+			opacity: 1;
+		}
+
+		.role-card-icon {
+			transform: scale(1.2) translateY(-2px);
+		}
+	}
+
+	&.active {
+		border-color: $primary-color;
+		background: linear-gradient(135deg, rgba(37, 99, 235, 0.25), rgba(37, 99, 235, 0.12));
+		box-shadow: 0 0 20px rgba(37, 99, 235, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+
+		.role-card-icon {
+			transform: scale(1.25);
+		}
+
+		.role-card-label {
+			color: $primary-light;
+			font-weight: 700;
+		}
+	}
+}
+
+.role-card-icon {
+	font-size: 2rem;
+	transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+	display: block;
+	line-height: 1;
+}
+
+.role-card-label {
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: $text-light;
+	transition: color 0.3s ease;
+	text-align: center;
+}
+
+// ============================================
+// AUTH CARD
+// ============================================
+
+.auth-card {
+	background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(20, 28, 50, 0.95));
+	backdrop-filter: blur(30px);
+	border: 1px solid $border-color;
+	border-radius: 24px;
+	padding: 2.5rem;
+	box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5),
+	            0 0 1px $border-light;
+	animation: fadeInUp 0.6s ease-out 0.2s backwards;
+	position: relative;
+
+	@media (max-width: 480px) {
+		padding: 1.75rem 1.25rem;
+		border-radius: 16px;
+	}
+
+	&::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 1px;
+		background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.3), transparent);
+		border-radius: 24px 24px 0 0;
+	}
+}
+
+// ============================================
+// ADMIN INTRO
+// ============================================
+
+.admin-intro {
+	text-align: center;
+
+	.admin-intro-header {
+		margin-bottom: 2rem;
+
+		h2 {
+			margin: 0 0 0.5rem 0;
+			font-size: 1.75rem;
+			font-weight: 700;
+			color: $text-light;
+			letter-spacing: -0.02em;
+		}
+
+		p {
+			margin: 0;
+			font-size: 0.95rem;
+			color: $text-muted;
+			line-height: 1.5;
+		}
+	}
+}
+
+// ============================================
+// AUTH FORM
+// ============================================
+
+.auth-form {
+	display: flex;
+	flex-direction: column;
+	gap: 1.5rem;
+}
+
+.auth-header {
+	text-align: center;
+	margin-bottom: 0.5rem;
+
+	h2 {
+		margin: 0 0 0.5rem 0;
+		font-size: 1.5rem;
+		font-weight: 700;
+		color: $text-light;
+		letter-spacing: -0.01em;
+	}
+
+	p {
+		margin: 0;
+		font-size: 0.9rem;
+		color: $text-muted;
+		line-height: 1.5;
+		text-transform: capitalize;
+	}
+}
+
+// ============================================
+// FORM FIELDS
+// ============================================
+
+.form-field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+
+	label {
+		display: block;
+		color: $text-light;
+		font-weight: 600;
+		font-size: 0.85rem;
+		letter-spacing: 0.5px;
+		text-transform: uppercase;
+		opacity: 0.95;
+	}
+
+	.input-wrapper {
+		position: relative;
+		display: flex;
+		align-items: center;
+	}
+}
+
+.password-input-wrapper {
+	position: relative;
+	display: flex;
+	align-items: center;
+
+	input {
+		padding-right: 2.75rem;
+	}
+}
+
+input {
+	padding: 0.875rem 1rem;
+	background: rgba(2, 6, 23, 0.6);
+	border: 1.5px solid $border-light;
+	border-radius: 12px;
+	color: $text-light;
+	font-size: 1rem;
+	font-family: inherit;
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	letter-spacing: 0.3px;
+	width: 100%;
+
+	&::placeholder {
+		color: rgba(203, 213, 225, 0.4);
+	}
+
+	&:focus {
+		outline: none;
+		background: rgba(2, 6, 23, 0.8);
+		border-color: $primary-color;
+		box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15),
+		            0 0 12px rgba(37, 99, 235, 0.3);
+	}
+
+	&:hover:not(:focus) {
+		border-color: $border-color;
+		background: rgba(2, 6, 23, 0.7);
+	}
+
+	&.has-error {
+		border-color: #ef4444;
+		background: rgba(239, 68, 68, 0.08);
+
+		&:focus {
+			box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15),
+			            0 0 12px rgba(239, 68, 68, 0.2);
+		}
+	}
+}
+
+.field-error {
+	font-size: 0.8rem;
+	color: #ef4444;
+	margin-top: 0.25rem;
+	display: block;
+	animation: slideIn 0.2s ease-out;
+}
+
+// ============================================
+// FORM BUTTONS & LINKS
+// ============================================
+
+.password-toggle-btn {
+	position: absolute;
+	right: 0.75rem;
+	background: none;
+	border: none;
+	color: $text-muted;
+	cursor: pointer;
+	font-size: 1.1rem;
+	opacity: 0.7;
+	transition: all 0.2s ease;
+	padding: 0.25rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 2;
+
+	&:hover {
+		opacity: 1;
+		color: $primary-light;
+	}
+
+	&:active {
+		transform: scale(0.95);
+	}
+}
+
+.auth-links {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: -0.75rem;
+	margin-bottom: 0.25rem;
+}
+
+.link-btn {
+	background: none;
+	border: none;
+	color: $primary-light;
+	cursor: pointer;
+	font-size: 0.85rem;
+	font-weight: 500;
+	text-decoration: none;
+	transition: all 0.2s ease;
+	padding: 0.25rem 0;
+
+	&:hover {
+		color: #60a5fa;
+		text-decoration: underline;
+	}
+
+	&:active {
+		transform: scale(0.98);
+	}
+}
+
+.forgot-btn {
+	// Inherits link-btn styles
+}
+
+// ============================================
+// BUTTONS
+// ============================================
+
+.btn-primary {
+	width: 100%;
+	padding: 0.975rem 1rem;
+	background: linear-gradient(135deg, $primary-color, $primary-light);
+	border: none;
+	border-radius: 12px;
+	color: white;
+	font-weight: 600;
+	font-size: 1rem;
+	letter-spacing: 0.5px;
+	cursor: pointer;
+	transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+	box-shadow: 0 8px 16px rgba(37, 99, 235, 0.3);
+	text-transform: uppercase;
+
+	&:hover:not(:disabled) {
+		transform: translateY(-2px);
+		box-shadow: 0 12px 24px rgba(37, 99, 235, 0.4);
+	}
+
+	&:active:not(:disabled) {
+		transform: translateY(0);
+		box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+	}
+
+	&:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+}
+
+.btn-block {
+	width: 100%;
+}
+
+// ============================================
+// ERROR & STATUS MESSAGES
+// ============================================
+
+.error-banner {
+	padding: 1rem;
+	background: rgba(239, 68, 68, 0.12);
+	border: 1px solid rgba(239, 68, 68, 0.3);
+	border-radius: 8px;
+	color: #fecaca;
+	font-size: 0.9rem;
+	line-height: 1.5;
+	animation: slideIn 0.3s ease-out;
+}
+
+// ============================================
+// SIGNUP SECTION
+// ============================================
+
+.signup-section {
+	margin-top: 1.5rem;
+	padding-top: 1.5rem;
+	border-top: 1px solid $border-light;
+	text-align: center;
+
+	p {
+		margin: 0;
+		font-size: 0.9rem;
+		color: $text-muted;
+		line-height: 1.5;
+
+		.signup-btn {
+			margin-left: 0.25rem;
+			display: inline;
+		}
+	}
+}
+
+// ============================================
+// RESPONSIVE
+// ============================================
+
+@media (max-width: 640px) {
+	.auth-page-modern {
+		padding: 1rem;
+	}
+
+	.auth-container {
+		width: 100%;
+	}
+
+	.role-cards-container {
+		gap: 0.5rem;
+		margin-bottom: 1.5rem;
+	}
+
+	.auth-card {
+		padding: 1.5rem 1rem;
+	}
+
+	.auth-header {
+		h2 {
+			font-size: 1.25rem;
+		}
+	}
+
+	.form-field {
+		gap: 0.4rem;
+	}
+
+	input {
+		font-size: 16px; // Prevent iOS zoom
+	}
+}
+
+@media (max-width: 480px) {
+	.auth-page-modern {
+		min-height: 100dvh; // Use dynamic viewport height on mobile
+		padding: 1rem;
+	}
+
+	.auth-container {
+		max-width: 100%;
+	}
+
+	.role-card {
+		padding: 1rem 0.5rem;
+		gap: 0.4rem;
+
+		.role-card-icon {
+			font-size: 1.75rem;
+		}
+
+		.role-card-label {
+			font-size: 0.75rem;
+		}
+	}
+
+	.auth-card {
+		padding: 1.25rem;
+		border-radius: 12px;
+	}
+
+	.auth-header {
+		h2 {
+			font-size: 1.25rem;
+		}
+
+		p {
+			font-size: 0.85rem;
+		}
+	}
+
+	.form-field {
+		label {
+			font-size: 0.8rem;
+		}
+	}
+
+	input {
+		padding: 0.75rem 0.875rem;
+		font-size: 16px;
+	}
+
+	.btn-primary {
+		padding: 0.875rem 0.75rem;
+		font-size: 0.95rem;
+	}
+
+	.signup-section {
+		margin-top: 1rem;
+		padding-top: 1rem;
+
+		p {
+			font-size: 0.85rem;
+		}
+	}
+}

@@ -1,0 +1,40 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "nodemon index.js",
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "body-parser": "^1.20.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.1",
+    "firebase-admin": "^13.9.0",
+    "hnsapp": "file:..",
+    "jsonwebtoken": "^9.0.3",
+    "mailtrap": "^4.5.1",
+    "mongodb": "^7.1.1",
+    "mongoose": "^9.6.2",
+    "multer": "^2.0.2",
+    "nodemailer": "^7.0.13",
+    "socket.io": "^4.8.1",
+    "twilio": "^4.10.0",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}

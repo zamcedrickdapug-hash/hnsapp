@@ -1,0 +1,364 @@
+/* ============================================
+   DEMO MODE CONTROLLER STYLES
+   ============================================ */
+
+.demo-mode-controller {
+	background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.7) 100%);
+	border: 1px solid rgba(148, 163, 184, 0.25);
+	border-radius: 12px;
+	padding: 16px;
+	backdrop-filter: blur(8px);
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	color: #e2e8f0;
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================
+   HEADER
+   ============================================ */
+
+.controller-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding-bottom: 12px;
+	border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+	gap: 10px;
+}
+
+.controller-header h3 {
+	margin: 0;
+	font-size: 1rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: #f1f5f9;
+}
+
+.info-button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	background: rgba(82, 163, 255, 0.15);
+	border: 1px solid rgba(82, 163, 255, 0.3);
+	border-radius: 6px;
+	color: #52a3ff;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	font-size: 0;
+}
+
+.info-button:hover {
+	background: rgba(82, 163, 255, 0.25);
+	border-color: rgba(82, 163, 255, 0.5);
+	color: #60b6ff;
+}
+
+/* ============================================
+   INFO PANEL
+   ============================================ */
+
+.controller-info {
+	background: rgba(51, 65, 85, 0.4);
+	border: 1px solid rgba(148, 163, 184, 0.15);
+	border-radius: 8px;
+	padding: 12px;
+	font-size: 0.8rem;
+	line-height: 1.5;
+	color: #cbd5e1;
+}
+
+.controller-info p {
+	margin: 0 0 8px 0;
+}
+
+.controller-info ul {
+	margin: 0;
+	padding-left: 20px;
+	list-style: disc inside;
+}
+
+.controller-info li {
+	margin-bottom: 4px;
+}
+
+/* ============================================
+   SECTIONS
+   ============================================ */
+
+.controller-section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.controller-label {
+	font-size: 0.75rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: #94a3b8;
+}
+
+/* ============================================
+   SCENARIO SELECTOR
+   ============================================ */
+
+.scenario-selector {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+	gap: 8px;
+}
+
+.scenario-option {
+	padding: 8px 12px;
+	background: rgba(51, 65, 85, 0.4);
+	border: 1.5px solid rgba(148, 163, 184, 0.2);
+	border-radius: 6px;
+	color: #cbd5e1;
+	font-size: 0.8rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.scenario-option:hover:not(:disabled) {
+	background: rgba(51, 65, 85, 0.6);
+	border-color: rgba(82, 163, 255, 0.4);
+	color: #e2e8f0;
+	transform: translateY(-1px);
+}
+
+.scenario-option.active {
+	background: linear-gradient(135deg, #3f94ff 0%, #2e63d7 100%);
+	border-color: rgba(82, 163, 255, 0.5);
+	color: #ffffff;
+	box-shadow: 0 4px 12px rgba(62, 148, 255, 0.25);
+}
+
+.scenario-option:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+/* ============================================
+   STATUS DISPLAY
+   ============================================ */
+
+.status-display {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 10px;
+	background: rgba(51, 65, 85, 0.3);
+	border-radius: 6px;
+	border: 1px solid rgba(148, 163, 184, 0.15);
+	transition: all 0.3s ease;
+}
+
+.status-badge {
+	display: inline-block;
+	padding: 4px 8px;
+	border-radius: 4px;
+	font-size: 0.75rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	background: rgba(82, 163, 255, 0.15);
+	color: #52a3ff;
+}
+
+.status-badge.idle {
+	background: rgba(148, 163, 184, 0.15);
+	color: #cbd5e1;
+}
+
+.status-badge.en-route-to-pickup,
+.status-badge.near-pickup {
+	background: rgba(249, 115, 22, 0.15);
+	color: #fb923c;
+}
+
+.status-badge.picked-up {
+	background: rgba(168, 85, 247, 0.15);
+	color: #c084fc;
+}
+
+.status-badge.en-route-to-destination,
+.status-badge.near-destination {
+	background: rgba(59, 130, 246, 0.15);
+	color: #60a5fa;
+}
+
+.status-badge.arrived {
+	background: rgba(16, 185, 129, 0.15);
+	color: #10b981;
+}
+
+.progress-display {
+	font-weight: 700;
+	color: #f1f5f9;
+	font-size: 0.9rem;
+}
+
+/* ============================================
+   CONTROL BUTTONS
+   ============================================ */
+
+.controller-controls {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+	gap: 8px;
+}
+
+.control-button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 10px 12px;
+	border: 1px solid transparent;
+	border-radius: 6px;
+	font-size: 0.8rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	white-space: nowrap;
+}
+
+.start-button {
+	background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+	color: #ffffff;
+	border: 1px solid rgba(34, 197, 94, 0.3);
+	box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
+}
+
+.start-button:hover {
+	background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+	box-shadow: 0 6px 16px rgba(34, 197, 94, 0.3);
+}
+
+.pause-button {
+	background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+	color: #ffffff;
+	border: 1px solid rgba(245, 158, 11, 0.3);
+	box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+}
+
+.pause-button:hover {
+	background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+	box-shadow: 0 6px 16px rgba(245, 158, 11, 0.3);
+}
+
+.stop-button {
+	background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+	color: #ffffff;
+	border: 1px solid rgba(239, 68, 68, 0.3);
+	box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+	font-size: 1.2rem;
+}
+
+.stop-button:hover {
+	background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+	box-shadow: 0 6px 16px rgba(239, 68, 68, 0.3);
+}
+
+.reset-button {
+	background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+	color: #ffffff;
+	border: 1px solid rgba(59, 130, 246, 0.3);
+	box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+.reset-button:hover {
+	background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+	box-shadow: 0 6px 16px rgba(59, 130, 246, 0.3);
+}
+
+/* ============================================
+   PROGRESS BAR
+   ============================================ */
+
+.controller-progress {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding-top: 8px;
+	border-top: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.progress-bar-container {
+	position: relative;
+	width: 100%;
+	height: 6px;
+	background: rgba(51, 65, 85, 0.5);
+	border-radius: 999px;
+	overflow: hidden;
+	border: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.progress-bar-fill {
+	height: 100%;
+	background: linear-gradient(90deg, #3b82f6 0%, #06d6a0 100%);
+	border-radius: 999px;
+	box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+	position: relative;
+}
+
+.progress-bar-fill::after {
+	content: '';
+	position: absolute;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	width: 2px;
+	background: rgba(255, 255, 255, 0.6);
+	filter: blur(0.5px);
+}
+
+.progress-text {
+	font-size: 0.7rem;
+	font-weight: 600;
+	text-align: center;
+	color: #94a3b8;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 640px) {
+	.demo-mode-controller {
+		padding: 12px;
+		gap: 12px;
+	}
+
+	.controller-header h3 {
+		font-size: 0.95rem;
+	}
+
+	.scenario-selector {
+		grid-template-columns: repeat(3, 1fr);
+	}
+
+	.controller-controls {
+		grid-template-columns: 1fr 1fr;
+		gap: 6px;
+	}
+
+	.control-button {
+		padding: 8px;
+		font-size: 0.7rem;
+	}
+}

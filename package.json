@@ -1,0 +1,17 @@
+{
+  "name": "hnsapp",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "npm install --prefix frontend --include=dev && npm run build --prefix frontend && npm install --prefix backend --omit=dev",
+    "start": "npm --prefix backend start",
+    "backend:dev": "npm run dev --prefix backend",
+    "frontend:dev": "npm run dev --prefix frontend",
+    "frontend:build": "npm run build --prefix frontend"
+  },
+  "dependencies": {
+    "framer-motion": "^12.38.0"
+  }
+}

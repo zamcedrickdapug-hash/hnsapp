@@ -1,0 +1,437 @@
+﻿// ============================================
+// H&S BOOKING SYSTEM - ADMIN LOGIN PAGE STYLES
+// ============================================
+
+// Color Variables
+$primary-color: #2563eb;
+$primary-light: #3b82f6;
+$bg-darker: #020617;
+$text-light: #f1f5f9;
+$text-muted: #cbd5e1;
+$border-light: rgba(148, 163, 184, 0.2);
+
+// Animation
+@keyframes fadeInUp {
+from {
+opacity: 0;
+transform: translateY(20px);
+}
+to {
+opacity: 1;
+transform: translateY(0);
+}
+}
+
+// ============================================
+// PAGE LAYOUT
+// ============================================
+
+.admin-login-page {
+min-height: 100vh;
+display: flex;
+align-items: center;
+justify-content: center;
+padding: 1.5rem;
+background: $bg-darker;
+position: relative;
+overflow: hidden;
+
+&::before {
+content: '';
+position: absolute;
+inset: 0;
+background: linear-gradient(135deg, #0f172a 0%, #1e293b 25%, #0f172a 50%, #1e1b4b 75%, #0f172a 100%);
+opacity: 0.5;
+pointer-events: none;
+}
+
+&::after {
+content: '';
+position: absolute;
+inset: 0;
+background: radial-gradient(circle at 20% 50%, rgba(37, 99, 235, 0.15) 0%, transparent 50%);
+pointer-events: none;
+}
+}
+
+// ============================================
+// CONTAINER
+// ============================================
+
+.admin-login-container {
+position: relative;
+z-index: 10;
+width: 100%;
+max-width: 480px;
+animation: fadeInUp 0.6s ease-out;
+}
+
+// ============================================
+// HEADER
+// ============================================
+
+.admin-login-header {
+text-align: center;
+margin-bottom: 2.5rem;
+
+.header-icon {
+display: inline-flex;
+align-items: center;
+justify-content: center;
+width: 60px;
+height: 60px;
+background: linear-gradient(135deg, rgba(37, 99, 235, 0.2), rgba(59, 130, 246, 0.15));
+border: 2px solid rgba(59, 130, 246, 0.3);
+border-radius: 16px;
+font-size: 2rem;
+margin-bottom: 1.25rem;
+animation: fadeInUp 0.6s ease-out;
+box-shadow: 0 8px 16px rgba(37, 99, 235, 0.1);
+}
+
+h2 {
+margin: 0 0 0.75rem 0;
+font-size: 1.9rem;
+font-weight: 800;
+color: $text-light;
+letter-spacing: -0.02em;
+background: linear-gradient(135deg, $text-light, $primary-light);
+-webkit-background-clip: text;
+-webkit-text-fill-color: transparent;
+background-clip: text;
+}
+
+p {
+margin: 0;
+font-size: 0.95rem;
+color: $text-muted;
+font-weight: 500;
+letter-spacing: 0.3px;
+}
+}
+
+// ============================================
+// FORM
+// ============================================
+
+.admin-auth-form {
+background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(20, 28, 50, 0.98));
+backdrop-filter: blur(40px);
+border: 1px solid $border-light;
+border-radius: 20px;
+padding: 2.75rem;
+box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+display: flex;
+flex-direction: column;
+gap: 1.75rem;
+position: relative;
+
+&::before {
+content: '';
+position: absolute;
+top: 0;
+left: 0;
+right: 0;
+height: 1px;
+background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.4), transparent);
+border-radius: 20px 20px 0 0;
+}
+
+&::after {
+content: '';
+position: absolute;
+bottom: 0;
+left: 0;
+right: 0;
+height: 1px;
+background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.2), transparent);
+border-radius: 0 0 20px 20px;
+}
+
+@media (max-width: 480px) {
+padding: 1.75rem 1.25rem;
+border-radius: 16px;
+gap: 1.25rem;
+}
+}
+
+// ============================================
+// FORM FIELDS
+// ============================================
+
+label {
+display: block;
+color: $text-light;
+font-weight: 700;
+font-size: 0.85rem;
+letter-spacing: 0.5px;
+text-transform: uppercase;
+opacity: 0.95;
+margin-bottom: 0.75rem;
+}
+
+input {
+padding: 0.95rem 1.125rem;
+background: rgba(2, 6, 23, 0.4);
+border: 1.5px solid $border-light;
+border-radius: 12px;
+color: $text-light;
+font-size: 1rem;
+font-family: inherit;
+transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+width: 100%;
+backdrop-filter: blur(10px);
+
+&::placeholder {
+color: rgba(203, 213, 225, 0.35);
+font-weight: 500;
+}
+
+&:focus {
+outline: none;
+background: rgba(2, 6, 23, 0.6);
+border-color: $primary-color;
+box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2),
+            0 0 16px rgba(37, 99, 235, 0.35),
+            inset 0 2px 4px rgba(37, 99, 235, 0.1);
+transform: translateY(-1px);
+}
+
+&:hover:not(:focus) {
+border-color: rgba(59, 130, 246, 0.4);
+background: rgba(2, 6, 23, 0.5);
+}
+
+&:disabled {
+opacity: 0.5;
+cursor: not-allowed;
+background: rgba(2, 6, 23, 0.2);
+}
+
+&.error {
+border-color: #ef4444;
+background: rgba(239, 68, 68, 0.1);
+
+&:focus {
+box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.2),
+            0 0 16px rgba(239, 68, 68, 0.3);
+}
+}
+}
+
+// ============================================
+// PASSWORD INPUT
+// ============================================
+
+.password-input-wrapper {
+position: relative;
+display: flex;
+align-items: center;
+
+input {
+padding-right: 3rem;
+}
+}
+
+.password-toggle {
+position: absolute;
+right: 1rem;
+background: none;
+border: none;
+color: $text-muted;
+cursor: pointer;
+font-size: 1.15rem;
+opacity: 0.6;
+transition: all 0.2s ease;
+padding: 0.5rem;
+z-index: 2;
+
+&:hover {
+opacity: 1;
+color: $primary-light;
+transform: scale(1.1);
+}
+
+&:active {
+transform: scale(0.95);
+}
+
+&:disabled {
+opacity: 0.4;
+cursor: not-allowed;
+}
+}
+
+// ============================================
+// ERROR MESSAGE
+// ============================================
+
+.feedback {
+padding: 1.125rem 1.25rem;
+background: rgba(239, 68, 68, 0.15);
+border: 1.5px solid rgba(239, 68, 68, 0.4);
+border-radius: 12px;
+color: #fca5a5;
+font-size: 0.9rem;
+line-height: 1.6;
+font-weight: 500;
+animation: slideInUp 0.3s ease-out;
+box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
+
+&.error {
+// Error styling
+}
+
+&.success {
+background: rgba(34, 197, 94, 0.15);
+border-color: rgba(34, 197, 94, 0.4);
+color: #86efac;
+box-shadow: 0 4px 12px rgba(34, 197, 94, 0.15);
+}
+}
+
+@keyframes slideInUp {
+from {
+opacity: 0;
+transform: translateY(10px);
+}
+to {
+opacity: 1;
+transform: translateY(0);
+}
+}
+
+// ============================================
+// BUTTON
+// ============================================
+
+button[type='submit'] {
+width: 100%;
+padding: 1.05rem 1.25rem;
+background: linear-gradient(135deg, $primary-color, $primary-light);
+border: none;
+border-radius: 12px;
+color: white;
+font-weight: 700;
+font-size: 0.95rem;
+letter-spacing: 1px;
+cursor: pointer;
+transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+box-shadow: 0 10px 28px rgba(37, 99, 235, 0.35);
+text-transform: uppercase;
+position: relative;
+overflow: hidden;
+
+&::before {
+content: '';
+position: absolute;
+top: 0;
+left: -100%;
+width: 100%;
+height: 100%;
+background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+transition: left 0.5s ease;
+}
+
+&:hover:not(:disabled) {
+transform: translateY(-3px);
+box-shadow: 0 16px 40px rgba(37, 99, 235, 0.45);
+letter-spacing: 1.2px;
+
+&::before {
+left: 100%;
+}
+}
+
+&:active:not(:disabled) {
+transform: translateY(-1px);
+box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+}
+
+&:disabled {
+opacity: 0.5;
+cursor: not-allowed;
+}
+}
+
+// ============================================
+// BACK LINK
+// ============================================
+
+.form-footer {
+margin-top: 1.5rem;
+padding-top: 1.5rem;
+border-top: 1px solid $border-light;
+text-align: center;
+}
+
+.back-link {
+background: none;
+border: none;
+color: $primary-light;
+cursor: pointer;
+font-size: 0.9rem;
+font-weight: 600;
+text-decoration: none;
+transition: all 0.2s ease;
+padding: 0.5rem;
+position: relative;
+
+&::after {
+content: '';
+position: absolute;
+bottom: -2px;
+left: 0;
+width: 0;
+height: 2px;
+background: $primary-light;
+transition: width 0.3s ease;
+}
+
+&:hover:not(:disabled) {
+color: #60a5fa;
+
+&::after {
+width: 100%;
+}
+}
+
+&:disabled {
+opacity: 0.5;
+cursor: not-allowed;
+}
+}
+
+// ============================================
+// RESPONSIVE
+// ============================================
+
+@media (max-width: 480px) {
+.admin-login-page {
+min-height: 100dvh;
+padding: 1rem;
+}
+
+.admin-login-header {
+h2 {
+font-size: 1.25rem;
+}
+
+p {
+font-size: 0.85rem;
+}
+}
+
+.admin-auth-form {
+padding: 1.25rem;
+}
+
+label {
+font-size: 0.8rem;
+}
+
+input {
+padding: 0.75rem 0.875rem;
+font-size: 16px;
+}
+}

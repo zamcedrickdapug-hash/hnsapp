@@ -1,0 +1,217 @@
+/* ============================================
+   ANIMATED VEHICLE MARKER STYLES
+   ============================================ */
+
+.vehicle-marker-wrapper {
+	position: relative;
+	width: 48px;
+	height: 48px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+/* Glow effect when vehicle is moving */
+.vehicle-marker-glow {
+	position: absolute;
+	width: 100%;
+	height: 100%;
+	border-radius: 50%;
+	background: radial-gradient(circle, rgba(82, 163, 255, 0.4) 0%, rgba(82, 163, 255, 0) 70%);
+	filter: blur(2px);
+	z-index: 1;
+	animation: vehicleGlowPulse 2.5s ease-in-out infinite;
+}
+
+/* Main vehicle marker container */
+.vehicle-marker {
+	position: relative;
+	width: 40px;
+	height: 40px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: linear-gradient(135deg, #3f94ff 0%, #2e63d7 100%);
+	border-radius: 50%;
+	border: 2px solid rgba(255, 255, 255, 0.4);
+	box-shadow:
+		0 0 0 2px rgba(82, 163, 255, 0.2),
+		0 4px 12px rgba(0, 0, 0, 0.4),
+		inset 0 1px 2px rgba(255, 255, 255, 0.3);
+	z-index: 2;
+	transition: transform 0.3s ease-out;
+	color: #ffffff;
+}
+
+/* Pulsing ring animation */
+.vehicle-marker-ring {
+	position: absolute;
+	width: 100%;
+	height: 100%;
+	border: 2px solid rgba(82, 163, 255, 0.6);
+	border-radius: 50%;
+	animation: vehicleRingPulse 2s ease-in-out infinite;
+	pointer-events: none;
+}
+
+/* Vehicle icon styling */
+.vehicle-marker-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	z-index: 3;
+}
+
+.vehicle-marker-icon svg {
+	width: 100%;
+	height: 100%;
+	color: inherit;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+/* Direction indicator (arrow) */
+.vehicle-marker-direction {
+	position: absolute;
+	top: -6px;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 8px;
+	height: 8px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: #52a3ff;
+	z-index: 4;
+}
+
+.vehicle-marker-direction svg {
+	width: 100%;
+	height: 100%;
+	filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+}
+
+/* Pulsing heartbeat effect */
+.vehicle-marker-pulse {
+	position: absolute;
+	width: 100%;
+	height: 100%;
+	border-radius: 50%;
+	border: 2px solid rgba(82, 163, 255, 0.8);
+	animation: vehicleHeartbeat 1.5s ease-in-out infinite;
+	pointer-events: none;
+}
+
+/* Motion trail effect */
+.motion-trail {
+	position: absolute;
+	width: 100%;
+	height: 100%;
+	border-radius: 50%;
+	background: radial-gradient(circle, transparent 30%, rgba(82, 163, 255, 0.1) 100%);
+	animation: motionTrailFade 0.8s ease-out forwards;
+	pointer-events: none;
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+@keyframes vehicleGlowPulse {
+	0%, 100% {
+		opacity: 0.4;
+		transform: scale(1);
+	}
+	50% {
+		opacity: 0.7;
+		transform: scale(1.1);
+	}
+}
+
+@keyframes vehicleRingPulse {
+	0%, 100% {
+		opacity: 0;
+		transform: scale(0.8);
+	}
+	50% {
+		opacity: 1;
+		transform: scale(1.2);
+	}
+}
+
+@keyframes vehicleHeartbeat {
+	0%, 100% {
+		transform: scale(1);
+		opacity: 0.8;
+	}
+	50% {
+		transform: scale(1.15);
+		opacity: 0.4;
+	}
+}
+
+@keyframes motionTrailFade {
+	0% {
+		opacity: 1;
+		transform: scale(1);
+	}
+	100% {
+		opacity: 0;
+		transform: scale(1.3);
+	}
+}
+
+/* ============================================
+   RESPONSIVE STYLES
+   ============================================ */
+
+@media (max-width: 768px) {
+	.vehicle-marker-wrapper {
+		width: 40px;
+		height: 40px;
+	}
+
+	.vehicle-marker {
+		width: 36px;
+		height: 36px;
+	}
+
+	.vehicle-marker-icon {
+		width: 20px;
+		height: 20px;
+	}
+
+	.vehicle-marker-direction {
+		top: -4px;
+		width: 6px;
+		height: 6px;
+	}
+}
+
+/* ============================================
+   SELECTED/HOVER STATES
+   ============================================ */
+
+.vehicle-marker-wrapper.selected .vehicle-marker {
+	box-shadow:
+		0 0 0 3px rgba(82, 163, 255, 0.3),
+		0 0 0 6px rgba(82, 163, 255, 0.15),
+		0 4px 16px rgba(0, 0, 0, 0.5),
+		inset 0 1px 2px rgba(255, 255, 255, 0.4);
+	transform: scale(1.1);
+}
+
+.vehicle-marker-wrapper.moving .vehicle-marker {
+	animation: vehicleMotion 0.6s ease-in-out infinite;
+}
+
+@keyframes vehicleMotion {
+	0%, 100% {
+		transform: scale(1);
+	}
+	50% {
+		transform: scale(0.95);
+	}
+}
