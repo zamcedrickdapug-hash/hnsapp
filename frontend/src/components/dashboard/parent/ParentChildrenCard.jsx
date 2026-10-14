@@ -18,6 +18,7 @@ export function ParentChildrenCard({
   schoolName = 'School Name',
   pickupZone = 'Pickup Zone',
   status = 'waiting',
+  hasStudentDetails = true,
   onEditClick = () => {},
   isLoading = false,
 }) {
@@ -85,7 +86,7 @@ export function ParentChildrenCard({
             size="sm"
             className="w-full mt-2"
           >
-            Edit Student Info
+            {hasStudentDetails ? 'Edit Student Info' : 'Add student details'}
           </Button>
         </CardContent>
       </Card>

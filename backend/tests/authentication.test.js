@@ -194,6 +194,62 @@ test('parent and driver profile routes store valid phone numbers in +63 format',
   }
 });
 
+test('parent profile endpoint reads and persists editable parent and student details', async (t) => {
+  const f = await createFixture(t);
+  const parent = await f.addUser({ phone: '+639171234567', homeAddress: 'Old pickup zone' });
+  const token = f.sessionToken(parent);
+
+  assert.equal((await f.request('/api/parents/profile')).status, 401);
+  assert.equal((await f.request('/api/parents/profile', undefined, f.sessionToken(
+    await f.addUser({ role: 'driver' })
+  ))).status, 403);
+
+  const initial = await f.request('/api/parents/profile', undefined, token);
+  assert.equal(initial.status, 200);
+  assert.equal(initial.body.profile.parentName, 'Test Account');
+  assert.equal(initial.body.profile.pickupZone, 'Old pickup zone');
+  assert.equal(initial.body.profile.studentName, '');
+
+  const update = await f.request('/api/parents/profile', {
+    parentName: ' Updated Parent ',
+    contactNumber: '09701713972',
+    studentName: 'Student Example',
+    gradeSection: 'Grade 5 - A',
+    schoolName: 'Example School',
+    pickupZone: 'New pickup zone',
+    schoolLatitude: '14.5995',
+    schoolLongitude: '120.9842',
+  }, token, 'PUT');
+  assert.equal(update.status, 200);
+  assert.deepEqual(update.body.profile, {
+    parentName: 'Updated Parent',
+    contactNumber: '+639701713972',
+    studentName: 'Student Example',
+    gradeSection: 'Grade 5 - A',
+    schoolName: 'Example School',
+    pickupZone: 'New pickup zone',
+    schoolLatitude: 14.5995,
+    schoolLongitude: 120.9842,
+  });
+  assert.equal(parent.student.fullName, 'Student Example');
+  assert.equal(parent.phone, '+639701713972');
+
+  const invalidPhone = await f.request('/api/parents/profile', {
+    parentName: 'Updated Parent',
+    contactNumber: '0817123456',
+  }, token, 'PUT');
+  assert.equal(invalidPhone.status, 400);
+  assert.equal(parent.phone, '+639701713972');
+
+  const incompleteCoordinates = await f.request('/api/parents/profile', {
+    parentName: 'Updated Parent',
+    contactNumber: '+639701713972',
+    schoolLatitude: '14.5',
+    schoolLongitude: '',
+  }, token, 'PUT');
+  assert.equal(incompleteCoordinates.status, 400);
+});
+
 test('one password login returns each stored role and a compatible session token', async (t) => {
   const f = await createFixture(t);
   for (const role of ['parent', 'driver', 'admin']) {
@@ -606,9 +662,11 @@ test('the real MongoDB schema retains Firebase UID, uploaded ID, and license exp
     role: 'driver', fullName: 'Schema Test', email: 'schema@gmail.com', firebaseUid: randomUUID(),
     driver: { licenseExpirationDate: new Date('2035-01-01'), yearsOfExperience: 0 },
     validId: { originalName: 'id.png', filename: 'stored.png', path: 'test/id.png', mimeType: 'image/png', size: 9 },
+    student: { schoolLatitude: 14.5995, schoolLongitude: 120.9842 },
   });
   await user.validate();
   assert.ok(user.toObject().firebaseUid);
   assert.ok(user.toObject().driver.licenseExpirationDate instanceof Date);
   assert.equal(user.toObject().validId.originalName, 'id.png');
+  assert.equal(user.toObject().student.schoolLatitude, 14.5995);
 });

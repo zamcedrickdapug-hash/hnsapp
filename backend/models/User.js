@@ -49,6 +49,16 @@ const studentSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    schoolLatitude: {
+      type: Number,
+      min: -90,
+      max: 90,
+    },
+    schoolLongitude: {
+      type: Number,
+      min: -180,
+      max: 180,
+    },
   },
   { _id: false }
 );

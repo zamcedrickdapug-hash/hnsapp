@@ -21,17 +21,20 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Wifi, WifiOff, AlertCircle } from 'lucide-react'
+import { Wifi, WifiOff, AlertCircle, MessageSquare, CreditCard, UserRound, CheckCircle2, AlertTriangle, Save, RotateCcw } from 'lucide-react'
+import { isValidPhoneNumber, normalizePhoneNumber } from '../../constants/authConstants'
 import { apiFetch } from '../../api'
 import { useSocket, useSocketEvent } from '../../hooks/useSocket'
 import { DashboardLayout } from '../../components/dashboard'
 import { ParentChildrenCard, ParentTrackingPanel } from '../../components/dashboard/parent'
+import NotificationHistory from '../../components/ui/NotificationHistory'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import LiveTripMap from '../../components/tracking/LiveTripMap'
 import { NotificationsContainer } from '../../components/notifications/NotificationToast'
 import { ReceiptModal } from '../../components/modals/ReceiptModal'
 import { ReportIssueModal } from '../../components/modals/ReportIssueModal'
+import TripHistoryPage from './TripHistoryPage'
 import './ParentDashboard.scss'
 
 // Default settings structure
@@ -77,26 +80,68 @@ export default function ParentDashboard({ token, user, onLogout }) {
   const [tripHistory, setTripHistory] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState('')
+  const [parentNotifications, setParentNotifications] = useState([])
+  const [notificationsLoading, setNotificationsLoading] = useState(false)
+  const [notificationsError, setNotificationsError] = useState('')
 
   // ====== SETTINGS STATE ======
-  const [settingsData, setSettingsData] = useState(() => {
-    const storageKey = `hns_parent_profile_${user.id}`
-    const stored = localStorage.getItem(storageKey)
-    return stored ? JSON.parse(stored) : { ...defaultSettings }
-  })
+  const initialSettingsData = {
+    ...defaultSettings,
+    parentDisplayName: user.fullName || user.name || '',
+    contactNumber: user.phone || '',
+    emergencyContact: user.phone || '',
+    pickupZone: user.homeAddress || '',
+  }
+  const [settingsData, setSettingsData] = useState(initialSettingsData)
+  const [savedSettingsData, setSavedSettingsData] = useState(initialSettingsData)
+  const [settingsFieldErrors, setSettingsFieldErrors] = useState({})
+  const [loadingSettings, setLoadingSettings] = useState(true)
   const [savingSettings, setSavingSettings] = useState(false)
   const [settingsStatus, setSettingsStatus] = useState('')
 
   // ====== MODAL STATE ======
   const [selectedReceiptId, setSelectedReceiptId] = useState(null)
   const [reportingTrip, setReportingTrip] = useState(null)
-  const [editingSettings, setEditingSettings] = useState(false)
 
   // Refs
   const notificationSoundRef = useRef(null)
   const highlightTimeoutRef = useRef(null)
 
   // ====== COMPUTED VALUES ======
+
+  const mapParentProfileToSettings = useCallback((profile = {}) => ({
+    ...defaultSettings,
+    parentDisplayName: profile.parentName || user.fullName || user.name || '',
+    contactNumber: profile.contactNumber || user.phone || '',
+    emergencyContact: profile.contactNumber || user.phone || '',
+    studentName: profile.studentName || '',
+    studentGradeSection: profile.gradeSection || '',
+    schoolName: profile.schoolName || '',
+    schoolLatitude: profile.schoolLatitude ?? '',
+    schoolLongitude: profile.schoolLongitude ?? '',
+    pickupZone: profile.pickupZone || user.homeAddress || '',
+  }), [user])
+
+  const loadParentProfile = useCallback(async () => {
+    setLoadingSettings(true)
+    setSettingsStatus('')
+    try {
+      const response = await apiFetch('/api/parents/profile', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const profileSettings = mapParentProfileToSettings(response.profile || {})
+      setSettingsData(profileSettings)
+      setSavedSettingsData(profileSettings)
+    } catch (error) {
+      setSettingsStatus(error.message || 'Unable to load your saved profile.')
+    } finally {
+      setLoadingSettings(false)
+    }
+  }, [mapParentProfileToSettings, token])
+
+  useEffect(() => {
+    loadParentProfile()
+  }, [loadParentProfile])
 
   const tripSummary = useMemo(() => {
     const completed = tripHistory.filter((t) => t.status === 'completed').length
@@ -117,6 +162,31 @@ export default function ParentDashboard({ token, user, onLogout }) {
     }
     return statusMap[activeRideRequest.status] || 'Waiting'
   }, [activeRideRequest])
+
+  const hasRequiredStudentDetails = [
+    settingsData.studentName,
+    settingsData.studentGradeSection,
+    settingsData.schoolName,
+    settingsData.pickupZone,
+  ].every((value) => typeof value === 'string' && value.trim())
+  const settingsIsDirty = JSON.stringify(settingsData) !== JSON.stringify(savedSettingsData)
+  const missingStudentDetails = [
+    ['studentName', 'Student name'],
+    ['studentGradeSection', 'Grade/section'],
+    ['schoolName', 'School name'],
+    ['pickupZone', 'Pickup zone'],
+  ].filter(([field]) => !String(settingsData[field] || '').trim())
+    .map(([, label]) => label)
+
+  const updateSettingsField = (field, value) => {
+    setSettingsData((current) => ({ ...current, [field]: value }))
+    setSettingsFieldErrors((current) => {
+      if (!current[field]) return current
+      const next = { ...current }
+      delete next[field]
+      return next
+    })
+  }
 
   // ====== API CALLS ======
 
@@ -148,6 +218,56 @@ export default function ParentDashboard({ token, user, onLogout }) {
       if (!silent) setHistoryLoading(false)
     }
   }, [token])
+
+  const loadParentNotifications = useCallback(async () => {
+    setNotificationsLoading(true)
+    setNotificationsError('')
+    try {
+      const response = await apiFetch('/api/parents/notifications', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      setParentNotifications(response.notifications || [])
+    } catch (error) {
+      setNotificationsError(error.message || 'Unable to load notifications.')
+    } finally {
+      setNotificationsLoading(false)
+    }
+  }, [token])
+
+  const markNotificationAsRead = useCallback(async (notificationId) => {
+    try {
+      await apiFetch(`/api/parents/notifications/${notificationId}/read`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      setParentNotifications((current) =>
+        current.map((notification) =>
+          notification._id === notificationId ? { ...notification, read: true } : notification
+        )
+      )
+    } catch (error) {
+      setNotificationsError(error.message || 'Unable to update notification.')
+    }
+  }, [token])
+
+  const markAllNotificationsAsRead = useCallback(async () => {
+    const unreadNotifications = parentNotifications.filter((notification) => !notification.read)
+    try {
+      for (const notification of unreadNotifications) {
+        await apiFetch(`/api/parents/notifications/${notification._id}/read`, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        setParentNotifications((current) =>
+          current.map((item) =>
+            item._id === notification._id ? { ...item, read: true } : item
+          )
+        )
+      }
+    } catch (error) {
+      setNotificationsError(error.message || 'Unable to update notifications.')
+    }
+  }, [parentNotifications, token])
 
   const bookTrip = useCallback(async () => {
     setBookingError('')
@@ -248,23 +368,61 @@ export default function ParentDashboard({ token, user, onLogout }) {
   }, [activeRideRequest, token])
 
   const saveSettings = useCallback(async (updatedData) => {
+    const parentName = updatedData.parentDisplayName.trim()
+    const contactNumber = updatedData.contactNumber.trim()
+    setSettingsFieldErrors({})
+    if (!parentName) {
+      setSettingsFieldErrors({ parentDisplayName: 'Parent name is required.' })
+      setSettingsStatus('Parent name is required.')
+      return
+    }
+    if (!isValidPhoneNumber(contactNumber)) {
+      setSettingsFieldErrors({ contactNumber: 'Enter a valid Philippine mobile number.' })
+      setSettingsStatus('Please enter a valid Philippine mobile number.')
+      return
+    }
+
     setSavingSettings(true)
     setSettingsStatus('')
 
     try {
-      const storageKey = `hns_parent_profile_${user.id}`
-      localStorage.setItem(storageKey, JSON.stringify(updatedData))
-      setSettingsData(updatedData)
+      const response = await apiFetch('/api/parents/profile', {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          parentName,
+          contactNumber: normalizePhoneNumber(contactNumber),
+          studentName: updatedData.studentName.trim(),
+          gradeSection: updatedData.studentGradeSection.trim(),
+          schoolName: updatedData.schoolName.trim(),
+          pickupZone: updatedData.pickupZone.trim(),
+          schoolLatitude: updatedData.schoolLatitude,
+          schoolLongitude: updatedData.schoolLongitude,
+        }),
+      })
+      const profileSettings = mapParentProfileToSettings(response.profile || {})
+      setSettingsData(profileSettings)
+      setSavedSettingsData(profileSettings)
       setSettingsStatus('Settings saved successfully!')
-      setEditingSettings(false)
 
       setTimeout(() => setSettingsStatus(''), 3000)
     } catch (error) {
-      setSettingsStatus(error.message || 'Unable to save settings.')
+      const message = error.message || 'Unable to save settings.'
+      setSettingsStatus(message)
+      if (/mobile number/i.test(message)) {
+        setSettingsFieldErrors({ contactNumber: message })
+      } else if (/parent name/i.test(message)) {
+        setSettingsFieldErrors({ parentDisplayName: message })
+      } else if (/coordinates/i.test(message)) {
+        setSettingsFieldErrors({
+          schoolLatitude: message,
+          schoolLongitude: message,
+        })
+      }
     } finally {
       setSavingSettings(false)
     }
-  }, [user.id])
+  }, [mapParentProfileToSettings, token])
 
   // ====== TOAST NOTIFICATIONS ======
 
@@ -287,10 +445,16 @@ export default function ParentDashboard({ token, user, onLogout }) {
   }, [loadActiveTrip])
 
   useEffect(() => {
-    if (activeSection === 'history') {
+    if (activeSection === 'trips') {
       loadTripHistory()
     }
   }, [activeSection, loadTripHistory])
+
+  useEffect(() => {
+    if (activeSection === 'notifications') {
+      loadParentNotifications()
+    }
+  }, [activeSection, loadParentNotifications])
 
   useEffect(() => {
     setSocketConnected(socket?.connected || false)
@@ -351,20 +515,22 @@ export default function ParentDashboard({ token, user, onLogout }) {
       currentPage={activeSection}
       onNavigate={setActiveSection}
       onLogout={onLogout}
-      pageTitle={
-        activeSection === 'dashboard'
-          ? 'Parent Dashboard'
-          : activeSection === 'history'
-            ? 'Trip History'
-            : 'Settings'
-      }
-      pageDescription={
-        activeSection === 'dashboard'
-          ? 'Book and track your student transportation.'
-          : activeSection === 'history'
-            ? 'View past trips and receipts.'
-            : 'Manage your profile and preferences.'
-      }
+      pageTitle={{
+        dashboard: 'Parent Dashboard',
+        trips: 'Trip History',
+        notifications: 'Notifications',
+        messages: 'Messages',
+        payments: 'Payments',
+        settings: 'Settings',
+      }[activeSection] || 'Parent Dashboard'}
+      pageDescription={{
+        dashboard: 'Book and track your student transportation.',
+        trips: 'View your ride requests and past trips.',
+        notifications: 'Review updates about your account and trips.',
+        messages: 'Messages with drivers will be available here.',
+        payments: 'Payment information will be available here.',
+        settings: 'Manage your profile and preferences.',
+      }[activeSection] || ''}
     >
       {/* Toast Notifications */}
       <NotificationsContainer notifications={toastNotifications} onDismiss={dismissToast} />
@@ -417,25 +583,33 @@ export default function ParentDashboard({ token, user, onLogout }) {
             {/* Left Column: Student Info & Booking */}
             <div className="lg:col-span-1 space-y-6">
               <ParentChildrenCard
-                studentName={settingsData.studentName || 'Student'}
-                studentGradeSection={settingsData.studentGradeSection || 'N/A'}
-                schoolName={settingsData.schoolName || 'School'}
-                pickupZone={settingsData.pickupZone || 'N/A'}
+                studentName={settingsData.studentName || 'Student details not added'}
+                studentGradeSection={settingsData.studentGradeSection || 'Grade/Section not added'}
+                schoolName={settingsData.schoolName || 'School not added'}
+                pickupZone={settingsData.pickupZone || 'Pickup zone not added'}
+                hasStudentDetails={hasRequiredStudentDetails}
                 status={activeRideRequest?.status || 'waiting'}
-                onEditClick={() => setEditingSettings(true)}
+                onEditClick={() => setActiveSection('settings')}
                 isLoading={false}
               />
 
               {/* Booking Actions */}
               {!activeRideRequest ? (
-                <Button
-                  onClick={bookTrip}
-                  disabled={bookingLoading || !settingsData.pickupZone}
-                  className="w-full bg-blue-600 hover:bg-blue-700"
-                  size="lg"
-                >
-                  {bookingLoading ? 'Booking...' : 'Book Trip'}
-                </Button>
+                <>
+                  <Button
+                    onClick={bookTrip}
+                    disabled={bookingLoading || !hasRequiredStudentDetails}
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                    size="lg"
+                  >
+                    {bookingLoading ? 'Booking...' : 'Book Trip'}
+                  </Button>
+                  {!hasRequiredStudentDetails && (
+                    <p className="text-sm text-gray-700">
+                      Add the student name, grade/section, school, and pickup zone in Settings before booking.
+                    </p>
+                  )}
+                </>
               ) : (
                 <Button
                   onClick={cancelTrip}
@@ -498,94 +672,63 @@ export default function ParentDashboard({ token, user, onLogout }) {
       )}
 
       {/* History Section */}
-      {activeSection === 'history' && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
-          className="space-y-6"
-        >
-          {/* Summary Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
-              { label: 'Total Trips', value: tripSummary.total, color: 'text-blue-600' },
-              { label: 'Completed', value: tripSummary.completed, color: 'text-green-600' },
-              { label: 'Cancelled', value: tripSummary.cancelled, color: 'text-red-600' },
-            ].map((stat, idx) => (
-              <motion.div
-                key={stat.label}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.1 }}
-              >
-                <Card>
-                  <CardContent className="pt-6">
-                    <p className="text-sm font-medium text-gray-600">{stat.label}</p>
-                    <p className={`text-3xl font-bold ${stat.color} mt-2`}>{stat.value}</p>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
+      {activeSection === 'trips' && (
+        <TripHistoryPage
+          trips={tripHistory}
+          isLoading={historyLoading}
+          error={historyError}
+          parentName={settingsData.parentDisplayName}
+          studentName={settingsData.studentName}
+          schoolName={settingsData.schoolName}
+          onViewReceipt={setSelectedReceiptId}
+          onReportIssue={(trip) =>
+            setReportingTrip({ id: trip.id, date: trip.date })
+          }
+        />
+      )}
 
-          {/* Trip History List */}
-          {historyLoading ? (
-            <Card>
-              <CardContent className="pt-6">
-                <div className="h-40 bg-gray-200 rounded animate-pulse" />
-              </CardContent>
-            </Card>
-          ) : tripHistory.length === 0 ? (
-            <Card>
-              <CardContent className="pt-6">
-                <p className="text-center text-gray-500 py-8">No trips yet.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {tripHistory.map((trip, idx) => (
-                <motion.div
-                  key={trip._id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: idx * 0.05 }}
-                >
-                  <Card className="hover:shadow-md transition-shadow cursor-pointer">
-                    <CardContent className="pt-4 flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-gray-900">{trip.driver?.fullName || 'Driver'}</p>
-                        <p className="text-xs text-gray-500">
-                          {new Date(trip.createdAt).toLocaleDateString()} • {trip.status}
-                        </p>
-                      </div>
-                      {trip.status === 'completed' && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setSelectedReceiptId(trip._id)}
-                        >
-                          View Receipt
-                        </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          setReportingTrip({
-                            id: trip._id,
-                            date: new Date(trip.createdAt).toLocaleDateString(),
-                          })
-                        }
-                      >
-                        Report Issue
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
+      {activeSection === 'notifications' && (
+        <div className="space-y-4">
+          {notificationsError && (
+            <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              {notificationsError}
+            </p>
           )}
-        </motion.div>
+          {notificationsLoading ? (
+            <p role="status" className="text-sm text-gray-700">Loading notifications...</p>
+          ) : (
+            <NotificationHistory
+              notifications={parentNotifications}
+              unreadCount={parentNotifications.filter((notification) => !notification.read).length}
+              onMarkAsRead={markNotificationAsRead}
+              onMarkAllAsRead={markAllNotificationsAsRead}
+            />
+          )}
+        </div>
+      )}
+
+      {activeSection === 'messages' && (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <MessageSquare size={40} aria-hidden="true" className="text-slate-500" />
+            <h2 className="text-lg font-semibold text-gray-900">Messages are coming soon</h2>
+            <p className="max-w-md text-sm text-gray-600">
+              Driver conversations will appear here when messaging becomes available.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {activeSection === 'payments' && (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <CreditCard size={40} aria-hidden="true" className="text-slate-500" />
+            <h2 className="text-lg font-semibold text-gray-900">Payments are coming soon</h2>
+            <p className="max-w-md text-sm text-gray-600">
+              Payment history and invoices will appear here when billing is available.
+            </p>
+          </CardContent>
+        </Card>
       )}
 
       {/* Settings Section */}
@@ -594,168 +737,259 @@ export default function ParentDashboard({ token, user, onLogout }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3 }}
-          className="max-w-2xl space-y-6"
+          className="parent-settings"
         >
-          <Card>
-            <CardHeader>
-              <CardTitle>Parent Information</CardTitle>
-              <CardDescription>Update your profile details</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700">Parent Name</label>
-                <input
-                  type="text"
-                  value={settingsData.parentDisplayName}
-                  onChange={(e) =>
-                    setSettingsData((prev) => ({
-                      ...prev,
-                      parentDisplayName: e.target.value,
-                    }))
-                  }
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  disabled={savingSettings}
-                />
-              </div>
+          <header className="parent-settings__page-header">
+            <div>
+              <p className="parent-settings__eyebrow">ACCOUNT</p>
+              <h1>Settings</h1>
+              <p>Keep your family and pickup details up to date.</p>
+            </div>
+          </header>
 
-              <div>
-                <label className="text-sm font-medium text-gray-700">Contact Number</label>
-                <input
-                  type="tel"
-                  value={settingsData.contactNumber}
-                  onChange={(e) =>
-                    setSettingsData((prev) => ({
-                      ...prev,
-                      contactNumber: e.target.value,
-                    }))
-                  }
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  disabled={savingSettings}
-                />
-              </div>
+          {loadingSettings ? (
+            <div className="parent-settings__skeleton" role="status" aria-label="Loading profile settings">
+              <div className="parent-settings__skeleton-profile" />
+              <div className="parent-settings__skeleton-card" />
+              <div className="parent-settings__skeleton-card" />
+              <span>Loading your saved profile...</span>
+            </div>
+          ) : (
+            <>
+              <section className="parent-settings__profile" aria-label="Account profile">
+                <div className="parent-settings__avatar" aria-hidden="true">
+                  {(settingsData.parentDisplayName || user.email || 'P')
+                    .split(/\s+/)
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((part) => part[0])
+                    .join('')
+                    .toUpperCase()}
+                </div>
+                <div className="parent-settings__profile-copy">
+                  <h2>{settingsData.parentDisplayName || 'Parent account'}</h2>
+                  <span className="parent-settings__role">Parent</span>
+                  {user.email && <p>{user.email}</p>}
+                </div>
+                <UserRound className="parent-settings__profile-icon" size={22} aria-hidden="true" />
+              </section>
 
-              <div>
-                <label className="text-sm font-medium text-gray-700">Student Name</label>
-                <input
-                  type="text"
-                  value={settingsData.studentName}
-                  onChange={(e) =>
-                    setSettingsData((prev) => ({
-                      ...prev,
-                      studentName: e.target.value,
-                    }))
-                  }
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  disabled={savingSettings}
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-700">Grade/Section</label>
-                <input
-                  type="text"
-                  value={settingsData.studentGradeSection}
-                  onChange={(e) =>
-                    setSettingsData((prev) => ({
-                      ...prev,
-                      studentGradeSection: e.target.value,
-                    }))
-                  }
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  disabled={savingSettings}
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-700">School Name</label>
-                <input
-                  type="text"
-                  value={settingsData.schoolName}
-                  onChange={(e) =>
-                    setSettingsData((prev) => ({
-                      ...prev,
-                      schoolName: e.target.value,
-                    }))
-                  }
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  disabled={savingSettings}
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-700">School Destination Latitude (optional)</label>
-                <input
-                  type="number"
-                  min="-90"
-                  max="90"
-                  step="any"
-                  value={settingsData.schoolLatitude ?? ''}
-                  onChange={(e) =>
-                    setSettingsData((prev) => ({ ...prev, schoolLatitude: e.target.value }))
-                  }
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  disabled={savingSettings}
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-700">School Destination Longitude (optional)</label>
-                <input
-                  type="number"
-                  min="-180"
-                  max="180"
-                  step="any"
-                  value={settingsData.schoolLongitude ?? ''}
-                  onChange={(e) =>
-                    setSettingsData((prev) => ({ ...prev, schoolLongitude: e.target.value }))
-                  }
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  disabled={savingSettings}
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  Provide the school&apos;s real coordinates to enable destination routing and automatic arrival detection.
-                </p>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-700">Pickup Zone</label>
-                <input
-                  type="text"
-                  value={settingsData.pickupZone}
-                  onChange={(e) =>
-                    setSettingsData((prev) => ({
-                      ...prev,
-                      pickupZone: e.target.value,
-                    }))
-                  }
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  disabled={savingSettings}
-                />
-              </div>
+              <section
+                className={`parent-settings__readiness ${hasRequiredStudentDetails ? 'is-ready' : 'needs-details'}`}
+                aria-live="polite"
+              >
+                {hasRequiredStudentDetails
+                  ? <CheckCircle2 size={20} aria-hidden="true" />
+                  : <AlertTriangle size={20} aria-hidden="true" />}
+                <div>
+                  <strong>
+                    {hasRequiredStudentDetails
+                      ? 'Ready to book'
+                      : 'Complete student details to book'}
+                  </strong>
+                  {!hasRequiredStudentDetails && (
+                    <p>Still needed: {missingStudentDetails.join(', ')}.</p>
+                  )}
+                </div>
+              </section>
 
               {settingsStatus && (
-                <motion.div
-                  className={`p-3 rounded-lg text-sm ${
-                    settingsStatus.includes('successfully')
-                      ? 'bg-green-50 text-green-700 border border-green-200'
-                      : 'bg-red-50 text-red-700 border border-red-200'
-                  }`}
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
+                <div
+                  className={`parent-settings__status ${settingsStatus.includes('successfully') ? 'is-success' : 'is-error'}`}
+                  role={settingsStatus.includes('successfully') ? 'status' : 'alert'}
                 >
                   {settingsStatus}
-                </motion.div>
+                </div>
               )}
 
-              <Button
-                onClick={() => saveSettings(settingsData)}
-                disabled={savingSettings}
-                className="w-full"
-              >
-                {savingSettings ? 'Saving...' : 'Save Settings'}
-              </Button>
-            </CardContent>
-          </Card>
+              <section className="parent-settings__card" aria-labelledby="parent-info-title">
+                <div className="parent-settings__section-heading">
+                  <div>
+                    <h2 id="parent-info-title">Parent Information</h2>
+                    <p>Your contact details for trip updates.</p>
+                  </div>
+                </div>
+                <div className="parent-settings__grid">
+                  <div className="parent-settings__field">
+                    <label htmlFor="parent-name">Parent Name <span aria-hidden="true">*</span></label>
+                    <input
+                      id="parent-name"
+                      type="text"
+                      autoComplete="name"
+                      placeholder="Enter parent name"
+                      value={settingsData.parentDisplayName}
+                      onChange={(event) => updateSettingsField('parentDisplayName', event.target.value)}
+                      aria-invalid={Boolean(settingsFieldErrors.parentDisplayName)}
+                      aria-describedby={settingsFieldErrors.parentDisplayName ? 'parent-name-error' : undefined}
+                      disabled={savingSettings}
+                    />
+                    {settingsFieldErrors.parentDisplayName && (
+                      <p className="parent-settings__field-error" id="parent-name-error">
+                        {settingsFieldErrors.parentDisplayName}
+                      </p>
+                    )}
+                  </div>
+                  <div className="parent-settings__field">
+                    <label htmlFor="contact-number">Contact Number <span aria-hidden="true">*</span></label>
+                    <input
+                      id="contact-number"
+                      type="tel"
+                      autoComplete="tel"
+                      placeholder="+639XXXXXXXXX"
+                      value={settingsData.contactNumber}
+                      onChange={(event) => updateSettingsField('contactNumber', event.target.value)}
+                      aria-invalid={Boolean(settingsFieldErrors.contactNumber)}
+                      aria-describedby={settingsFieldErrors.contactNumber
+                        ? 'contact-number-help contact-number-error'
+                        : 'contact-number-help'}
+                      disabled={savingSettings}
+                    />
+                    <p className="parent-settings__helper" id="contact-number-help">
+                      Use 09XXXXXXXXX or international format such as +639XXXXXXXXX.
+                    </p>
+                    {settingsFieldErrors.contactNumber && (
+                      <p className="parent-settings__field-error" id="contact-number-error">
+                        {settingsFieldErrors.contactNumber}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              <section className="parent-settings__card" aria-labelledby="student-info-title">
+                <div className="parent-settings__section-heading">
+                  <div>
+                    <h2 id="student-info-title">Student Information</h2>
+                    <p>These details are used to prepare your trip booking.</p>
+                  </div>
+                </div>
+                <div className="parent-settings__grid">
+                  <div className="parent-settings__field">
+                    <label htmlFor="student-name">Student Name <span aria-hidden="true">*</span></label>
+                    <input
+                      id="student-name"
+                      type="text"
+                      placeholder="Enter student name"
+                      value={settingsData.studentName}
+                      onChange={(event) => updateSettingsField('studentName', event.target.value)}
+                      disabled={savingSettings}
+                    />
+                  </div>
+                  <div className="parent-settings__field">
+                    <label htmlFor="student-grade">Grade/Section <span aria-hidden="true">*</span></label>
+                    <input
+                      id="student-grade"
+                      type="text"
+                      placeholder="e.g. Grade 5 - Section A"
+                      value={settingsData.studentGradeSection}
+                      onChange={(event) => updateSettingsField('studentGradeSection', event.target.value)}
+                      disabled={savingSettings}
+                    />
+                  </div>
+                  <div className="parent-settings__field">
+                    <label htmlFor="school-name">School Name <span aria-hidden="true">*</span></label>
+                    <input
+                      id="school-name"
+                      type="text"
+                      placeholder="Enter school name"
+                      value={settingsData.schoolName}
+                      onChange={(event) => updateSettingsField('schoolName', event.target.value)}
+                      disabled={savingSettings}
+                    />
+                  </div>
+                  <div className="parent-settings__field">
+                    <label htmlFor="pickup-zone">Pickup Zone <span aria-hidden="true">*</span></label>
+                    <input
+                      id="pickup-zone"
+                      type="text"
+                      autoComplete="street-address"
+                      placeholder="Enter pickup address or zone"
+                      value={settingsData.pickupZone}
+                      onChange={(event) => updateSettingsField('pickupZone', event.target.value)}
+                      disabled={savingSettings}
+                    />
+                  </div>
+                  <div className="parent-settings__field">
+                    <label htmlFor="school-latitude">School Destination Latitude</label>
+                    <input
+                      id="school-latitude"
+                      type="number"
+                      placeholder="e.g. 14.5995"
+                      min="-90"
+                      max="90"
+                      step="any"
+                      value={settingsData.schoolLatitude ?? ''}
+                      onChange={(event) => updateSettingsField('schoolLatitude', event.target.value)}
+                      aria-invalid={Boolean(settingsFieldErrors.schoolLatitude)}
+                      aria-describedby={settingsFieldErrors.schoolLatitude
+                        ? 'school-coordinates-help school-latitude-error'
+                        : 'school-coordinates-help'}
+                      disabled={savingSettings}
+                    />
+                    {settingsFieldErrors.schoolLatitude && (
+                      <p className="parent-settings__field-error" id="school-latitude-error">
+                        {settingsFieldErrors.schoolLatitude}
+                      </p>
+                    )}
+                  </div>
+                  <div className="parent-settings__field">
+                    <label htmlFor="school-longitude">School Destination Longitude</label>
+                    <input
+                      id="school-longitude"
+                      type="number"
+                      placeholder="e.g. 120.9842"
+                      min="-180"
+                      max="180"
+                      step="any"
+                      value={settingsData.schoolLongitude ?? ''}
+                      onChange={(event) => updateSettingsField('schoolLongitude', event.target.value)}
+                      aria-invalid={Boolean(settingsFieldErrors.schoolLongitude)}
+                      aria-describedby={settingsFieldErrors.schoolLongitude
+                        ? 'school-coordinates-help school-longitude-error'
+                        : 'school-coordinates-help'}
+                      disabled={savingSettings}
+                    />
+                    {settingsFieldErrors.schoolLongitude && (
+                      <p className="parent-settings__field-error" id="school-longitude-error">
+                        {settingsFieldErrors.schoolLongitude}
+                      </p>
+                    )}
+                    <p className="parent-settings__helper" id="school-coordinates-help">
+                      Optional. Enter both coordinates to enable destination routing and arrival detection.
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              <div className="parent-settings__save-bar">
+                <p>{settingsIsDirty ? 'You have unsaved changes.' : 'All changes are saved.'}</p>
+                <div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setSettingsData(savedSettingsData)
+                      setSettingsFieldErrors({})
+                      setSettingsStatus('')
+                    }}
+                    disabled={!settingsIsDirty || savingSettings}
+                  >
+                    <RotateCcw size={16} aria-hidden="true" />
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => saveSettings(settingsData)}
+                    disabled={!settingsIsDirty || savingSettings}
+                    className="parent-settings__save-button"
+                  >
+                    <Save size={16} aria-hidden="true" />
+                    {savingSettings ? 'Saving...' : 'Save changes'}
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
         </motion.div>
       )}
 

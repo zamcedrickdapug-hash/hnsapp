@@ -14,121 +14,88 @@ import {
 	Zap,
 	Users,
 } from 'lucide-react'
-import TripStatistics from './TripStatistics'
-import TripsFilterBar from './TripsFilterBar'
-import TripsTable from './TripsTable'
+import TripStatistics from '../../components/trips/TripStatistics'
+import TripsFilterBar from '../../components/trips/TripsFilterBar'
+import TripsTable from '../../components/trips/TripsTable'
 import './TripHistoryPage.scss'
 
-export default function TripHistoryPage() {
+export default function TripHistoryPage({
+	trips = [],
+	isLoading = false,
+	error = '',
+	parentName = 'Parent',
+	studentName = '',
+	schoolName = '',
+	onViewReceipt,
+	onReportIssue,
+}) {
 	const [searchQuery, setSearchQuery] = useState('')
 	const [selectedFilter, setSelectedFilter] = useState('all')
 	const [dateRange, setDateRange] = useState({ start: '', end: '' })
 	const [sortBy, setSortBy] = useState('date-desc')
 	const [expandedTripId, setExpandedTripId] = useState(null)
 
-	// Mock trip data - replace with API data
-	// STATUS NORMALIZATION: All statuses are lowercase for consistent filtering
-	const mockTrips = [
-		{
-			id: 1,
-			date: '2026-05-12',
-			pickupTime: '08:00 AM',
-			arrivalTime: '08:35 AM',
-			duration: '35 mins',
-			distance: '12.5 km',
-			status: 'completed', // NORMALIZED: lowercase
-			studentName: 'John Doe',
-			parentName: 'Jane Doe',
-			driverName: 'Michael Johnson',
-			driverPhone: '+1234567890',
-			driverRating: 4.8,
-			vehicleType: 'Toyota Hiace',
-			plateNumber: 'ABC-1234',
-			pickupAddress: '123 Main St, Downtown',
-			schoolDestination: 'Central High School',
-			estimatedArrival: '08:34 AM',
-			route: 'Downtown → School District',
-			notesCount: 2,
-			emergencyCount: 0,
-			createdAt: new Date('2026-05-12'),
-		},
-		{
-			id: 2,
-			date: '2026-05-11',
-			pickupTime: '08:05 AM',
-			arrivalTime: '08:40 AM',
-			duration: '35 mins',
-			distance: '12.5 km',
-			status: 'completed', // NORMALIZED: lowercase
-			studentName: 'Sarah Smith',
-			parentName: 'Robert Smith',
-			driverName: 'Michael Johnson',
-			driverPhone: '+1234567890',
-			driverRating: 4.8,
-			vehicleType: 'Toyota Hiace',
-			plateNumber: 'ABC-1234',
-			pickupAddress: '456 Oak Ave, Midtown',
-			schoolDestination: 'Central High School',
-			estimatedArrival: '08:39 AM',
-			route: 'Midtown → School District',
-			notesCount: 0,
-			emergencyCount: 0,
-			createdAt: new Date('2026-05-11'),
-		},
-		{
-			id: 3,
-			date: '2026-05-10',
-			pickupTime: '08:10 AM',
-			arrivalTime: null,
-			duration: 'Ongoing',
-			distance: '8.3 km',
-			status: 'on the way', // NORMALIZED: lowercase
-			studentName: 'Emma Wilson',
-			parentName: 'David Wilson',
-			driverName: 'Sarah Davis',
-			driverPhone: '+0987654321',
-			driverRating: 4.9,
-			vehicleType: 'Honda Odyssey',
-			plateNumber: 'XYZ-5678',
-			pickupAddress: '789 Pine Rd, Uptown',
-			schoolDestination: 'Lincoln Middle School',
-			estimatedArrival: '08:45 AM',
-			route: 'Uptown → School District',
-			notesCount: 1,
-			emergencyCount: 0,
-			createdAt: new Date('2026-05-10'),
-		},
-		{
-			id: 4,
-			date: '2026-05-09',
-			pickupTime: '08:15 AM',
-			arrivalTime: null,
-			duration: 'Cancelled',
-			distance: '0 km',
-			status: 'cancelled', // NORMALIZED: lowercase
-			studentName: 'Lucas Brown',
-			parentName: 'Jennifer Brown',
-			driverName: 'N/A',
-			driverPhone: 'N/A',
-			driverRating: 0,
-			vehicleType: 'N/A',
-			plateNumber: 'N/A',
-			pickupAddress: '321 Elm St, Downtown',
-			schoolDestination: 'Central High School',
+	const historyTrips = useMemo(() => trips.map((trip) => {
+		const createdAt = new Date(trip.createdAt)
+		const endedAt = trip.arrivedAtSchoolAt || (trip.status === 'completed' ? trip.updatedAt : null)
+		const rawDurationMinutes = endedAt && Number.isFinite(createdAt.getTime())
+			? Math.round((new Date(endedAt) - createdAt) / 60000)
+			: null
+		const durationMinutes = Number.isFinite(rawDurationMinutes)
+			? Math.max(0, rawDurationMinutes)
+			: null
+		const rawStatus = String(trip.status || '').toLowerCase()
+		const status = rawStatus === 'completed'
+			? 'completed'
+			: rawStatus === 'cancelled'
+				? 'cancelled'
+				: rawStatus === 'searching'
+					? 'searching'
+					: 'on the way'
+		const distanceKm = trip.distance == null || trip.distance === ''
+			? null
+			: Number.isFinite(Number(trip.distance))
+				? Number(trip.distance)
+				: null
+		const displayStatus = status === 'on the way'
+			? 'On The Way'
+			: status.charAt(0).toUpperCase() + status.slice(1)
+
+		return {
+			id: String(trip._id),
+			date: Number.isFinite(createdAt.getTime()) ? createdAt.toLocaleDateString() : 'Date unavailable',
+			pickupTime: Number.isFinite(createdAt.getTime())
+				? createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+				: '—',
+			arrivalTime: trip.arrivedAtSchoolAt
+				? new Date(trip.arrivedAtSchoolAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+				: null,
+			duration: durationMinutes === null ? '—' : `${durationMinutes} mins`,
+			durationMinutes,
+			distance: distanceKm === null ? '—' : `${distanceKm} km`,
+			distanceKm,
+			status: displayStatus,
+			displayStatus,
+			studentName: trip.studentName || studentName || 'Student details unavailable',
+			parentName,
+			driverName: trip.driver?.fullName || 'No driver assigned',
+			driverPhone: trip.driver?.phone || 'N/A',
+			driverRating: trip.driver?.rating ?? 'N/A',
+			vehicleType: trip.vehicleId?.vehicleType || 'N/A',
+			plateNumber: trip.vehicleId?.plateNumber || 'N/A',
+			pickupAddress: trip.pickupZone || 'N/A',
+			schoolDestination: trip.schoolName || schoolName || 'N/A',
 			estimatedArrival: 'N/A',
 			route: 'N/A',
-			notesCount: 1,
+			notesCount: 0,
 			emergencyCount: 0,
-			createdAt: new Date('2026-05-09'),
-		},
-	]
-
-	// DEBUG: Log trips data
-	console.log('✅ Trips data loaded:', mockTrips.length, 'trips')
+			createdAt,
+		}
+	}), [trips, parentName, studentName, schoolName])
 
 	// Filter trips - REAL FUNCTIONAL FILTERING
 	const filteredTrips = useMemo(() => {
-		let result = [...mockTrips]
+		let result = [...historyTrips]
 
 		// STATUS FILTER - Most important filter
 		if (selectedFilter !== 'all') {
@@ -153,73 +120,64 @@ export default function TripHistoryPage() {
 
 		// DATE RANGE FILTER
 		if (dateRange.start) {
-			result = result.filter((trip) => new Date(trip.date) >= new Date(dateRange.start))
+			result = result.filter((trip) => trip.createdAt >= new Date(dateRange.start))
 		}
 		if (dateRange.end) {
-			result = result.filter((trip) => new Date(trip.date) <= new Date(dateRange.end))
+			const endDate = new Date(dateRange.end)
+			endDate.setHours(23, 59, 59, 999)
+			result = result.filter((trip) => trip.createdAt <= endDate)
 		}
 
 		// SORTING
 		result.sort((a, b) => {
 			switch (sortBy) {
 				case 'date-desc':
-					return new Date(b.date) - new Date(a.date)
+					return b.createdAt - a.createdAt
 				case 'date-asc':
-					return new Date(a.date) - new Date(b.date)
+					return a.createdAt - b.createdAt
 				case 'distance-desc':
-					return parseFloat(b.distance || 0) - parseFloat(a.distance || 0)
+					return (b.distanceKm ?? -1) - (a.distanceKm ?? -1)
 				case 'distance-asc':
-					return parseFloat(a.distance || 0) - parseFloat(b.distance || 0)
+					return (a.distanceKm ?? Number.MAX_VALUE) - (b.distanceKm ?? Number.MAX_VALUE)
 				default:
 					return 0
 			}
 		})
 
-		// DEBUG: Log filtering info
-		console.log('🔍 Filter Applied:', {
-			activeFilter: selectedFilter,
-			searchQuery: searchQuery || 'none',
-			filteredCount: result.length,
-			totalCount: mockTrips.length,
-			details: {
-				completed: result.filter((t) => t.status === 'completed').length,
-				cancelled: result.filter((t) => t.status === 'cancelled').length,
-				onTheWay: result.filter((t) => t.status === 'on the way').length,
-			},
-		})
-
 		return result
-	}, [selectedFilter, searchQuery, dateRange, sortBy, mockTrips])
+	}, [selectedFilter, searchQuery, dateRange, sortBy, historyTrips])
 
 	// Calculate statistics and filter counts
 	const statistics = useMemo(() => {
 		return {
-			totalTrips: mockTrips.length,
-			completedTrips: mockTrips.filter((t) => t.status === 'completed').length,
-			activeTrips: mockTrips.filter((t) => t.status === 'on the way').length,
-			cancelledTrips: mockTrips.filter((t) => t.status === 'cancelled').length,
-			totalDistance: mockTrips
-				.reduce((sum, t) => sum + parseFloat(t.distance || 0), 0)
-				.toFixed(1),
-			averageDuration: Math.round(
-				mockTrips
-					.filter((t) => t.status === 'completed')
-					.reduce((sum, t) => sum + parseInt(t.duration), 0) /
-					mockTrips.filter((t) => t.status === 'completed').length
-			),
+			totalTrips: historyTrips.length,
+			completedTrips: historyTrips.filter((t) => t.status.toLowerCase() === 'completed').length,
+			activeTrips: historyTrips.filter((t) => t.status.toLowerCase() === 'on the way').length,
+			cancelledTrips: historyTrips.filter((t) => t.status.toLowerCase() === 'cancelled').length,
+			totalDistance: historyTrips.some((trip) => trip.distanceKm !== null)
+				? historyTrips.reduce((sum, trip) => sum + (trip.distanceKm ?? 0), 0).toFixed(1)
+				: '—',
+			averageDuration: (() => {
+				const completedDurations = historyTrips
+					.filter((trip) => trip.status.toLowerCase() === 'completed' && trip.durationMinutes !== null)
+					.map((trip) => trip.durationMinutes)
+				return completedDurations.length
+					? Math.round(completedDurations.reduce((sum, duration) => sum + duration, 0) / completedDurations.length)
+					: '—'
+			})(),
 		}
-	}, [mockTrips])
+	}, [historyTrips])
 
 	// FILTER COUNTS - For displaying on filter buttons
 	const filterCounts = useMemo(() => {
 		return {
-			all: mockTrips.length,
-			completed: mockTrips.filter((t) => t.status === 'completed').length,
-			cancelled: mockTrips.filter((t) => t.status === 'cancelled').length,
-			'on the way': mockTrips.filter((t) => t.status === 'on the way').length,
-			searching: mockTrips.filter((t) => t.status === 'searching').length,
+			all: historyTrips.length,
+			completed: historyTrips.filter((t) => t.status.toLowerCase() === 'completed').length,
+			cancelled: historyTrips.filter((t) => t.status.toLowerCase() === 'cancelled').length,
+			'on the way': historyTrips.filter((t) => t.status.toLowerCase() === 'on the way').length,
+			searching: historyTrips.filter((t) => t.status.toLowerCase() === 'searching').length,
 		}
-	}, [mockTrips])
+	}, [historyTrips])
 
 	return (
 		<motion.div
@@ -243,6 +201,8 @@ export default function TripHistoryPage() {
 
 			{/* Statistics */}
 			<TripStatistics data={statistics} />
+			{isLoading && <p role="status" className="text-sm text-slate-600">Loading trips...</p>}
+			{error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
 
 			{/* Search and Filters */}
 			<motion.div
@@ -287,9 +247,11 @@ export default function TripHistoryPage() {
 							trips={filteredTrips}
 							expandedTripId={expandedTripId}
 							onToggleExpand={setExpandedTripId}
+							onViewReceipt={onViewReceipt}
+							onReportIssue={onReportIssue}
 						/>
 					</motion.div>
-				) : (
+				) : !isLoading ? (
 					<motion.div
 						key="empty-state"
 						initial={{ opacity: 0, scale: 0.9 }}
@@ -303,7 +265,7 @@ export default function TripHistoryPage() {
 						<h2>No trips found</h2>
 						<p>Try adjusting your filters or search to find trips</p>
 					</motion.div>
-				)}
+				) : null}
 			</AnimatePresence>
 		</motion.div>
 	)

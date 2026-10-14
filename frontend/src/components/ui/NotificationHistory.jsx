@@ -175,13 +175,15 @@ export const NotificationHistory = ({
                       ✓
                     </button>
                   )}
-                  <button
-                    className="notification-history__item-action notification-history__item-action--delete"
-                    onClick={(e) => handleDelete(notification._id, e)}
-                    title="Delete"
-                  >
-                    ✕
-                  </button>
+                  {onDelete && (
+                    <button
+                      className="notification-history__item-action notification-history__item-action--delete"
+                      onClick={(e) => handleDelete(notification._id, e)}
+                      title="Delete"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
 
                 {!notification.read && (
@@ -207,7 +209,7 @@ export const NotificationHistory = ({
       </div>
 
       {/* Footer */}
-      {notifications.length > 0 && (
+      {notifications.length > 0 && onDeleteAll && (
         <div className="notification-history__footer">
           <button
             className="notification-history__clear-btn"

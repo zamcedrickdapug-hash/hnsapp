@@ -45,7 +45,7 @@ const STATUS_CONFIG = {
 	},
 }
 
-function TripCard({ trip, isExpanded, onToggleExpand }) {
+function TripCard({ trip, isExpanded, onToggleExpand, onViewReceipt, onReportIssue }) {
 	// Normalize trip status to lowercase for lookup
 	const normalizedStatus = trip.status?.toLowerCase?.() || 'completed'
 	const statusConfig = STATUS_CONFIG[normalizedStatus] || STATUS_CONFIG.completed
@@ -232,15 +232,19 @@ function TripCard({ trip, isExpanded, onToggleExpand }) {
 
 							{/* Action Buttons */}
 							<div className="trip-actions">
+								{normalizedStatus === 'completed' && (
 								<motion.button
 									className="action-btn primary"
+									onClick={() => onViewReceipt?.(trip.id)}
 									whileHover={{ scale: 1.05, boxShadow: '0 12px 32px rgba(102, 126, 234, 0.3)' }}
 									whileTap={{ scale: 0.95 }}
 								>
 									View Receipt
 								</motion.button>
+								)}
 								<motion.button
 									className="action-btn secondary"
+									onClick={() => onReportIssue?.(trip)}
 									whileHover={{ scale: 1.05 }}
 									whileTap={{ scale: 0.95 }}
 								>
@@ -255,7 +259,7 @@ function TripCard({ trip, isExpanded, onToggleExpand }) {
 	)
 }
 
-export default function TripsTable({ trips, expandedTripId, onToggleExpand }) {
+export default function TripsTable({ trips, expandedTripId, onToggleExpand, onViewReceipt, onReportIssue }) {
 	return (
 		<motion.div className="trips-table">
 			<AnimatePresence mode="popLayout">
@@ -265,6 +269,8 @@ export default function TripsTable({ trips, expandedTripId, onToggleExpand }) {
 						trip={trip}
 						isExpanded={expandedTripId === trip.id}
 						onToggleExpand={onToggleExpand}
+						onViewReceipt={onViewReceipt}
+						onReportIssue={onReportIssue}
 					/>
 				))}
 			</AnimatePresence>

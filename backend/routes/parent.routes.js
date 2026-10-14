@@ -176,6 +176,81 @@ router.post('/create-profile', async (req, res) => {
   }
 });
 
+const buildParentProfile = (user) => ({
+  parentName: user.fullName || '',
+  contactNumber: user.phone || '',
+  studentName: user.student?.fullName || '',
+  gradeSection: user.student?.gradeLevel || '',
+  schoolName: user.student?.schoolName || '',
+  pickupZone: user.homeAddress || '',
+  schoolLatitude: user.student?.schoolLatitude ?? '',
+  schoolLongitude: user.student?.schoolLongitude ?? '',
+});
+
+router.get('/profile', requireParent, (req, res) => {
+  return res.status(200).json({ profile: buildParentProfile(req.user) });
+});
+
+router.put('/profile', requireParent, async (req, res) => {
+  const body = req.body || {};
+  const parentName = typeof body.parentName === 'string' ? body.parentName.trim() : '';
+  const contactNumber = typeof body.contactNumber === 'string' ? body.contactNumber.trim() : '';
+  const studentName = typeof body.studentName === 'string' ? body.studentName.trim() : '';
+  const gradeSection = typeof body.gradeSection === 'string' ? body.gradeSection.trim() : '';
+  const schoolName = typeof body.schoolName === 'string' ? body.schoolName.trim() : '';
+  const pickupZone = typeof body.pickupZone === 'string' ? body.pickupZone.trim() : '';
+  const hasLatitude = body.schoolLatitude !== undefined && body.schoolLatitude !== null &&
+    !(typeof body.schoolLatitude === 'string' && !body.schoolLatitude.trim());
+  const hasLongitude = body.schoolLongitude !== undefined && body.schoolLongitude !== null &&
+    !(typeof body.schoolLongitude === 'string' && !body.schoolLongitude.trim());
+
+  if (!parentName) {
+    return res.status(400).json({ message: 'Parent name is required.' });
+  }
+  if (!isValidPhoneNumber(contactNumber)) {
+    return res.status(400).json({ message: 'Please enter a valid Philippine mobile number.' });
+  }
+  if (hasLatitude !== hasLongitude) {
+    return res.status(400).json({ message: 'Enter both school destination coordinates or leave both blank.' });
+  }
+
+  let schoolLatitude;
+  let schoolLongitude;
+  if (hasLatitude) {
+    if (!['number', 'string'].includes(typeof body.schoolLatitude) ||
+        !['number', 'string'].includes(typeof body.schoolLongitude)) {
+      return res.status(400).json({ message: 'Enter valid school destination coordinates.' });
+    }
+    schoolLatitude = Number(body.schoolLatitude);
+    schoolLongitude = Number(body.schoolLongitude);
+    if (!Number.isFinite(schoolLatitude) || schoolLatitude < -90 || schoolLatitude > 90 ||
+        !Number.isFinite(schoolLongitude) || schoolLongitude < -180 || schoolLongitude > 180) {
+      return res.status(400).json({ message: 'Enter valid school destination coordinates.' });
+    }
+  }
+
+  try {
+    req.user.fullName = parentName;
+    req.user.phone = normalizePhoneNumber(contactNumber);
+    req.user.homeAddress = pickupZone;
+    if (!req.user.student) req.user.student = {};
+    req.user.student.fullName = studentName;
+    req.user.student.gradeLevel = gradeSection;
+    req.user.student.schoolName = schoolName;
+    req.user.student.schoolLatitude = hasLatitude ? schoolLatitude : undefined;
+    req.user.student.schoolLongitude = hasLongitude ? schoolLongitude : undefined;
+    await req.user.save();
+
+    return res.status(200).json({
+      message: 'Parent profile saved successfully.',
+      profile: buildParentProfile(req.user),
+    });
+  } catch (error) {
+    console.error('[PARENT] Failed to save profile:', error.name || 'UnknownError');
+    return res.status(500).json({ message: 'Unable to save parent profile.' });
+  }
+});
+
 router.get('/notifications', requireApplicant, async (req, res) => {
   const notifications = [...(req.user.notifications || [])].sort(
     (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
