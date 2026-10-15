@@ -30,7 +30,7 @@ import { ParentChildrenCard, ParentTrackingPanel } from '../../components/dashbo
 import NotificationHistory from '../../components/ui/NotificationHistory'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
-import LiveTripMap from '../../components/tracking/LiveTripMap'
+import LiveTripMap from '../../components/tracking/LiveTripGoogleMap'
 import { NotificationsContainer } from '../../components/notifications/NotificationToast'
 import { ReceiptModal } from '../../components/modals/ReceiptModal'
 import { ReportIssueModal } from '../../components/modals/ReportIssueModal'
