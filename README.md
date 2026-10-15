@@ -91,6 +91,7 @@ For a Render backend and Vercel frontend:
 - On Vercel, set the project root to `frontend`, use `npm run build` as the build command, and `dist` as the output directory. Set `VITE_API_URL` to the Render backend URL ending in `/api`, and configure the `VITE_FIREBASE_*` values if Firebase authentication is enabled.
 - Configure `FIREBASE_SERVICE_ACCOUNT` in Render when the backend needs Firebase Admin verification. The frontend's `vercel.json` rewrites app routes to `index.html` for client-side route refreshes.
 - MongoDB Atlas must allow connections from the Render service. Keep database, JWT, SMTP, Firebase Admin, and VAPID credentials in the deployment platform's secret settings.
+- New Valid ID uploads are stored as buffers in a separate MongoDB collection, limited to JPEG, PNG, or PDF files up to 2 MiB. They do not depend on Render's filesystem. Legacy files on disk are neither migrated nor deleted automatically.
 
 The backend can serve the built frontend from `frontend/dist` when present.
 

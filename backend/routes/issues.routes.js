@@ -1,5 +1,5 @@
 const express = require('express')
-const { requireAuth } = require('../middleware/auth')
+const { requireAuth, requireAdmin } = require('../middleware/auth')
 const User = require('../models/User')
 const { Issue } = require('../models/Issue')
 
@@ -11,7 +11,7 @@ const router = express.Router()
  */
 router.post('/create-report', requireAuth, async (req, res) => {
 	try {
-		const { tripId, category, description, screenshot, driverId, status } = req.body
+		const { tripId, category, description, screenshot, driverId } = req.body
 		const parentId = req.user._id
 
 		// Validate required fields
@@ -47,7 +47,7 @@ router.post('/create-report', requireAuth, async (req, res) => {
 			category,
 			description,
 			screenshot: screenshot || null,
-			status: status || 'pending',
+			status: 'pending',
 			createdAt: new Date(),
 			updatedAt: new Date(),
 		})
@@ -81,15 +81,9 @@ router.post('/create-report', requireAuth, async (req, res) => {
  * GET /api/issues
  * Get all issue reports for a parent or admin
  */
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', requireAdmin, async (req, res) => {
 	try {
-		const userId = req.user._id
-		const userRole = req.user.role
-
-		// Admins can see all issues, parents can only see their own
-		const query = userRole === 'admin' ? {} : { parentId: userId }
-
-		const issues = await Issue.find(query)
+		const issues = await Issue.find({})
 			.populate('parentId', 'fullName phone email')
 			.populate('driverId', 'fullName phone vehicleType plateNumber')
 			.sort({ createdAt: -1 })
@@ -126,7 +120,8 @@ router.get('/:id', requireAuth, async (req, res) => {
 		}
 
 		// Check authorization - parent can view their own, admin can view all
-		if (req.user.role !== 'admin' && issue.parentId._id.toString() !== req.user._id.toString()) {
+		const issueOwnerId = issue.parentId?._id || issue.parentId
+		if (req.user.role !== 'admin' && String(issueOwnerId) !== String(req.user._id)) {
 			return res.status(403).json({
 				success: false,
 				message: 'Not authorized to view this issue',
@@ -150,16 +145,8 @@ router.get('/:id', requireAuth, async (req, res) => {
  * PATCH /api/issues/:id/status
  * Update the status of an issue report (admin only)
  */
-router.patch('/:id/status', requireAuth, async (req, res) => {
+router.patch('/:id/status', requireAdmin, async (req, res) => {
 	try {
-		// Only admins can update issue status
-		if (req.user.role !== 'admin') {
-			return res.status(403).json({
-				success: false,
-				message: 'Only admins can update issue status',
-			})
-		}
-
 		const { status, resolution } = req.body
 		const validStatuses = ['pending', 'reviewing', 'resolved', 'closed']
 

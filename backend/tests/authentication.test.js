@@ -1,7 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const { Module, createRequire } = require('node:module');
 const { randomBytes, randomUUID } = require('node:crypto');
@@ -10,6 +9,17 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { isValidPhoneNumber, normalizePhoneNumber } = require('../utils/validation');
 const { validatePhoneNumber } = require('../utils/onboardingValidation');
+
+const validDocumentBytes = (mimeType, size = 16) => {
+  const signatures = {
+    'image/jpeg': [0xff, 0xd8, 0xff],
+    'image/png': [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+    'application/pdf': [...Buffer.from('%PDF-')],
+  };
+  const bytes = new Uint8Array(Math.max(size, signatures[mimeType].length));
+  bytes.set(signatures[mimeType]);
+  return bytes;
+};
 
 if (!process.env.JWT_SECRET?.trim()) {
   process.env.JWT_SECRET = randomBytes(32).toString('hex');
@@ -29,7 +39,8 @@ const loadWithDependencies = (relativePath, dependencies) => {
 const createFixture = async (t) => {
   const users = new Map();
   const identities = new Map();
-  const uploads = fs.mkdtempSync(path.join(os.tmpdir(), 'hnsapp-auth-test-'));
+  const validIdDocuments = new Map();
+  const issues = new Map();
   const password = randomUUID();
   const passwordHash = await bcrypt.hash(password, 4);
   const selections = [];
@@ -51,6 +62,47 @@ const createFixture = async (t) => {
     static async findById(id) { return users.get(String(id)) || null; }
   }
 
+  class ValidIdDocument {
+    constructor(data) {
+      Object.assign(this, { _id: randomBytes(12).toString('hex') }, data);
+    }
+    async save() { validIdDocuments.set(String(this._id), this); return this; }
+    static findOne(query) {
+      const document = [...validIdDocuments.values()].find((item) => (
+        String(item._id) === String(query._id) &&
+        String(item.ownerId) === String(query.ownerId)
+      )) || null;
+      const result = Promise.resolve(document);
+      result.select = async () => document;
+      return result;
+    }
+    static async deleteOne(query) {
+      const document = [...validIdDocuments.values()].find((item) => String(item._id) === String(query._id));
+      if (document) validIdDocuments.delete(String(document._id));
+      return { deletedCount: document ? 1 : 0 };
+    }
+  }
+
+  const queryResult = (value) => ({
+    populate() { return this; },
+    sort() { return this; },
+    limit() { return this; },
+    then(resolve, reject) { return Promise.resolve(value).then(resolve, reject); },
+  });
+  class Issue {
+    constructor(data) {
+      Object.assign(this, { _id: randomBytes(12).toString('hex') }, data);
+    }
+    async save() { issues.set(String(this._id), this); return this; }
+    static find() { return queryResult([...issues.values()]); }
+    static findById(id) { return queryResult(issues.get(String(id)) || null); }
+    static async findByIdAndUpdate(id, update) {
+      const issue = issues.get(String(id));
+      if (issue) Object.assign(issue, update);
+      return issue || null;
+    }
+  }
+
   const identity = loadWithDependencies('utils/firebaseIdentity.js', {
     'firebase-admin': {
       apps: [{}],
@@ -65,6 +117,8 @@ const createFixture = async (t) => {
   const middleware = loadWithDependencies('middleware/auth.js', { '../models/User': User });
   const dependencies = {
     '../models/User': User,
+    '../models/ValidIdDocument': ValidIdDocument,
+    '../models/Issue': { Issue },
     '../models/VanRequest': {},
     '../models/DriverStatus': {},
     '../models/DriverStats': {},
@@ -75,7 +129,6 @@ const createFixture = async (t) => {
     '../socket': {},
     '../services/notificationService': {},
     '../services/driverService': {},
-    path: { ...path, resolve: (...parts) => parts.at(-1) === '../uploads/ids' ? uploads : path.resolve(...parts) },
   };
 
   const app = express();
@@ -84,17 +137,13 @@ const createFixture = async (t) => {
   app.use('/api/parents', loadWithDependencies('routes/parent.routes.js', dependencies));
   app.use('/api/drivers', loadWithDependencies('routes/driver.routes.js', dependencies));
   app.use('/api/admin', loadWithDependencies('routes/admin.routes.js', dependencies));
+  app.use('/api/issues', loadWithDependencies('routes/issues.routes.js', dependencies));
   app.use('/api/routing', loadWithDependencies('routes/routing.js', dependencies));
   const server = await new Promise((resolve) => {
     const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
   });
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
-  t.after(async () => {
-    await new Promise((resolve) => server.close(resolve));
-    // Remove only files created in this fixture's uniquely allocated directory.
-    for (const filename of fs.readdirSync(uploads)) fs.unlinkSync(path.join(uploads, filename));
-    fs.rmdirSync(uploads);
-  });
+  t.after(async () => new Promise((resolve) => server.close(resolve)));
 
   const request = async (route, body, token, method = body === undefined ? 'GET' : 'POST') => {
     const multipart = body instanceof FormData;
@@ -109,7 +158,7 @@ const createFixture = async (t) => {
     const contentType = response.headers.get('content-type') || '';
     const responseBody = contentType.includes('application/json')
       ? await response.json()
-      : await response.text();
+      : Buffer.from(await response.arrayBuffer());
     return { status: response.status, body: responseBody };
   };
 
@@ -128,7 +177,7 @@ const createFixture = async (t) => {
     process.env.JWT_SECRET,
     { expiresIn: '7d' }
   );
-  const driverForm = (identityFields, data = {}, file = new Blob(['sample ID'], { type: 'image/png' }), filename = 'id.png') => {
+  const driverForm = (identityFields, data = {}, file = new Blob([validDocumentBytes('image/png')], { type: 'image/png' }), filename = 'id.png') => {
     const form = new FormData();
     const expiry = new Date();
     expiry.setFullYear(expiry.getFullYear() + 2);
@@ -143,7 +192,20 @@ const createFixture = async (t) => {
     return form;
   };
 
-  return { users, User, password, selections, uploads, baseUrl, request, addUser, firebaseToken, sessionToken, driverForm };
+  return {
+    users,
+    validIdDocuments,
+    issues,
+    User,
+    password,
+    selections,
+    baseUrl,
+    request,
+    addUser,
+    firebaseToken,
+    sessionToken,
+    driverForm,
+  };
 };
 
 test('frontend and backend phone validators accept only supported Philippine mobile formats', async () => {
@@ -664,12 +726,30 @@ test('driver application keeps uploaded ID and vehicle/license information until
   assert.ok(driver.driver.licenseExpirationDate instanceof Date);
   assert.equal(driver.driver.licenseExpiry, undefined);
   assert.equal(driver.validId.mimeType, 'image/png');
-  assert.equal(fs.readFileSync(driver.validId.path, 'utf8'), 'sample ID');
+  assert.equal(driver.validId.path, undefined);
+  assert.deepEqual(
+    [...f.validIdDocuments.get(String(driver.validId.documentId)).data],
+    [...validDocumentBytes('image/png')]
+  );
   assert.equal(driver.passwordHash, undefined);
+
+  const admin = await f.addUser({ role: 'admin' });
+  const deniedDocument = await f.request(
+    `/api/admin/registrations/${driver._id}/id-document`,
+    undefined,
+    f.sessionToken(await f.addUser())
+  );
+  assert.equal(deniedDocument.status, 403);
+  const documentResponse = await f.request(
+    `/api/admin/registrations/${driver._id}/id-document`,
+    undefined,
+    f.sessionToken(admin)
+  );
+  assert.equal(documentResponse.status, 200);
+  assert.ok(documentResponse.body.equals(Buffer.from(validDocumentBytes('image/png'))));
 
   const verified = f.firebaseToken(driver.email, { uid: identity.firebaseUid });
   assert.equal((await f.request('/api/auth/verify-firebase-token', { idToken: verified.idToken })).status, 403);
-  const admin = await f.addUser({ role: 'admin' });
   const approved = await f.request(`/api/admin/registrations/${driver._id}/status`, { status: 'approved' }, f.sessionToken(admin), 'PATCH');
   assert.equal(approved.status, 200);
   const login = await f.request('/api/auth/verify-firebase-token', { idToken: verified.idToken });
@@ -690,55 +770,141 @@ test('driver registration enforces uploads, identity, expiry, experience, and du
     f.driverForm(identity, { yearsOfExperience: '61' }),
     f.driverForm(identity, { vehicleType: '' }),
     f.driverForm(identity, {}, new Blob(['bad'], { type: 'text/html' }), 'id.html'),
-    f.driverForm(identity, {}, new Blob([new Uint8Array(5 * 1024 * 1024 + 1)], { type: 'image/png' })),
+    f.driverForm(identity, {}, new Blob([new Uint8Array(2 * 1024 * 1024 + 1)], { type: 'image/png' })),
   ];
   for (const form of invalidForms) {
     const result = await f.request('/api/drivers/create-profile', form);
     assert.equal(result.status, 400);
     assert.equal(f.users.size, 0);
-    assert.equal(fs.readdirSync(f.uploads).length, 0);
+    assert.equal(f.validIdDocuments.size, 0);
   }
   const invalidType = await f.request(
     '/api/drivers/create-profile',
     f.driverForm(identity, {}, new Blob(['bad'], { type: 'text/html' }), 'id.html'),
   );
-  assert.match(invalidType.body.message, /Only JPG, PNG, WEBP images, or PDF files are allowed/i);
+  assert.match(invalidType.body.message, /Only JPEG, PNG, or PDF files are allowed/i);
 
   const oversized = await f.request(
     '/api/drivers/create-profile',
-    f.driverForm(identity, {}, new Blob([new Uint8Array(5 * 1024 * 1024 + 1)], { type: 'image/png' })),
+    f.driverForm(identity, {}, new Blob([new Uint8Array(2 * 1024 * 1024 + 1)], { type: 'image/png' })),
   );
-  assert.match(oversized.body.message, /5MB or smaller/i);
+  assert.match(oversized.body.message, /2MB or smaller/i);
+
+  const webp = await f.request(
+    '/api/drivers/create-profile',
+    f.driverForm(identity, {}, new Blob(['image'], { type: 'image/webp' }), 'id.webp'),
+  );
+  assert.equal(webp.status, 400);
+  assert.match(webp.body.message, /Only JPEG, PNG, or PDF/i);
+
+  const spoofedPng = await f.request(
+    '/api/drivers/create-profile',
+    f.driverForm(identity, {}, new Blob(['not a PNG'], { type: 'image/png' }), 'id.png'),
+  );
+  assert.equal(spoofedPng.status, 400);
+  assert.match(spoofedPng.body.errors.join(' '), /file content must be a valid JPEG, PNG, or PDF/i);
 
   const unexpectedFieldForm = f.driverForm(identity);
   unexpectedFieldForm.append('otherFile', new Blob(['unexpected'], { type: 'image/png' }), 'other.png');
   const unexpectedField = await f.request('/api/drivers/create-profile', unexpectedFieldForm);
   assert.equal(unexpectedField.status, 400);
   assert.match(unexpectedField.body.message, /Unexpected upload field.*validId/i);
-  assert.equal(fs.readdirSync(f.uploads).length, 0);
+  assert.equal(f.validIdDocuments.size, 0);
 
   assert.equal((await f.request('/api/drivers/create-profile', f.driverForm(identity, { firebaseUid: 'another-user' }))).status, 403);
-  assert.equal(fs.readdirSync(f.uploads).length, 0);
-  assert.equal((await f.request('/api/drivers/create-profile', f.driverForm(identity))).status, 201);
+  assert.equal(f.validIdDocuments.size, 0);
+  assert.equal((await f.request(
+    '/api/drivers/create-profile',
+    f.driverForm(identity, {}, new Blob([validDocumentBytes('image/png', 2 * 1024 * 1024)], { type: 'image/png' }))
+  )).status, 201);
+  for (const [email, mimeType, filename] of [
+    ['jpeg-driver@gmail.com', 'image/jpeg', 'id.jpg'],
+    ['pdf-driver@gmail.com', 'application/pdf', 'id.pdf'],
+  ]) {
+    const allowedIdentity = f.firebaseToken(email);
+    const result = await f.request(
+      '/api/drivers/create-profile',
+      f.driverForm(allowedIdentity, {}, new Blob([validDocumentBytes(mimeType)], { type: mimeType }), filename)
+    );
+    assert.equal(result.status, 201, `${mimeType} should be accepted`);
+  }
   assert.equal((await f.request('/api/drivers/create-profile', f.driverForm(identity))).status, 200);
-  assert.equal(f.users.size, 1);
-  assert.equal(fs.readdirSync(f.uploads).length, 1);
+  assert.equal(f.users.size, 3);
+  assert.equal(f.validIdDocuments.size, 3);
   const other = f.firebaseToken(identity.email);
   assert.equal((await f.request('/api/drivers/create-profile', f.driverForm(other))).status, 409);
-  assert.equal(fs.readdirSync(f.uploads).length, 1);
+  assert.equal(f.validIdDocuments.size, 3);
+});
+
+test('issues list and status changes are admin-only while report details are owner-only', async (t) => {
+  const f = await createFixture(t);
+  const parent = await f.addUser();
+  const otherParent = await f.addUser();
+  const admin = await f.addUser({ role: 'admin' });
+  const parentToken = f.sessionToken(parent);
+  const otherParentToken = f.sessionToken(otherParent);
+  const adminToken = f.sessionToken(admin);
+
+  assert.equal((await f.request('/api/issues')).status, 401);
+  assert.equal((await f.request('/api/issues', undefined, parentToken)).status, 403);
+  assert.equal((await f.request('/api/issues', undefined, adminToken)).status, 200);
+
+  const created = await f.request('/api/issues/create-report', {
+    category: 'other',
+    description: 'Test issue report',
+    status: 'resolved',
+  }, parentToken);
+  assert.equal(created.status, 201);
+  assert.equal(created.body.issue.status, 'pending');
+  const issueId = created.body.issue.id;
+
+  assert.equal((await f.request(`/api/issues/${issueId}`, undefined, parentToken)).status, 200);
+  assert.equal((await f.request(`/api/issues/${issueId}`, undefined, otherParentToken)).status, 403);
+  assert.equal((await f.request(`/api/issues/${issueId}`, undefined, adminToken)).status, 200);
+
+  assert.equal((await f.request(
+    `/api/issues/${issueId}/status`,
+    { status: 'reviewing' },
+    parentToken,
+    'PATCH'
+  )).status, 403);
+  const updated = await f.request(
+    `/api/issues/${issueId}/status`,
+    { status: 'reviewing' },
+    adminToken,
+    'PATCH'
+  );
+  assert.equal(updated.status, 200);
+  assert.equal(updated.body.issue.status, 'reviewing');
 });
 
 test('the real MongoDB schema retains Firebase UID, uploaded ID, and license expiration', async () => {
   const User = require('../models/User');
+  const ValidIdDocument = require('../models/ValidIdDocument');
+  assert.equal(ValidIdDocument.schema.path('data').options.select, false);
+  assert.equal(ValidIdDocument.schema.path('size').options.max, 2 * 1024 * 1024);
+  assert.deepEqual(ValidIdDocument.schema.path('mimeType').enumValues, [
+    'image/jpeg',
+    'image/png',
+    'application/pdf',
+  ]);
   const user = new User({
     role: 'driver', fullName: 'Schema Test', email: 'schema@gmail.com', firebaseUid: randomUUID(),
     driver: { licenseExpirationDate: new Date('2035-01-01'), yearsOfExperience: 0 },
-    validId: { originalName: 'id.png', filename: 'stored.png', path: 'test/id.png', mimeType: 'image/png', size: 9 },
+    validId: {
+      documentId: new (require('mongoose').Types.ObjectId)(),
+      originalName: 'id.png',
+      filename: 'stored.png',
+      mimeType: 'image/png',
+      size: 9,
+    },
     student: { schoolLatitude: 14.5995, schoolLongitude: 120.9842 },
   });
   await user.validate();
   assert.ok(user.toObject().firebaseUid);
   assert.ok(user.toObject().driver.licenseExpirationDate instanceof Date);
   assert.equal(user.toObject().validId.originalName, 'id.png');
+  assert.equal(user.toObject().validId.path, undefined);
+  assert.equal(user.toObject().validId.data, undefined);
   assert.equal(user.toObject().student.schoolLatitude, 14.5995);
 });

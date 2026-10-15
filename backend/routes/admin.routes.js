@@ -1,7 +1,6 @@
-const fs = require('fs');
-const path = require('path');
 const express = require('express');
 const User = require('../models/User');
+const ValidIdDocument = require('../models/ValidIdDocument');
 const VanRequest = require('../models/VanRequest');
 const { requireAdmin } = require('../middleware/auth');
 const { sanitizeText } = require('../utils/validation');
@@ -122,14 +121,16 @@ router.patch('/registrations/:registrationId/status', requireAdmin, async (req, 
 router.get('/registrations/:registrationId/id-document', requireAdmin, async (req, res) => {
   const parent = await User.findOne({ _id: req.params.registrationId, role: { $in: ['parent', 'driver'] } });
 
-  if (!parent || !parent.validId?.path) {
+  if (!parent || !parent.validId?.documentId) {
     return res.status(404).json({ message: 'ID document not found.' });
   }
 
-  const resolvedPath = path.resolve(parent.validId.path);
-
-  if (!fs.existsSync(resolvedPath)) {
-    return res.status(404).json({ message: 'Stored ID document file is missing.' });
+  const document = await ValidIdDocument.findOne({
+    _id: parent.validId.documentId,
+    ownerId: parent._id,
+  }).select('+data');
+  if (!document) {
+    return res.status(404).json({ message: 'Stored ID document is missing from MongoDB.' });
   }
 
   const safeFileName = String(parent.validId.originalName || 'valid-id')
@@ -138,8 +139,9 @@ router.get('/registrations/:registrationId/id-document', requireAdmin, async (re
 
   res.setHeader('Content-Type', parent.validId.mimeType || 'application/octet-stream');
   res.setHeader('Content-Disposition', `inline; filename="${safeFileName}"`);
+  res.setHeader('Content-Length', String(document.size));
 
-  return res.sendFile(resolvedPath);
+  return res.send(Buffer.from(document.data));
 });
 
 router.get('/users', requireAdmin, async (req, res) => {
@@ -230,11 +232,11 @@ router.delete('/users/:userId', requireAdmin, async (req, res) => {
     return res.status(403).json({ message: 'Admin accounts cannot be deleted.' });
   }
 
-  if (targetUser.validId?.path) {
-    const resolvedPath = path.resolve(targetUser.validId.path);
-    if (fs.existsSync(resolvedPath)) {
-      fs.unlinkSync(resolvedPath);
-    }
+  if (targetUser.validId?.documentId) {
+    await ValidIdDocument.deleteOne({
+      _id: targetUser.validId.documentId,
+      ownerId: targetUser._id,
+    });
   }
 
   await User.deleteOne({ _id: targetUser._id });

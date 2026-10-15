@@ -18,8 +18,8 @@ const INITIAL_FORM = {
 };
 
 const DRIVER_FIELDS = ['phone', 'homeAddress', 'licenseNumber', 'licenseExpiry', 'vehicleType', 'plateNumber', 'yearsOfExperience'];
-const DOCUMENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-const DOCUMENT_EXTENSIONS = /\.(jpe?g|png|webp|pdf)$/i;
+const DOCUMENT_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
+const DOCUMENT_EXTENSIONS = /\.(jpe?g|png|pdf)$/i;
 
 function todayString() {
   const today = new Date();
@@ -103,8 +103,8 @@ export default function SignupPageEnterprise({ initialRole = 'parent' }) {
         nextErrors.yearsOfExperience = 'Enter a whole number from 0 to 60.';
       }
       if (!validId) nextErrors.validId = 'Upload a valid ID for verification.';
-      else if (!DOCUMENT_EXTENSIONS.test(validId.name) || !DOCUMENT_TYPES.includes(validId.type)) nextErrors.validId = 'Choose a JPG, PNG, WEBP, or PDF file.';
-      else if (validId.size > 5 * 1024 * 1024) nextErrors.validId = 'Choose a file no larger than 5 MB.';
+      else if (!DOCUMENT_EXTENSIONS.test(validId.name) || !DOCUMENT_TYPES.includes(validId.type)) nextErrors.validId = 'Choose a JPEG, PNG, or PDF file.';
+      else if (validId.size > 2 * 1024 * 1024) nextErrors.validId = 'Choose a file no larger than 2 MB.';
     }
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -259,7 +259,7 @@ export default function SignupPageEnterprise({ initialRole = 'parent' }) {
               {field('yearsOfExperience', 'Years of experience', { type: 'number', min: '0', max: '60', step: '1', inputMode: 'numeric' })}
             </div>
           </fieldset>
-          <Field name="validId" label="Valid ID document" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" hint="JPG, PNG, WEBP, or PDF. Maximum 5 MB." error={errors.validId} disabled={submitting} required onChange={(event) => { setValidId(event.target.files?.[0] || null); setErrors((current) => ({ ...current, validId: '' })); }} />
+          <Field name="validId" label="Valid ID document" type="file" accept=".jpg,.jpeg,.png,.pdf" hint="JPEG, PNG, or PDF. Maximum 2 MB." error={errors.validId} disabled={submitting} required onChange={(event) => { setValidId(event.target.files?.[0] || null); setErrors((current) => ({ ...current, validId: '' })); }} />
           <p className="signup-copy">Your application and documents will be reviewed by an administrator before you can access the driver dashboard.</p>
         </>}
 

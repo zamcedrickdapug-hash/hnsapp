@@ -1,10 +1,8 @@
-const path = require('path');
-const fs = require('fs');
-const crypto = require('crypto');
 const express = require('express');
 const multer = require('multer');
 const VanRequest = require('../models/VanRequest');
 const User = require('../models/User');
+const ValidIdDocument = require('../models/ValidIdDocument');
 const Vehicle = require('../models/Vehicle');
 const DriverStatus = require('../models/DriverStatus');
 const { requireAuth } = require('../middleware/auth');
@@ -24,36 +22,26 @@ const { verifyRegistrationIdentity } = require('../utils/firebaseIdentity');
 const { releaseVanRequestAssignment } = require('../services/releaseVanRequestAssignment');
 
 const router = express.Router();
+const MAX_VALID_ID_SIZE = 2 * 1024 * 1024;
 
-const uploadsDirectory = path.resolve(__dirname, '../uploads/ids');
-
-const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.pdf'];
-
-const ensureUploadsDirectory = () => {
-  fs.mkdirSync(uploadsDirectory, { recursive: true });
+const allowedMimeTypes = new Map([
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+  ['.png', 'image/png'],
+  ['.pdf', 'application/pdf'],
+]);
+const validFileSignatures = {
+  'image/jpeg': Buffer.from([0xff, 0xd8, 0xff]),
+  'image/png': Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  'application/pdf': Buffer.from('%PDF-'),
 };
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    ensureUploadsDirectory();
-    cb(null, uploadsDirectory);
-  },
-  filename: (req, file, cb) => {
-    const extension = path.extname(file.originalname).toLowerCase();
-    const safeExtension = allowedExtensions.includes(extension) ? extension : '';
-    const randomName = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${safeExtension}`;
-    cb(null, randomName);
-  },
-});
-
 const fileFilter = (req, file, cb) => {
-  const extension = path.extname(file.originalname || '').toLowerCase();
-  const isMimeAllowed = allowedMimeTypes.includes(file.mimetype);
-  const isExtensionAllowed = allowedExtensions.includes(extension);
+  const extension = String(file.originalname || '').toLowerCase().match(/\.[^.]+$/)?.[0];
+  const isMimeAllowed = extension && allowedMimeTypes.get(extension) === file.mimetype;
 
-  if (!isMimeAllowed || !isExtensionAllowed) {
-    const error = new Error('Only JPG, PNG, WEBP images, or PDF files are allowed.');
+  if (!isMimeAllowed) {
+    const error = new Error('Only JPEG, PNG, or PDF files are allowed.');
     error.code = 'INVALID_FILE_TYPE';
     cb(error);
     return;
@@ -62,23 +50,18 @@ const fileFilter = (req, file, cb) => {
   cb(null, true);
 };
 
+const hasValidFileSignature = (file) => {
+  const signature = validFileSignatures[file.mimetype];
+  return signature && file.buffer?.subarray(0, signature.length).equals(signature);
+};
+
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024,
+    fileSize: MAX_VALID_ID_SIZE + 1,
   },
 });
-
-const removeFileIfExists = (filePath) => {
-  if (!filePath) {
-    return;
-  }
-
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
-  }
-};
 
 const distanceInMeters = (first, second) => {
   const lat1 = Number(first?.latitude);
@@ -120,6 +103,7 @@ const isValidLicenseExpiryDate = (expiryDateString) => {
 // Firebase registration retains the existing ID upload and admin review workflow.
 router.post('/create-profile', upload.single('validId'), async (req, res) => {
 	console.info('[DRIVER] Profile creation request received.');
+	let storedDocumentId;
 	try {
 		const {
 			fullName,
@@ -147,15 +131,17 @@ router.post('/create-profile', upload.single('validId'), async (req, res) => {
 			errors.push('Years of experience is required.');
 		}
 		if (!req.file) errors.push('A valid ID file is required.');
+		if (req.file && req.file.size > MAX_VALID_ID_SIZE) errors.push('ID file must be 2MB or smaller.');
+		if (req.file && !hasValidFileSignature(req.file)) {
+			errors.push('The uploaded file content must be a valid JPEG, PNG, or PDF.');
+		}
 
 		if (errors.length > 0) {
-			removeFileIfExists(req.file?.path);
 			return res.status(400).json({ message: 'Validation failed.', errors });
 		}
 
 		// Validate license expiry date
 		if (!isValidLicenseExpiryDate(licenseExpiry)) {
-			removeFileIfExists(req.file?.path);
 			return res.status(400).json({
 				message: 'Driver license expiration date must be today or a future date.',
 			});
@@ -164,7 +150,6 @@ router.post('/create-profile', upload.single('validId'), async (req, res) => {
 		// Validate years of experience is a valid number
 		const yearsNum = Number(yearsOfExperience);
 		if (!Number.isInteger(yearsNum) || yearsNum < 0 || yearsNum > 60) {
-			removeFileIfExists(req.file?.path);
 			return res.status(400).json({ message: 'Years of experience must be a whole number between 0 and 60.' });
 		}
 
@@ -172,7 +157,6 @@ router.post('/create-profile', upload.single('validId'), async (req, res) => {
 		let user = await User.findOne({ email: identity.email });
 
 		if (user) {
-			removeFileIfExists(req.file?.path);
 			if (user.role !== 'driver' || user.firebaseUid !== identity.uid) {
 				return res.status(409).json({ message: 'This email address is already registered. Please sign in.' });
 			}
@@ -203,13 +187,6 @@ router.post('/create-profile', upload.single('validId'), async (req, res) => {
 				plateNumber: plateNumber.trim(),
 				yearsOfExperience: yearsNum,
 			},
-			validId: {
-				originalName: req.file.originalname,
-				filename: req.file.filename,
-				path: req.file.path,
-				mimeType: req.file.mimetype,
-				size: req.file.size,
-			},
 			isVerified: false,
 			status: 'pending', // Driver profile is pending admin approval
 			accountState: 'active',
@@ -219,6 +196,23 @@ router.post('/create-profile', upload.single('validId'), async (req, res) => {
 				status: 'pending',
 			}],
 		});
+
+		const storedDocument = new ValidIdDocument({
+			ownerId: user._id,
+			originalName: req.file.originalname,
+			mimeType: req.file.mimetype,
+			size: req.file.size,
+			data: req.file.buffer,
+		});
+		await storedDocument.save();
+		storedDocumentId = storedDocument._id;
+		user.validId = {
+			documentId: storedDocument._id,
+			originalName: req.file.originalname,
+			filename: String(storedDocument._id),
+			mimeType: req.file.mimetype,
+			size: req.file.size,
+		};
 
 		await user.save();
 		console.info('[DRIVER] Profile created with pending review status.');
@@ -234,7 +228,13 @@ router.post('/create-profile', upload.single('validId'), async (req, res) => {
 			},
 		});
 	} catch (error) {
-		removeFileIfExists(req.file?.path);
+		if (storedDocumentId) {
+			try {
+				await ValidIdDocument.deleteOne({ _id: storedDocumentId });
+			} catch (cleanupError) {
+				console.error('[DRIVER] Failed to clean up stored ID document:', cleanupError.name || 'UnknownError');
+			}
+		}
 		if (error.status) return res.status(error.status).json({ message: error.message });
 		if (error.code === 11000) return res.status(409).json({ message: 'This email address is already registered.' });
 		return res.status(500).json({ message: 'Failed to create driver profile.' });
@@ -243,7 +243,7 @@ router.post('/create-profile', upload.single('validId'), async (req, res) => {
 	if (!(error instanceof multer.MulterError) && error.code !== 'INVALID_FILE_TYPE') return next(error);
 
 	const message = error.code === 'LIMIT_FILE_SIZE'
-		? 'ID file must be 5MB or smaller.'
+		? 'ID file must be 2MB or smaller.'
 		: error.code === 'LIMIT_UNEXPECTED_FILE'
 			? 'Unexpected upload field. Upload the file using the validId field.'
 			: error.message;

@@ -27,8 +27,11 @@ export function TripCard({ trip, index, isExpanded, onToggle, onViewReceipt, onR
 
 	console.log(`🎫 TripCard [${trip.studentName}] status: "${trip.status}" → lookup key: "${statusNormalized}"`)
 
-	// Get config with fallback
-	const statusConfig = STATUS_CONFIG[statusNormalized] || STATUS_CONFIG.completed
+	const statusConfig = STATUS_CONFIG[statusNormalized] || {
+		icon: Clock,
+		color: '#6b7280',
+		label: trip.status?.toString().trim() || 'Unknown',
+	}
 	const StatusIcon = statusConfig.icon
 
 	return (

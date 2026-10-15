@@ -183,17 +183,15 @@ const driverSchema = new mongoose.Schema(
 
 const validIdSchema = new mongoose.Schema(
   {
+    documentId: {
+      type: mongoose.Schema.Types.ObjectId,
+    },
     originalName: {
       type: String,
       required: true,
       trim: true,
     },
     filename: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    path: {
       type: String,
       required: true,
       trim: true,

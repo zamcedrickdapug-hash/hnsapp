@@ -1,8 +1,4 @@
-const path = require('path');
-const fs = require('fs');
-const crypto = require('crypto');
 const express = require('express');
-const multer = require('multer');
 const User = require('../models/User');
 const VanRequest = require('../models/VanRequest');
 const { releaseVanRequestAssignment } = require('../services/releaseVanRequestAssignment');
@@ -14,61 +10,6 @@ const { getIo, buildTripRoomName, buildUserRoomName } = require('../socket');
 const { notifyParentSearching } = require('../services/notificationService');
 
 const router = express.Router();
-
-const uploadsDirectory = path.resolve(__dirname, '../uploads/ids');
-
-const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.pdf'];
-
-const ensureUploadsDirectory = () => {
-  fs.mkdirSync(uploadsDirectory, { recursive: true });
-};
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    ensureUploadsDirectory();
-    cb(null, uploadsDirectory);
-  },
-  filename: (req, file, cb) => {
-    const extension = path.extname(file.originalname).toLowerCase();
-    const safeExtension = allowedExtensions.includes(extension) ? extension : '';
-    const randomName = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${safeExtension}`;
-    cb(null, randomName);
-  },
-});
-
-const fileFilter = (req, file, cb) => {
-  const extension = path.extname(file.originalname || '').toLowerCase();
-  const isMimeAllowed = allowedMimeTypes.includes(file.mimetype);
-  const isExtensionAllowed = allowedExtensions.includes(extension);
-
-  if (!isMimeAllowed || !isExtensionAllowed) {
-    const error = new Error('Only JPG, PNG, WEBP images, or PDF files are allowed.');
-    error.code = 'INVALID_FILE_TYPE';
-    cb(error);
-    return;
-  }
-
-  cb(null, true);
-};
-
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: {
-    fileSize: 5 * 1024 * 1024,
-  },
-});
-
-const removeFileIfExists = (filePath) => {
-  if (!filePath) {
-    return;
-  }
-
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
-  }
-};
 
 const parseRequesterLocation = (locationPayload) => {
   const latitude = Number(locationPayload?.latitude);
@@ -544,26 +485,6 @@ router.patch('/van-requests/:requestId/cancel', requireParent, async (req, res) 
   } catch (error) {
     return res.status(500).json({ message: 'Unable to cancel ride request right now.' });
   }
-});
-
-router.use((error, req, res, next) => {
-  if (error instanceof multer.MulterError) {
-    if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ message: 'ID file must be 5MB or smaller.' });
-    }
-
-    if (error.code === 'LIMIT_UNEXPECTED_FILE') {
-      return res.status(400).json({ message: 'Unexpected upload field. Upload the file using the validId field.' });
-    }
-
-    return res.status(400).json({ message: 'Unable to process uploaded file.' });
-  }
-
-  if (error?.code === 'INVALID_FILE_TYPE') {
-    return res.status(400).json({ message: error.message });
-  }
-
-  return next(error);
 });
 
 module.exports = router;
