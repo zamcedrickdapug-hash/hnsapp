@@ -170,6 +170,78 @@ test('frontend and backend phone validators accept only supported Philippine mob
   assert.equal(frontend.isValidPhoneNumber('0970 171 3972'), true);
 });
 
+test('frontend origin allowlist parses comma-separated domains and adds local development origin only outside production', () => {
+  const previousFrontendUrl = process.env.FRONTEND_URL;
+  const previousNodeEnv = process.env.NODE_ENV;
+
+  try {
+    process.env.FRONTEND_URL = 'https://parents.example, https://staff.example/app';
+    process.env.NODE_ENV = 'production';
+    assert.deepEqual(
+      require('../utils/frontendOrigins').getAllowedFrontendOrigins(),
+      ['https://parents.example', 'https://staff.example']
+    );
+
+    process.env.NODE_ENV = 'development';
+    assert.deepEqual(
+      require('../utils/frontendOrigins').getAllowedFrontendOrigins(),
+      ['https://parents.example', 'https://staff.example', 'http://localhost:5173']
+    );
+  } finally {
+    if (previousFrontendUrl === undefined) delete process.env.FRONTEND_URL;
+    else process.env.FRONTEND_URL = previousFrontendUrl;
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
+  }
+});
+
+test('Firebase Admin accepts service-account credentials from the JSON environment variable', async () => {
+  const previousServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
+  const previousCredentialsPath = process.env.FIREBASE_ADMIN_SDK_PATH;
+  const expectedServiceAccount = {
+    project_id: 'test-project',
+    client_email: 'test-service@example.invalid',
+    private_key: 'test-key-not-a-real-credential',
+  };
+  let initializedCredential;
+  const firebaseAdmin = {
+    apps: [],
+    credential: {
+      cert: (serviceAccount) => {
+        initializedCredential = serviceAccount;
+        return { serviceAccount };
+      },
+    },
+    initializeApp(options) {
+      this.apps.push(options);
+    },
+    auth: () => ({
+      verifyIdToken: async () => ({
+        uid: 'test-uid',
+        email: 'parent@example.invalid',
+        email_verified: true,
+      }),
+    }),
+  };
+
+  try {
+    process.env.FIREBASE_SERVICE_ACCOUNT = JSON.stringify(expectedServiceAccount);
+    process.env.FIREBASE_ADMIN_SDK_PATH = 'path-that-must-not-be-read.json';
+    const identity = loadWithDependencies('utils/firebaseIdentity.js', {
+      'firebase-admin': firebaseAdmin,
+    });
+    const result = await identity.verifyFirebaseIdentity('test-id-token');
+
+    assert.deepEqual(initializedCredential, expectedServiceAccount);
+    assert.equal(result.email, 'parent@example.invalid');
+  } finally {
+    if (previousServiceAccount === undefined) delete process.env.FIREBASE_SERVICE_ACCOUNT;
+    else process.env.FIREBASE_SERVICE_ACCOUNT = previousServiceAccount;
+    if (previousCredentialsPath === undefined) delete process.env.FIREBASE_ADMIN_SDK_PATH;
+    else process.env.FIREBASE_ADMIN_SDK_PATH = previousCredentialsPath;
+  }
+});
+
 test('parent and driver profile routes store valid phone numbers in +63 format', async (t) => {
   const f = await createFixture(t);
   const numbers = ['09701713972', '09171234567', '+639171234567', '639171234567'];

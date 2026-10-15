@@ -15,6 +15,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, X, Check, Phone, Navigation } from 'lucide-react';
+import { resolveApiUrl } from '../../../api';
 
 const EmergencyAlertPanel = ({ socket, adminId }) => {
   const [alerts, setAlerts] = useState([]);
@@ -90,7 +91,7 @@ const EmergencyAlertPanel = ({ socket, adminId }) => {
     setAcknowledgingAlertId(alertId);
 
     try {
-      const response = await fetch(`/api/trip-safety/alert/${alertId}/acknowledge`, {
+      const response = await fetch(resolveApiUrl(`/api/trip-safety/alert/${alertId}/acknowledge`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

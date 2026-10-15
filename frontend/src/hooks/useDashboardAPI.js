@@ -21,6 +21,7 @@
 import { useCallback, useRef, useEffect } from 'react'
 import axios from 'axios'
 import { useDashboardState } from './useDashboardState'
+import { API_BASE_URL } from '../api'
 
 /**
  * useDashboardAPI Hook
@@ -34,13 +35,18 @@ export function useDashboardAPI() {
 
   // Create axios instance with base config
   const api = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+    baseURL: API_BASE_URL,
     timeout: 30000,
   })
 
   // Add auth token to requests if available
   api.interceptors.request.use(
     (config) => {
+      if (config.url === '/api') {
+        config.url = '/'
+      } else if (config.url?.startsWith('/api/')) {
+        config.url = config.url.slice(4)
+      }
       const token = localStorage.getItem('token')
       if (token) {
         config.headers.Authorization = `Bearer ${token}`

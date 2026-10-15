@@ -3,14 +3,10 @@ const { Server } = require('socket.io');
 const User = require('./models/User');
 const VanRequest = require('./models/VanRequest');
 const { getJwtSecret } = require('./utils/jwtSecret');
+const { getAllowedFrontendOrigins } = require('./utils/frontendOrigins');
 
 let ioInstance = null;
-const configuredFrontendUrl = String(process.env.FRONTEND_URL || '').trim();
-const allowedOrigins = configuredFrontendUrl
-  ? [new URL(configuredFrontendUrl).origin]
-  : process.env.NODE_ENV === 'production'
-    ? []
-    : ['http://localhost:5173'];
+const allowedOrigins = getAllowedFrontendOrigins();
 
 const buildTripRoomName = (requestId) => `trip:${String(requestId)}`;
 const buildUserRoomName = (userId) => `user:${String(userId)}`;

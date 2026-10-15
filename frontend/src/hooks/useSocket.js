@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
+import { API_SERVER_URL } from '../api'
 
 // Global singleton socket instance to prevent multiple connections
 let globalSocket = null
@@ -32,7 +33,7 @@ function getGlobalSocket(token, options = {}) {
 
   // Create new socket if needed
   if (!globalSocket) {
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || window.location.origin
+    const socketUrl = API_SERVER_URL
     const { auth: customAuth = {}, ...otherOptions } = options
     const socketOptions = {
       path: '/socket.io',

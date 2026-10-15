@@ -49,16 +49,15 @@ For Firebase-backed frontend authentication, copy `frontend/.env.example` to `fr
 - `VITE_FIREBASE_MESSAGING_SENDER_ID`
 - `VITE_FIREBASE_APP_ID`
 
-The frontend reads those values during its Firebase initialization. For backend verification of Firebase identity tokens, configure `FIREBASE_ADMIN_SDK_PATH` to point to a locally stored Firebase service-account JSON file. Keep that credential file private and out of Git.
+The frontend reads those values during its Firebase initialization. For backend verification of Firebase identity tokens, configure `FIREBASE_SERVICE_ACCOUNT` with the service-account JSON in the deployment environment. `FIREBASE_ADMIN_SDK_PATH` remains available for a locally stored file. Keep both credentials private and out of Git.
 
-For local dashboard API requests, `VITE_API_BASE_URL=http://localhost:4000/api` is the recommended override in `frontend/.env.local`. The dashboard API hook now also defaults to the backend's port `4000`.
+The frontend uses `VITE_API_URL` for API and socket connections. It defaults to `http://localhost:4000/api` for local development; set it to the backend URL ending in `/api` for a split-domain deployment.
 
 Other integration settings are optional unless you use the corresponding feature:
 
 - Email: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` (mail sender settings may also use `MAIL_FROM_EMAIL` and `MAIL_FROM_NAME`); the backend email service also reads `EMAIL_SERVICE`, `EMAIL_USER`, and `EMAIL_PASSWORD`
 - Web push: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` must all be configured to enable push initialization
-- Development/runtime: `PORT` (defaults to `4000`), `FRONTEND_URL`, and `MONGODB_DNS_SERVERS` (development-only DNS override)
-- Frontend service overrides: `VITE_API_BASE_URL` and `VITE_SOCKET_URL`
+- Development/runtime: `PORT` (defaults to `4000`), `FRONTEND_URL` (comma-separated frontend origins), and `MONGODB_DNS_SERVERS` (development-only DNS override)
 
 Do not put real credentials in `.env.example`, source files, or documentation. Use private local environment files or your deployment platform’s secret configuration.
 
@@ -76,13 +75,22 @@ Start the frontend in a second terminal:
 npm run frontend:dev
 ```
 
-Vite's development server proxies relative `/api` requests and `/socket.io` to `http://localhost:4000` by default. The frontend normally runs at `http://localhost:5173`; the backend defaults to port `4000`. Set `VITE_API_BASE_URL` as described above for dashboard requests. The backend exposes `/api/health` for a health check and reports database connection state there.
+The frontend normally runs at `http://localhost:5173`; the backend defaults to port `4000`. `VITE_API_URL` defaults to `http://localhost:4000/api` for local API and socket connections. Vite also retains proxies for any relative `/api` and `/socket.io` requests. The backend exposes `/api/health` for a health check and reports database connection state there.
 
 To build the frontend:
 
 ```sh
-npm run build --prefix frontend
+npm run build
 ```
+
+## Split-domain deployment
+
+For a Render backend and Vercel frontend:
+
+- On Render, set the service root to `backend`, use `npm ci` as the build command and `npm start` as the start command. Configure `MONGO_URL`, `JWT_SECRET`, and `FRONTEND_URL`; Render supplies `PORT`. `FRONTEND_URL` accepts a comma-separated list of frontend origins.
+- On Vercel, set the project root to `frontend`, use `npm run build` as the build command, and `dist` as the output directory. Set `VITE_API_URL` to the Render backend URL ending in `/api`, and configure the `VITE_FIREBASE_*` values if Firebase authentication is enabled.
+- Configure `FIREBASE_SERVICE_ACCOUNT` in Render when the backend needs Firebase Admin verification. The frontend's `vercel.json` rewrites app routes to `index.html` for client-side route refreshes.
+- MongoDB Atlas must allow connections from the Render service. Keep database, JWT, SMTP, Firebase Admin, and VAPID credentials in the deployment platform's secret settings.
 
 The backend can serve the built frontend from `frontend/dist` when present.
 

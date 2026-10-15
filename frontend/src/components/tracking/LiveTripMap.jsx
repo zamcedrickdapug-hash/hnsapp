@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Map, { Layer, Marker, Popup, Source } from 'react-map-gl/maplibre'
 import maplibregl from 'maplibre-gl'
+import { resolveApiUrl } from '../../api'
 import './maplibre-gl.css'
 import './LiveTripMap.css'
 
@@ -98,7 +99,7 @@ async function fetchWithTimeout(endpoint, signal, options = {}, skipOsrmMark = f
 	}
 
 	try {
-		return await fetch(endpoint, { ...options, signal: timeoutController.signal })
+		return await fetch(resolveApiUrl(endpoint), { ...options, signal: timeoutController.signal })
 	} catch (error) {
 		if (error?.name === 'AbortError' || error instanceof TypeError) {
 			if (!skipOsrmMark) markOsrmUnavailable()

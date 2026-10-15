@@ -3,6 +3,17 @@ const path = require('path');
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const identityError = (status, message) => Object.assign(new Error(message), { status });
 
+const getFirebaseServiceAccount = () => {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    return JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  }
+
+  const credentialsPath = process.env.FIREBASE_ADMIN_SDK_PATH
+    ? path.resolve(process.env.FIREBASE_ADMIN_SDK_PATH)
+    : path.resolve(__dirname, '../serviceAccountKey.json');
+  return require(credentialsPath);
+};
+
 const verifyFirebaseIdentity = async (idToken) => {
   if (typeof idToken !== 'string' || !idToken.trim()) {
     throw identityError(400, 'Firebase ID token is required.');
@@ -12,10 +23,7 @@ const verifyFirebaseIdentity = async (idToken) => {
   try {
     admin = require('firebase-admin');
     if (!admin.apps.length) {
-      const credentialsPath = process.env.FIREBASE_ADMIN_SDK_PATH
-        ? path.resolve(process.env.FIREBASE_ADMIN_SDK_PATH)
-        : path.resolve(__dirname, '../serviceAccountKey.json');
-      const serviceAccount = require(credentialsPath);
+      const serviceAccount = getFirebaseServiceAccount();
       admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
     }
   } catch {

@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
+const { getAllowedFrontendOrigins } = require('./frontendOrigins');
 
 /**
  * Generate a secure random token (32 bytes = 256 bits)
@@ -41,6 +42,14 @@ const sendPasswordResetEmail = async (email, resetToken, userName = 'User') => {
 			};
 		}
 
+		const frontendUrl = getAllowedFrontendOrigins()[0];
+		if (!frontendUrl) {
+			return {
+				success: false,
+				error: 'Frontend URL is not configured.',
+			};
+		}
+
 		console.log('[Password Reset] Creating mail transporter with SMTP:', {
 			host: smtpHost,
 			port: smtpPort,
@@ -72,7 +81,7 @@ const sendPasswordResetEmail = async (email, resetToken, userName = 'User') => {
 			};
 		}
 
-		const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password/${resetToken}`;
+		const resetLink = `${frontendUrl}/reset-password/${resetToken}`;
 
 		const htmlContent = `
 <!DOCTYPE html>

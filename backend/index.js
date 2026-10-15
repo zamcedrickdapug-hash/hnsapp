@@ -3,6 +3,7 @@ const path = require('path');
 const http = require('http');
 const dns = require('dns');
 const express = require('express');
+const cors = require('cors');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const bcrypt = require('bcryptjs');
@@ -21,6 +22,7 @@ const verificationRoutes = require('./routes/verification.routes');
 const safetyReportingRoutes = require('./routes/safetyReporting.routes');
 const tripSafetyRoutes = require('./routes/tripSafety.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
+const { getAllowedFrontendOrigins } = require('./utils/frontendOrigins');
 
 dotenv.config();
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
@@ -32,7 +34,8 @@ app.set('trust proxy', 1);
 const server = http.createServer(app);
 initSocketServer(server);
 const PORT = Number(process.env.PORT || 4000);
-const FRONTEND_URL = String(process.env.FRONTEND_URL || '').trim();
+const allowedFrontendOrigins = getAllowedFrontendOrigins();
+const FRONTEND_URL = allowedFrontendOrigins[0] || '';
 const FRONTEND_DIST_PATH = path.resolve(__dirname, '../frontend/dist');
 const FRONTEND_INDEX_PATH = path.join(FRONTEND_DIST_PATH, 'index.html');
 let isDatabaseConnected = false;
@@ -140,6 +143,12 @@ const initializeDatabase = async () => {
 	}
 };
 
+app.use(cors({
+	origin: (origin, callback) => {
+		callback(null, !origin || allowedFrontendOrigins.includes(origin));
+	},
+	credentials: true,
+}));
 app.use(express.json({ limit: '1mb' }));
 
 // Request logging middleware - MUST be first!

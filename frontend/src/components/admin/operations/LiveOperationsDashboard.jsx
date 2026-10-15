@@ -30,6 +30,7 @@ import FleetStatusCard from './FleetStatusCard';
 import EmergencyAlertPanel from './EmergencyAlertPanel';
 import OperationsAnalyticsCard from './OperationsAnalyticsCard';
 import DriverSafetyLeaderboard from './DriverSafetyLeaderboard';
+import { resolveApiUrl } from '../../../api';
 
 const LiveOperationsDashboard = ({ socket, userId }) => {
   const [realTimeMetrics, setRealTimeMetrics] = useState(null);
@@ -44,7 +45,7 @@ const LiveOperationsDashboard = ({ socket, userId }) => {
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
-        const response = await fetch('/api/analytics/real-time', {
+        const response = await fetch(resolveApiUrl('/api/analytics/real-time'), {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`,
           },
@@ -75,7 +76,7 @@ const LiveOperationsDashboard = ({ socket, userId }) => {
       try {
         const today = new Date().toISOString().split('T')[0];
         const response = await fetch(
-          `/api/analytics/summary?startDate=${today}T00:00:00Z&endDate=${today}T23:59:59Z`,
+          resolveApiUrl(`/api/analytics/summary?startDate=${today}T00:00:00Z&endDate=${today}T23:59:59Z`),
           {
             headers: {
               Authorization: `Bearer ${localStorage.getItem('token')}`,

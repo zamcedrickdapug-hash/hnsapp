@@ -21,7 +21,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { apiFetch } from '../../api'
+import { apiFetch, resolveApiUrl } from '../../api'
 import { useSocket, useSocketEvent } from '../../hooks/useSocket'
 import { DashboardLayout } from '../../components/dashboard'
 import { AdminStatsCards } from '../../components/dashboard/admin/AdminStatsCards'
@@ -259,7 +259,7 @@ export default function AdminPanel({ token, user, onLogout }) {
     setRegistrationError('')
 
     try {
-      const response = await fetch(`/api/admin/registrations/${registrationId}/id-document`, {
+      const response = await fetch(resolveApiUrl(`/api/admin/registrations/${registrationId}/id-document`), {
         headers: { Authorization: `Bearer ${token}` },
       })
 
