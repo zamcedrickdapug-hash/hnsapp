@@ -99,6 +99,7 @@ function DashboardLayout({
         {/* Header */}
         <DashboardHeader
           title={pageTitle}
+          mobileTitleTruncate={role === 'admin'}
           userName={userName}
           notificationCount={notificationCount}
           onNotificationClick={handleNotificationClick}

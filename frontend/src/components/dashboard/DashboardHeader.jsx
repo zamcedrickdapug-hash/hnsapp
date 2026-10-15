@@ -35,6 +35,7 @@ import { Bell, User, LogOut, Settings, ChevronDown, Menu } from 'lucide-react'
  */
 function DashboardHeader({
   title = 'Dashboard',
+  mobileTitleTruncate = false,
   userName = 'User',
   notificationCount = 0,
   onNotificationClick = () => {},
@@ -58,7 +59,7 @@ function DashboardHeader({
           {/* Notifications */}
           <motion.button
             onClick={onNotificationClick}
-            className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            className="relative shrink-0 p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             aria-label="Notifications"
@@ -141,11 +142,11 @@ function DashboardHeader({
       </header>
 
       {/* Mobile Header */}
-      <header className="md:hidden h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 sticky top-0 z-40">
+      <header className={`md:hidden h-16 bg-white border-b border-gray-200 flex items-center justify-between ${mobileTitleTruncate ? 'gap-1 px-2 sm:px-4' : 'px-4'} sticky top-0 z-40`}>
         {/* Mobile Menu Toggle */}
         <motion.button
           onClick={onMenuToggle}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          className={`${mobileTitleTruncate ? 'shrink-0 ' : ''}p-2 hover:bg-gray-100 rounded-lg transition-colors`}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           aria-label="Toggle menu"
@@ -154,16 +155,17 @@ function DashboardHeader({
         </motion.button>
 
         {/* Mobile Title */}
-        <h1 className="text-lg font-bold text-gray-900 flex-1 text-center px-2 truncate">{title}</h1>
+        <h1 className={`${mobileTitleTruncate ? 'min-w-0 flex-1 text-base sm:text-lg px-1' : 'flex-1 text-lg px-2'} font-bold text-gray-900 text-center truncate`} title={title}>{title}</h1>
 
         {/* Mobile Actions */}
-        <div className="flex items-center gap-2">
+        <div className={`${mobileTitleTruncate ? 'shrink-0 gap-1 sm:gap-2' : 'gap-2'} flex items-center`}>
           {/* Mobile Notifications */}
           <motion.button
             onClick={onNotificationClick}
-            className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            className={`relative ${mobileTitleTruncate ? 'shrink-0 ' : ''}p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors`}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
+            aria-label="Notifications"
           >
             <Bell size={20} />
             {notificationCount > 0 && (
@@ -180,9 +182,10 @@ function DashboardHeader({
           {/* Mobile Profile */}
           <motion.button
             onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className={`${mobileTitleTruncate ? 'shrink-0 ' : ''}p-2 hover:bg-gray-100 rounded-lg transition-colors`}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
+            aria-label="Open profile menu"
           >
             <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-700 rounded-full flex items-center justify-center">
               <User size={16} className="text-white" />

@@ -65,7 +65,9 @@ export default function AdminApplySection({
       {loading ? <p className="feedback">Loading registrations...</p> : null}
 
       {!loading && registrations.length === 0 ? (
-        <p className="feedback">No registrations found for the selected status.</p>
+        <p className="feedback admin-empty-state">
+          {statusFilter === 'all' ? 'No applications yet.' : 'No applications found for this status.'}
+        </p>
       ) : null}
 
       <div className="registration-list">

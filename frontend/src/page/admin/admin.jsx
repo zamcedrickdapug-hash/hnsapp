@@ -21,6 +21,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
+import { BarChart3, Clock3, Settings } from 'lucide-react'
 import { apiFetch, resolveApiUrl } from '../../api'
 import { useSocket, useSocketEvent } from '../../hooks/useSocket'
 import { DashboardLayout } from '../../components/dashboard'
@@ -52,7 +53,7 @@ export default function AdminPanel({ token, user, onLogout }) {
 
   // ====== REGISTRATION STATE ======
   const [registrations, setRegistrations] = useState([])
-  const [statusFilter, setStatusFilter] = useState('pending')
+  const [statusFilter, setStatusFilter] = useState('all')
   const [declineReasons, setDeclineReasons] = useState({})
   const [registrationLoading, setRegistrationLoading] = useState(false)
   const [registrationError, setRegistrationError] = useState('')
@@ -64,6 +65,12 @@ export default function AdminPanel({ token, user, onLogout }) {
   const [usersLoading, setUsersLoading] = useState(false)
   const [usersError, setUsersError] = useState('')
   const [usersActioningId, setUsersActioningId] = useState('')
+
+  // ====== ISSUE STATE ======
+  const [issues, setIssues] = useState([])
+  const [issuesLoading, setIssuesLoading] = useState(false)
+  const [issuesError, setIssuesError] = useState('')
+  const [issueActioningId, setIssueActioningId] = useState('')
 
   // ====== LOCATION STATE ======
   const [locations, setLocations] = useState([])
@@ -169,10 +176,44 @@ export default function AdminPanel({ token, user, onLogout }) {
     [token],
   )
 
+  const loadIssues = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setIssuesLoading(true)
+    setIssuesError('')
+
+    try {
+      const response = await apiFetch('/api/issues', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      setIssues(response.issues || [])
+    } catch (error) {
+      setIssuesError(error.message || 'Unable to load issue reports.')
+    } finally {
+      if (!silent) setIssuesLoading(false)
+    }
+  }, [token])
+
+  const handleUpdateIssueStatus = async (issueId, status) => {
+    setIssueActioningId(issueId)
+    setIssuesError('')
+
+    try {
+      await apiFetch(`/api/issues/${issueId}/status`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status }),
+      })
+      await loadIssues({ silent: true })
+    } catch (error) {
+      setIssuesError(error.message || 'Unable to update issue status.')
+    } finally {
+      setIssueActioningId('')
+    }
+  }
+
   // ====== EFFECTS ======
 
   useEffect(() => {
-    if (activeSection === 'apply') {
+    if (activeSection === 'applications') {
       loadRegistrations()
     }
   }, [activeSection, loadRegistrations])
@@ -182,6 +223,12 @@ export default function AdminPanel({ token, user, onLogout }) {
       loadUsers()
     }
   }, [activeSection, loadUsers])
+
+  useEffect(() => {
+    if (activeSection === 'issues') {
+      loadIssues()
+    }
+  }, [activeSection, loadIssues])
 
   useEffect(() => {
     if (activeSection !== 'dashboard') return
@@ -393,20 +440,22 @@ export default function AdminPanel({ token, user, onLogout }) {
       currentPage={activeSection}
       onNavigate={setActiveSection}
       onLogout={onLogout}
-      pageTitle={
-        activeSection === 'dashboard'
-          ? 'Admin Dashboard'
-          : activeSection === 'users'
-            ? 'User Management'
-            : 'Registrations'
-      }
-      pageDescription={
-        activeSection === 'dashboard'
-          ? 'Live map and operational overview of drivers.'
-          : activeSection === 'users'
-            ? 'Moderate and manage all user accounts.'
-            : 'Review and approve or decline account applications.'
-      }
+      pageTitle={{
+        dashboard: 'Admin Dashboard',
+        users: 'User Management',
+        applications: 'Applications',
+        issues: 'Issues',
+        analytics: 'Analytics',
+        settings: 'System Settings',
+      }[activeSection] || 'Admin Dashboard'}
+      pageDescription={{
+        dashboard: 'Live map and operational overview of drivers.',
+        users: 'Moderate and manage all user accounts.',
+        applications: 'Review and approve or decline account applications.',
+        issues: 'Review reports submitted by users.',
+        analytics: 'System analytics and reports.',
+        settings: 'System configuration and policies.',
+      }[activeSection] || ''}
     >
       {/* Dashboard Section */}
       {activeSection === 'dashboard' && (
@@ -461,7 +510,7 @@ export default function AdminPanel({ token, user, onLogout }) {
       )}
 
       {/* Registrations Section */}
-      {activeSection === 'apply' && (
+      {activeSection === 'applications' && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -510,6 +559,137 @@ export default function AdminPanel({ token, user, onLogout }) {
           />
         </motion.div>
       )}
+
+      {activeSection === 'issues' && (
+        <AdminIssuesSection
+          issues={issues}
+          loading={issuesLoading}
+          error={issuesError}
+          actioningId={issueActioningId}
+          onRefresh={() => loadIssues()}
+          onUpdateStatus={handleUpdateIssueStatus}
+        />
+      )}
+
+      {activeSection === 'analytics' && (
+        <ComingSoonSection
+          Icon={BarChart3}
+          title="Analytics"
+          description="System analytics and reports will be available here."
+        />
+      )}
+
+      {activeSection === 'settings' && (
+        <ComingSoonSection
+          Icon={Settings}
+          title="System Settings"
+          description="System configuration and policies will be available here."
+        />
+      )}
     </DashboardLayout>
+  )
+}
+
+const issueStatuses = ['pending', 'reviewing', 'resolved', 'closed']
+
+function formatIssueDate(dateValue) {
+  if (!dateValue) return 'N/A'
+  const date = new Date(dateValue)
+  return Number.isNaN(date.getTime()) ? 'N/A' : date.toLocaleString()
+}
+
+function AdminIssuesSection({ issues, loading, error, actioningId, onRefresh, onUpdateStatus }) {
+  const [selectedStatuses, setSelectedStatuses] = useState({})
+
+  return (
+    <section className="admin-section admin-issues-section" aria-labelledby="issues-heading">
+      <div className="admin-toolbar-card">
+        <div>
+          <h2 id="issues-heading">Issue Reports</h2>
+          <p>Review and update reports submitted by users.</p>
+        </div>
+        <button type="button" onClick={onRefresh} disabled={loading}>
+          {loading ? 'Refreshing...' : 'Refresh Issues'}
+        </button>
+      </div>
+
+      {error ? <p className="feedback error" role="alert">{error}</p> : null}
+      {loading ? <p className="feedback" role="status">Loading issue reports...</p> : null}
+      {!loading && !error && issues.length === 0 ? (
+        <p className="feedback admin-empty-state">No issue reports yet.</p>
+      ) : null}
+
+      {!loading && issues.length > 0 ? (
+        <div className="admin-issues-list">
+          {issues.map((issue) => {
+            const reporter = issue.parentId
+            const reporterName = typeof reporter === 'object'
+              ? reporter?.fullName || reporter?.email || 'Unknown reporter'
+              : 'Unknown reporter'
+            const currentStatus = issue.status || 'pending'
+
+            return (
+              <article className="admin-issue-card" key={issue._id || issue.id}>
+                <div className="admin-issue-card__header">
+                  <div>
+                    <h3>{reporterName}</h3>
+                    {typeof reporter === 'object' && reporter?.email ? <p>{reporter.email}</p> : null}
+                  </div>
+                  <span className={`status-badge ${currentStatus}`}>{currentStatus}</span>
+                </div>
+
+                <dl className="admin-issue-card__details">
+                  <div>
+                    <dt>Category</dt>
+                    <dd>{issue.category || 'N/A'}</dd>
+                  </div>
+                  <div>
+                    <dt>Reported</dt>
+                    <dd>{formatIssueDate(issue.createdAt)}</dd>
+                  </div>
+                </dl>
+                <p className="admin-issue-card__description">{issue.description || 'No description provided.'}</p>
+
+                <div className="admin-issue-card__actions">
+                  <label>
+                    Status
+                    <select
+                      value={selectedStatuses[issue._id] || currentStatus}
+                      onChange={(event) => setSelectedStatuses((current) => ({
+                        ...current,
+                        [issue._id]: event.target.value,
+                      }))}
+                      disabled={actioningId === issue._id}
+                    >
+                      {issueStatuses.map((status) => (
+                        <option key={status} value={status}>{status}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => onUpdateStatus(issue._id, selectedStatuses[issue._id] || currentStatus)}
+                    disabled={actioningId === issue._id || (selectedStatuses[issue._id] || currentStatus) === currentStatus}
+                  >
+                    {actioningId === issue._id ? 'Saving...' : 'Update status'}
+                  </button>
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
+function ComingSoonSection({ Icon, title, description }) {
+  return (
+    <section className="admin-coming-soon" aria-labelledby="coming-soon-heading">
+      <Icon size={32} aria-hidden="true" />
+      <h2 id="coming-soon-heading">{title}</h2>
+      <p>{description}</p>
+      <span><Clock3 size={16} aria-hidden="true" /> Coming soon</span>
+    </section>
   )
 }
