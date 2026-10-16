@@ -127,7 +127,9 @@ const buildParentProfile = (user) => ({
   studentName: user.student?.fullName || '',
   gradeSection: user.student?.gradeLevel || '',
   schoolName: user.student?.schoolName || '',
-  pickupZone: user.homeAddress || '',
+  pickupZone: user.student?.pickupZone || user.homeAddress || '',
+  pickupLatitude: user.student?.pickupLatitude ?? '',
+  pickupLongitude: user.student?.pickupLongitude ?? '',
   schoolLatitude: user.student?.schoolLatitude ?? '',
   schoolLongitude: user.student?.schoolLongitude ?? '',
 });
@@ -144,6 +146,12 @@ router.put('/profile', requireParent, async (req, res) => {
   const gradeSection = typeof body.gradeSection === 'string' ? body.gradeSection.trim() : '';
   const schoolName = typeof body.schoolName === 'string' ? body.schoolName.trim() : '';
   const pickupZone = typeof body.pickupZone === 'string' ? body.pickupZone.trim() : '';
+  const hasPickupCoordinateFields =
+    body.pickupLatitude !== undefined || body.pickupLongitude !== undefined;
+  const hasPickupLatitude = body.pickupLatitude !== undefined && body.pickupLatitude !== null &&
+    !(typeof body.pickupLatitude === 'string' && !body.pickupLatitude.trim());
+  const hasPickupLongitude = body.pickupLongitude !== undefined && body.pickupLongitude !== null &&
+    !(typeof body.pickupLongitude === 'string' && !body.pickupLongitude.trim());
   const hasLatitude = body.schoolLatitude !== undefined && body.schoolLatitude !== null &&
     !(typeof body.schoolLatitude === 'string' && !body.schoolLatitude.trim());
   const hasLongitude = body.schoolLongitude !== undefined && body.schoolLongitude !== null &&
@@ -154,6 +162,23 @@ router.put('/profile', requireParent, async (req, res) => {
   }
   if (!isValidPhoneNumber(contactNumber)) {
     return res.status(400).json({ message: 'Please enter a valid Philippine mobile number.' });
+  }
+  if (hasPickupLatitude !== hasPickupLongitude) {
+    return res.status(400).json({ message: 'Enter both pickup coordinates or leave both blank.' });
+  }
+  let pickupLatitude;
+  let pickupLongitude;
+  if (hasPickupLatitude) {
+    if (!['number', 'string'].includes(typeof body.pickupLatitude) ||
+        !['number', 'string'].includes(typeof body.pickupLongitude)) {
+      return res.status(400).json({ message: 'Enter valid pickup coordinates.' });
+    }
+    pickupLatitude = Number(body.pickupLatitude);
+    pickupLongitude = Number(body.pickupLongitude);
+    if (!Number.isFinite(pickupLatitude) || pickupLatitude < -90 || pickupLatitude > 90 ||
+        !Number.isFinite(pickupLongitude) || pickupLongitude < -180 || pickupLongitude > 180) {
+      return res.status(400).json({ message: 'Enter valid pickup coordinates.' });
+    }
   }
   if (hasLatitude !== hasLongitude) {
     return res.status(400).json({ message: 'Enter both school destination coordinates or leave both blank.' });
@@ -182,6 +207,11 @@ router.put('/profile', requireParent, async (req, res) => {
     req.user.student.fullName = studentName;
     req.user.student.gradeLevel = gradeSection;
     req.user.student.schoolName = schoolName;
+    req.user.student.pickupZone = pickupZone;
+    if (hasPickupCoordinateFields) {
+      req.user.student.pickupLatitude = hasPickupLatitude ? pickupLatitude : undefined;
+      req.user.student.pickupLongitude = hasPickupLongitude ? pickupLongitude : undefined;
+    }
     req.user.student.schoolLatitude = hasLatitude ? schoolLatitude : undefined;
     req.user.student.schoolLongitude = hasLongitude ? schoolLongitude : undefined;
     await req.user.save();
@@ -194,6 +224,23 @@ router.put('/profile', requireParent, async (req, res) => {
     console.error('[PARENT] Failed to save profile:', error.name || 'UnknownError');
     return res.status(500).json({ message: 'Unable to save parent profile.' });
   }
+});
+
+router.post('/pickup-zone-check', requireParent, (req, res) => {
+  const { latitude, longitude } = req.body || {};
+  if (!['number', 'string'].includes(typeof latitude) ||
+      !['number', 'string'].includes(typeof longitude) ||
+      (typeof latitude === 'string' && !latitude.trim()) ||
+      (typeof longitude === 'string' && !longitude.trim())) {
+    return res.status(400).json({ message: 'Provide valid pickup latitude and longitude.' });
+  }
+
+  const location = parseRequesterLocation(req.body);
+  if (!location) {
+    return res.status(400).json({ message: 'Provide valid pickup latitude and longitude.' });
+  }
+
+  return res.status(200).json({ inside: isPickupInAnyServiceZone(location) });
 });
 
 router.get('/notifications', requireApplicant, async (req, res) => {
@@ -230,11 +277,18 @@ router.post('/van-requests', requireParent, async (req, res) => {
     const emergencyContact =
       String(req.body?.emergencyContact || '').trim() || String(req.user?.phone || '').trim();
     const notes = String(req.body?.notes || '').trim();
-    const requesterLocation = parseRequesterLocation(req.body?.requesterLocation);
+    const requesterLocation = parseRequesterLocation({
+      latitude: req.user?.student?.pickupLatitude,
+      longitude: req.user?.student?.pickupLongitude,
+    });
     const destinationLocation = parseDestinationLocation(req.body?.destinationLocation);
     const hasDestinationCoordinates =
       req.body?.destinationLocation?.latitude !== undefined ||
       req.body?.destinationLocation?.longitude !== undefined;
+
+    if (!requesterLocation) {
+      return res.status(400).json({ message: 'Set your pickup location first' });
+    }
 
     if (!studentName || !pickupZone) {
       return res.status(400).json({

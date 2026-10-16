@@ -49,6 +49,20 @@ const studentSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    pickupZone: {
+      type: String,
+      trim: true,
+    },
+    pickupLatitude: {
+      type: Number,
+      min: -90,
+      max: 90,
+    },
+    pickupLongitude: {
+      type: Number,
+      min: -180,
+      max: 180,
+    },
     schoolLatitude: {
       type: Number,
       min: -90,
