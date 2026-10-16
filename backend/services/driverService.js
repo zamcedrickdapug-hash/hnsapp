@@ -121,6 +121,18 @@ const updateDriverLocation = async (driverId, locationData, requestId = null) =>
  */
 const toggleDriverStatus = async (driverId, isOnline) => {
   try {
+    if (!isOnline) {
+      const activeRequest = await VanRequest.exists({
+        driver: driverId,
+        status: { $in: ['accepted', 'arrived', 'picked_up'] },
+      });
+      if (activeRequest) {
+        const error = new Error('Driver availability cannot change while a request is active.');
+        error.code = 'DRIVER_BUSY';
+        throw error;
+      }
+    }
+
     let status = await DriverStatus.findOneAndUpdate(
       { driverId, activeRequestId: null },
       {

@@ -8,6 +8,7 @@ const { verifyRegistrationIdentity } = require('../utils/firebaseIdentity');
 const { sendPushToUserIds } = require('../utils/pushNotifications');
 const { getIo, buildTripRoomName, buildUserRoomName } = require('../socket');
 const { notifyParentSearching } = require('../services/notificationService');
+const { getDriverEligibility } = require('../services/driverEligibility');
 
 const router = express.Router();
 
@@ -287,10 +288,22 @@ router.post('/van-requests', requireParent, async (req, res) => {
     });
     await req.user.save();
 
-    const activeDrivers = await User.find({ role: 'driver', status: 'approved' }).select('_id');
-    const activeDriverIds = activeDrivers.map((driver) => String(driver._id));
+    const activeDrivers = await User.find({
+      role: 'driver',
+      status: 'approved',
+      accountState: { $in: ['active', null] },
+    }).select('_id');
+    const eligibilityResults = await Promise.all(
+      activeDrivers.map(async (driver) => ({
+        driverId: String(driver._id),
+        eligibility: await getDriverEligibility(driver._id, rideRequest),
+      }))
+    );
+    const eligibleDriverIds = eligibilityResults
+      .filter(({ eligibility }) => eligibility.eligible)
+      .map(({ driverId }) => driverId);
 
-    sendPushToUserIds(activeDriverIds, {
+    sendPushToUserIds(eligibleDriverIds, {
       title: 'New School Van Request',
       body: `${studentName} needs pickup${pickupZone ? ` at ${pickupZone}` : ''}.`,
       data: {
@@ -312,14 +325,15 @@ router.post('/van-requests', requireParent, async (req, res) => {
       io.to(buildUserRoomName(req.user._id)).emit('trip:request-updated', eventPayload);
       
       // Emit new request to all connected drivers
-      activeDriverIds.forEach((driverId) => {
+      eligibleDriverIds.forEach((driverId) => {
         io.to(buildUserRoomName(driverId)).emit('trip:request-updated', eventPayload);
       });
       
-      // Broadcast new searching request to all drivers in the drivers room
-      io.to('drivers').emit('new-searching-request', {
-        request: populatedRequest,
-        timestamp: new Date(),
+      eligibleDriverIds.forEach((driverId) => {
+        io.to(buildUserRoomName(driverId)).emit('new-searching-request', {
+          request: populatedRequest,
+          timestamp: new Date(),
+        });
       });
     }
 
