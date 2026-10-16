@@ -1,6 +1,8 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const ValidIdDocument = require('../models/ValidIdDocument');
+const Vehicle = require('../models/Vehicle');
 const VanRequest = require('../models/VanRequest');
 const { requireAdmin } = require('../middleware/auth');
 const { sanitizeText } = require('../utils/validation');
@@ -91,6 +93,93 @@ router.patch('/registrations/:registrationId/status', requireAdmin, async (req, 
     return res.status(409).json({ message: 'This Parent application can no longer transition to the requested status.' });
   }
 
+  let normalizedVehicleType;
+  let normalizedPlateNumber;
+  if (requestedStatus === 'approved') {
+    const validationErrors = [];
+
+    if (applicant.role === 'parent') {
+      if (!applicant.student?.fullName?.trim()) {
+        validationErrors.push('Student name is required.');
+      }
+      if (!applicant.student?.schoolName?.trim()) {
+        validationErrors.push('Student school is required.');
+      }
+    } else {
+      if (!applicant.driver?.licenseNumber?.trim()) {
+        validationErrors.push('Driver license number is required.');
+      }
+
+      const licenseExpiry = applicant.driver?.licenseExpirationDate
+        ? new Date(applicant.driver.licenseExpirationDate)
+        : null;
+      const today = new Date();
+      const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const licenseExpiryDate = licenseExpiry && !Number.isNaN(licenseExpiry.getTime())
+        ? licenseExpiry.toISOString().slice(0, 10)
+        : '';
+      if (!licenseExpiryDate || licenseExpiryDate < todayDate) {
+        validationErrors.push('Driver license expiry must be a valid date that is not in the past.');
+      }
+
+      const validIdExists = applicant.validId?.documentId
+        ? await ValidIdDocument.exists({
+          _id: applicant.validId.documentId,
+          ownerId: applicant._id,
+        })
+        : false;
+      if (!validIdExists) {
+        validationErrors.push('Driver ID document is required.');
+      }
+
+      const plateNumber = typeof applicant.driver?.plateNumber === 'string'
+        ? applicant.driver.plateNumber.trim()
+        : '';
+      if (!plateNumber) {
+        validationErrors.push('Vehicle plate number is required.');
+      } else {
+        normalizedPlateNumber = plateNumber.toUpperCase();
+      }
+
+      const vehicleType = typeof applicant.driver?.vehicleType === 'string'
+        ? applicant.driver.vehicleType.trim().toLowerCase()
+        : '';
+      if (vehicleType.includes('minibus') || vehicleType.includes('mini bus')) {
+        normalizedVehicleType = 'minibus';
+      } else if (vehicleType.includes('mpv')) {
+        normalizedVehicleType = 'mpv';
+      } else if (vehicleType.includes('sedan')) {
+        normalizedVehicleType = 'sedan';
+      } else if (vehicleType.includes('van')) {
+        normalizedVehicleType = 'van';
+      } else {
+        validationErrors.push('Vehicle type must contain one of the allowed types: sedan, mpv, van, minibus.');
+      }
+
+      if (!applicant.driver?.vehicleColor?.trim()) {
+        validationErrors.push('Vehicle color is required.');
+      }
+
+      const seatCapacity = Number(applicant.driver?.seatCapacity);
+      if (
+        applicant.driver?.seatCapacity === undefined
+        || applicant.driver?.seatCapacity === null
+        || String(applicant.driver.seatCapacity).trim() === ''
+        || !Number.isInteger(seatCapacity)
+        || seatCapacity < 3
+        || seatCapacity > 20
+      ) {
+        validationErrors.push('Seat capacity must be a whole number from 3 to 20.');
+      }
+    }
+
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        message: `Cannot approve registration: ${validationErrors.join(' ')}`,
+      });
+    }
+  }
+
   applicant.status = requestedStatus;
   applicant.declineReason = requestedStatus === 'declined' ? declineReason : '';
 
@@ -110,7 +199,80 @@ router.patch('/registrations/:registrationId/status', requireAdmin, async (req, 
     read: false,
   });
 
-  await applicant.save();
+  if (requestedStatus === 'approved') {
+    let session;
+    try {
+      session = await mongoose.startSession();
+      await session.withTransaction(async () => {
+        if (applicant.role === 'driver') {
+          const existingVehicle = await Vehicle.findOne({ plateNumber: normalizedPlateNumber }).session(session);
+          if (
+            existingVehicle?.assignedDriver
+            && !existingVehicle.assignedDriver.equals(applicant._id)
+          ) {
+            const conflict = new Error('A vehicle with this plate number is already assigned to a different driver.');
+            conflict.statusCode = 409;
+            throw conflict;
+          }
+
+          await Vehicle.findOneAndUpdate(
+            { plateNumber: normalizedPlateNumber },
+            {
+              $set: {
+                plateNumber: normalizedPlateNumber,
+                vehicleType: normalizedVehicleType,
+                color: applicant.driver.vehicleColor.trim(),
+                seatCapacity: Number(applicant.driver.seatCapacity),
+                operatorId: req.user._id,
+                assignedDriver: applicant._id,
+                status: 'available',
+                currentPassengers: 0,
+                isAvailable: true,
+              },
+            },
+            {
+              upsert: true,
+              new: true,
+              runValidators: true,
+              session,
+            }
+          );
+        }
+
+        await applicant.save({ session });
+      });
+    } catch (error) {
+      if (error.statusCode === 409) {
+        return res.status(409).json({ message: error.message });
+      }
+
+      if (
+        error.code === 20
+        || error.code === 303
+        || /transaction numbers are only allowed|transactions are not supported|does not support transactions/i.test(error.message || '')
+      ) {
+        return res.status(500).json({
+          message: 'Approval requires MongoDB transactions, but this deployment does not support transactions. No changes were saved.',
+        });
+      }
+
+      if (error.code === 11000 && normalizedPlateNumber) {
+        const conflictingVehicle = await Vehicle.findOne({ plateNumber: normalizedPlateNumber }).select('assignedDriver');
+        if (
+          conflictingVehicle?.assignedDriver
+          && !conflictingVehicle.assignedDriver.equals(applicant._id)
+        ) {
+          return res.status(409).json({ message: 'A vehicle with this plate number is already assigned to a different driver.' });
+        }
+      }
+
+      return res.status(500).json({ message: 'Unable to approve registration. No changes were saved.' });
+    } finally {
+      await session?.endSession();
+    }
+  } else {
+    await applicant.save();
+  }
 
   return res.status(200).json({
     message: `Registration set to ${requestedStatus}.`,

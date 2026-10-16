@@ -123,8 +123,8 @@ export default function AdminApplySection({
                 </p>
                 <p>
                   <strong>License Expiry:</strong>{' '}
-                  {registration.driver?.licenseExpiry
-                    ? new Date(registration.driver.licenseExpiry).toLocaleDateString()
+                  {registration.driver?.licenseExpirationDate || registration.driver?.licenseExpiry
+                    ? new Date(registration.driver.licenseExpirationDate || registration.driver.licenseExpiry).toLocaleDateString()
                     : 'N/A'}
                 </p>
                 <p>

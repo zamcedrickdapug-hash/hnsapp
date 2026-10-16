@@ -183,7 +183,6 @@ const vehicleSchema = new mongoose.Schema(
     // Safety and compliance
     licenseExpiry: {
       type: Date,
-      required: true,
     },
     
     insurancePolicyNumber: {
