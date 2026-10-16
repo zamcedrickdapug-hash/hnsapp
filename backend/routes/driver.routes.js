@@ -112,6 +112,8 @@ router.post('/create-profile', upload.single('validId'), async (req, res) => {
 			licenseNumber,
 			licenseExpiry,
 			vehicleType,
+			vehicleColor,
+			seatCapacity,
 			plateNumber,
 			yearsOfExperience,
 		} = req.body || {};
@@ -126,6 +128,14 @@ router.post('/create-profile', upload.single('validId'), async (req, res) => {
 		if (typeof licenseNumber !== 'string' || !/^[A-Za-z0-9-]{5,30}$/.test(licenseNumber.trim())) errors.push('License number must be 5-30 characters (letters, numbers, hyphen).');
 		if (!licenseExpiry) errors.push('License expiry date is required.');
 		if (typeof vehicleType !== 'string' || !vehicleType.trim()) errors.push('Vehicle type is required.');
+		const trimmedVehicleColor = typeof vehicleColor === 'string' ? vehicleColor.trim() : '';
+		if (!trimmedVehicleColor || trimmedVehicleColor.length > 30) {
+			return res.status(400).json({ message: 'Vehicle color must be between 1 and 30 characters.' });
+		}
+		const seatCapacityNumber = Number(seatCapacity);
+		if (seatCapacity === undefined || seatCapacity === null || String(seatCapacity).trim() === '' || !Number.isInteger(seatCapacityNumber) || seatCapacityNumber < 3 || seatCapacityNumber > 20) {
+			return res.status(400).json({ message: 'Seat capacity must be a whole number between 3 and 20.' });
+		}
 		if (typeof plateNumber !== 'string' || !/^[A-Za-z0-9-]{3,15}$/.test(plateNumber.trim())) errors.push('Plate number must be 3-15 characters (letters, numbers, hyphen).');
 		if (yearsOfExperience === undefined || yearsOfExperience === null || yearsOfExperience === '') {
 			errors.push('Years of experience is required.');
@@ -184,6 +194,8 @@ router.post('/create-profile', upload.single('validId'), async (req, res) => {
 				licenseNumber: licenseNumber.trim(),
 				licenseExpirationDate: new Date(licenseExpiry),
 				vehicleType: vehicleType.trim(),
+				vehicleColor: trimmedVehicleColor,
+				seatCapacity: seatCapacityNumber,
 				plateNumber: plateNumber.trim(),
 				yearsOfExperience: yearsNum,
 			},
@@ -949,6 +961,23 @@ router.patch('/profile', async (req, res) => {
   try {
     const nextPhone = String(req.body?.phone || '').trim();
     const nextAddress = String(req.body?.homeAddress || '').trim();
+    const hasVehicleColor = Object.prototype.hasOwnProperty.call(req.body || {}, 'vehicleColor');
+    const hasSeatCapacity = Object.prototype.hasOwnProperty.call(req.body || {}, 'seatCapacity');
+    const trimmedVehicleColor = hasVehicleColor && typeof req.body.vehicleColor === 'string'
+      ? req.body.vehicleColor.trim()
+      : null;
+    const seatCapacityNumber = hasSeatCapacity ? Number(req.body.seatCapacity) : null;
+
+    if (hasVehicleColor && (!trimmedVehicleColor || trimmedVehicleColor.length > 30)) {
+      return res.status(400).json({ message: 'Vehicle color must be between 1 and 30 characters.' });
+    }
+    if (
+      hasSeatCapacity &&
+      (req.body.seatCapacity === null || String(req.body.seatCapacity).trim() === '' ||
+        !Number.isInteger(seatCapacityNumber) || seatCapacityNumber < 3 || seatCapacityNumber > 20)
+    ) {
+      return res.status(400).json({ message: 'Seat capacity must be a whole number between 3 and 20.' });
+    }
 
     req.user.phone = nextPhone || req.user.phone;
     req.user.homeAddress = nextAddress || req.user.homeAddress;
@@ -957,6 +986,8 @@ router.patch('/profile', async (req, res) => {
       vehicleType: String(req.body?.vehicleType || req.user.driver?.vehicleType || '').trim(),
       plateNumber: String(req.body?.plateNumber || req.user.driver?.plateNumber || '').trim(),
       licenseNumber: String(req.body?.licenseNumber || req.user.driver?.licenseNumber || '').trim(),
+      vehicleColor: hasVehicleColor ? trimmedVehicleColor : req.user.driver?.vehicleColor ?? null,
+      seatCapacity: hasSeatCapacity ? seatCapacityNumber : req.user.driver?.seatCapacity ?? null,
     };
 
     await req.user.save();

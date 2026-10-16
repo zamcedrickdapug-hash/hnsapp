@@ -14,10 +14,10 @@ import './SignupPage.css';
 
 const INITIAL_FORM = {
   fullName: '', email: '', password: '', confirmPassword: '', phone: '', homeAddress: '',
-  licenseNumber: '', licenseExpiry: '', vehicleType: '', plateNumber: '', yearsOfExperience: '',
+  licenseNumber: '', licenseExpiry: '', vehicleType: '', vehicleColor: '', seatCapacity: '12', plateNumber: '', yearsOfExperience: '',
 };
 
-const DRIVER_FIELDS = ['phone', 'homeAddress', 'licenseNumber', 'licenseExpiry', 'vehicleType', 'plateNumber', 'yearsOfExperience'];
+const DRIVER_FIELDS = ['phone', 'homeAddress', 'licenseNumber', 'licenseExpiry', 'vehicleType', 'vehicleColor', 'seatCapacity', 'plateNumber', 'yearsOfExperience'];
 const DOCUMENT_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
 const DOCUMENT_EXTENSIONS = /\.(jpe?g|png|pdf)$/i;
 
@@ -88,11 +88,17 @@ export default function SignupPageEnterprise({ initialRole = 'parent' }) {
       const required = {
         phone: 'Enter your phone number.', homeAddress: 'Enter your home address.',
         licenseNumber: 'Enter your license number.', licenseExpiry: 'Enter your license expiry date.',
-        vehicleType: 'Enter your vehicle type.', plateNumber: 'Enter your plate number.',
+        vehicleType: 'Enter your vehicle type.', vehicleColor: 'Enter your vehicle color.',
+        seatCapacity: 'Enter the number of seats.', plateNumber: 'Enter your plate number.',
         yearsOfExperience: 'Enter your years of experience.',
       };
       for (const [name, message] of Object.entries(required)) {
         if (!form[name].trim()) nextErrors[name] = message;
+      }
+      if (form.vehicleColor.trim().length > 30) nextErrors.vehicleColor = 'Vehicle color must be 30 characters or fewer.';
+      const seatCapacity = Number(form.seatCapacity);
+      if (form.seatCapacity && (!Number.isInteger(seatCapacity) || seatCapacity < 3 || seatCapacity > 20)) {
+        nextErrors.seatCapacity = 'Enter a whole number from 3 to 20.';
       }
       if (form.phone.trim() && !isValidPhoneNumber(form.phone)) nextErrors.phone = 'Use a valid Philippine mobile number.';
       if (form.licenseExpiry && (Number.isNaN(Date.parse(form.licenseExpiry)) || form.licenseExpiry < todayString())) {
@@ -255,6 +261,8 @@ export default function SignupPageEnterprise({ initialRole = 'parent' }) {
             <legend>Vehicle information</legend>
             <div className="auth-form-grid">
               {field('vehicleType', 'Vehicle type', { placeholder: 'e.g. Van' })}
+              {field('vehicleColor', 'Vehicle color', { maxLength: 30 })}
+              {field('seatCapacity', 'Seat capacity', { type: 'number', min: '3', max: '20', step: '1', inputMode: 'numeric' })}
               {field('plateNumber', 'Plate number')}
               {field('yearsOfExperience', 'Years of experience', { type: 'number', min: '0', max: '60', step: '1', inputMode: 'numeric' })}
             </div>

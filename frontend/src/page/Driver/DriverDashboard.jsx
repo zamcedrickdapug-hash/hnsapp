@@ -39,6 +39,8 @@ import './DriverDashboard.scss'
 const defaultProfile = {
 	driverPhone: '',
 	vehicleType: 'School Service Van',
+	vehicleColor: '',
+	seatCapacity: '',
 	plateNumber: '',
 	licenseNumber: '',
 	licenseExpiry: '',
@@ -98,21 +100,19 @@ export default function DriverDashboard({ token, user, onLogout }) {
 	const [profileData, setProfileData] = useState(() => {
 		const storageKey = `hns_driver_profile_${user.id}`
 		const stored = localStorage.getItem(storageKey)
-		if (!stored) {
-			return {
-				...defaultProfile,
-				driverPhone: user.phone || '',
-				driverAddress: user.homeAddress || '',
-			}
-		}
+		let storedProfile = {}
 		try {
-			return JSON.parse(stored)
+			storedProfile = stored ? JSON.parse(stored) : {}
 		} catch {
-			return {
-				...defaultProfile,
-				driverPhone: user.phone || '',
-				driverAddress: user.homeAddress || '',
-			}
+			storedProfile = {}
+		}
+		return {
+			...defaultProfile,
+			...storedProfile,
+			driverPhone: user.phone || storedProfile.driverPhone || '',
+			driverAddress: user.homeAddress || storedProfile.driverAddress || '',
+			vehicleColor: user.driver?.vehicleColor ?? storedProfile.vehicleColor ?? '',
+			seatCapacity: user.driver?.seatCapacity ?? storedProfile.seatCapacity ?? '',
 		}
 	})
 
@@ -575,19 +575,38 @@ export default function DriverDashboard({ token, user, onLogout }) {
 		setError('')
 
 		try {
-			await apiFetch('/api/drivers/profile', {
+			const body = {
+				phone: profileData.driverPhone,
+				homeAddress: profileData.driverAddress,
+				vehicleType: profileData.vehicleType,
+				plateNumber: profileData.plateNumber,
+				licenseNumber: profileData.licenseNumber,
+			}
+			if (String(profileData.vehicleColor || '').trim()) {
+				body.vehicleColor = profileData.vehicleColor
+			}
+			if (String(profileData.seatCapacity ?? '').trim()) {
+				body.seatCapacity = profileData.seatCapacity
+			}
+
+			const response = await apiFetch('/api/drivers/profile', {
 				method: 'PATCH',
 				headers: { Authorization: `Bearer ${token}` },
-				body: JSON.stringify({
-					phone: profileData.driverPhone,
-					homeAddress: profileData.driverAddress,
-					vehicleType: profileData.vehicleType,
-					plateNumber: profileData.plateNumber,
-					licenseNumber: profileData.licenseNumber,
-				}),
+				body: JSON.stringify(body),
 			})
 
-			localStorage.setItem(`hns_driver_profile_${user.id}`, JSON.stringify(profileData))
+			const savedProfileData = {
+				...profileData,
+				driverPhone: response.user?.phone ?? profileData.driverPhone,
+				driverAddress: response.user?.homeAddress ?? profileData.driverAddress,
+				vehicleType: response.user?.driver?.vehicleType ?? profileData.vehicleType,
+				vehicleColor: response.user?.driver?.vehicleColor ?? '',
+				seatCapacity: response.user?.driver?.seatCapacity ?? '',
+				plateNumber: response.user?.driver?.plateNumber ?? profileData.plateNumber,
+				licenseNumber: response.user?.driver?.licenseNumber ?? profileData.licenseNumber,
+			}
+			setProfileData(savedProfileData)
+			localStorage.setItem(`hns_driver_profile_${user.id}`, JSON.stringify(savedProfileData))
 			setProfileStatus('Driver settings saved successfully.')
 		} catch (requestError) {
 			setError(requestError.message || 'Unable to save driver settings right now.')

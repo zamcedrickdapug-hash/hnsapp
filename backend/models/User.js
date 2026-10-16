@@ -134,6 +134,18 @@ const driverSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    vehicleColor: {
+      type: String,
+      trim: true,
+      maxlength: 30,
+      default: null,
+    },
+    seatCapacity: {
+      type: Number,
+      min: 3,
+      max: 20,
+      default: null,
+    },
     plateNumber: {
       type: String,
       trim: true,

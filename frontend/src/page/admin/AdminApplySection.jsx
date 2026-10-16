@@ -131,6 +131,12 @@ export default function AdminApplySection({
                   <strong>Vehicle Type:</strong> {registration.driver?.vehicleType}
                 </p>
                 <p>
+                  <strong>Vehicle Color:</strong> {registration.driver?.vehicleColor || 'N/A'}
+                </p>
+                <p>
+                  <strong>Seat Capacity:</strong> {registration.driver?.seatCapacity ?? 'N/A'}
+                </p>
+                <p>
                   <strong>Plate Number:</strong> {registration.driver?.plateNumber}
                 </p>
                 <p>

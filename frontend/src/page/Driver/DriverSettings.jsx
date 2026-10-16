@@ -98,6 +98,27 @@ export default function DriverSettings({
 							</label>
 
 							<label>
+								<span>Vehicle Color</span>
+								<Input
+									value={profileData.vehicleColor}
+									onChange={(event) => onFieldChange('vehicleColor', event.target.value)}
+									maxLength={30}
+								/>
+							</label>
+
+							<label>
+								<span>Seat Capacity</span>
+								<Input
+									type="number"
+									value={profileData.seatCapacity}
+									onChange={(event) => onFieldChange('seatCapacity', event.target.value)}
+									min="3"
+									max="20"
+									step="1"
+								/>
+							</label>
+
+							<label>
 								<span>Plate Number</span>
 								<Input
 									value={profileData.plateNumber}
