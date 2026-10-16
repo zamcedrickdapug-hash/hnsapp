@@ -8,7 +8,10 @@ const { verifyRegistrationIdentity } = require('../utils/firebaseIdentity');
 const { sendPushToUserIds } = require('../utils/pushNotifications');
 const { getIo, buildTripRoomName, buildUserRoomName } = require('../socket');
 const { notifyParentSearching } = require('../services/notificationService');
-const { getDriverEligibility } = require('../services/driverEligibility');
+const {
+  getDriverEligibility,
+  isPickupInAnyServiceZone,
+} = require('../services/driverEligibility');
 
 const router = express.Router();
 
@@ -242,6 +245,10 @@ router.post('/van-requests', requireParent, async (req, res) => {
 
     if (hasDestinationCoordinates && !destinationLocation) {
       return res.status(400).json({ message: 'Provide valid latitude and longitude for the school destination.' });
+    }
+
+    if (!isPickupInAnyServiceZone(requesterLocation)) {
+      return res.status(400).json({ message: 'Outside our service area' });
     }
 
     const activeRequest = await VanRequest.findOne({

@@ -327,6 +327,9 @@ router.patch('/requests/:requestId/accept', async (req, res) => {
     if (!eligibility.vehicle) {
       return res.status(400).json({ message: 'You need an assigned vehicle before accepting requests.' });
     }
+    if (!eligibility.pickupWithinServiceZone) {
+      return res.status(409).json({ message: 'This pickup is outside your service zone.' });
+    }
     if (!eligibility.isOnline) {
       return res.status(409).json({ message: 'Go online before accepting a request.' });
     }
