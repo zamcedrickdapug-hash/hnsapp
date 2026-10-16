@@ -147,6 +147,25 @@ export default function DriverDashboard({ token, user, onLogout }) {
 		[requests, user.id]
 	)
 
+	const passengerRequests = useMemo(() => {
+		const statusOrder = { accepted: 0, arrived: 1, picked_up: 2, arrived_at_school: 3 }
+		return requests
+			.filter(
+				(item) =>
+					['accepted', 'arrived', 'picked_up', 'arrived_at_school'].includes(item.status) &&
+					String(item.driver?._id || item.driver || '') === String(user.id)
+			)
+			.sort((first, second) => {
+				const statusDifference = statusOrder[first.status] - statusOrder[second.status]
+				if (statusDifference !== 0) return statusDifference
+				const firstAcceptedAt = Date.parse(first.acceptedAt || '')
+				const secondAcceptedAt = Date.parse(second.acceptedAt || '')
+				const firstTime = Number.isNaN(firstAcceptedAt) ? Number.MAX_VALUE : firstAcceptedAt
+				const secondTime = Number.isNaN(secondAcceptedAt) ? Number.MAX_VALUE : secondAcceptedAt
+				return firstTime - secondTime
+			})
+	}, [requests, user.id])
+
 	const completedTrips = useMemo(
 		() => requests.filter((item) => item.status === 'completed'),
 		[requests]
@@ -1010,6 +1029,55 @@ export default function DriverDashboard({ token, user, onLogout }) {
 						)}
 					</div>
 
+					{/* Passengers */}
+					<Card>
+						<CardHeader>
+							<div className="flex flex-wrap items-center justify-between gap-2">
+								<CardTitle className="text-base">Passengers</CardTitle>
+								<p className="text-sm font-semibold text-gray-600">
+									On board: {passengerRequests.filter((item) => item.status === 'picked_up').length} / Total:{' '}
+									{passengerRequests.length}
+								</p>
+							</div>
+						</CardHeader>
+						<CardContent className="space-y-3">
+							{passengerRequests.length === 0 ? (
+								<p className="text-sm text-gray-600">No passengers yet.</p>
+							) : (
+								passengerRequests.map((item) => {
+									const statusLabels = {
+										accepted: { label: 'On the way', className: 'bg-gray-100 text-gray-700' },
+										arrived: { label: 'Waiting at pickup', className: 'bg-amber-100 text-amber-800' },
+										picked_up: { label: 'On board', className: 'bg-green-100 text-green-800' },
+										arrived_at_school: { label: 'At school', className: 'bg-blue-100 text-blue-800' },
+									}
+									const status = statusLabels[item.status]
+									return (
+										<div
+											key={item._id}
+											className="flex min-w-0 items-center justify-between gap-3 rounded-lg border p-3"
+										>
+											<div className="min-w-0 flex-1">
+												<p className="truncate font-semibold text-gray-900">
+													{item.studentName || 'Student'}
+												</p>
+												<p className="truncate text-sm text-gray-600">
+													{item.parent?.fullName || 'Parent'}
+												</p>
+												<p className="truncate text-sm text-gray-600">{item.pickupZone || 'Pickup not provided'}</p>
+											</div>
+											<span
+												className={`shrink-0 rounded px-2 py-1 text-xs font-semibold ${status.className}`}
+											>
+												{status.label}
+											</span>
+										</div>
+									)
+								})
+							)}
+						</CardContent>
+					</Card>
+
 					{/* GPS Controls */}
 					<Card>
 						<CardHeader>
@@ -1017,14 +1085,15 @@ export default function DriverDashboard({ token, user, onLogout }) {
 							<CardDescription>Manage live location tracking</CardDescription>
 						</CardHeader>
 						<CardContent>
-							<div className="flex gap-2 flex-wrap">
-								<Button onClick={startGps} disabled={acceptedRequests.length === 0 || gpsStatus === 'Active'}>
+							<div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+								<Button className="w-full min-h-[44px] sm:w-auto" onClick={startGps} disabled={acceptedRequests.length === 0 || gpsStatus === 'Active'}>
 									Start GPS
 								</Button>
-								<Button onClick={stopGps} variant="destructive" disabled={gpsStatus === 'Inactive'}>
+								<Button className="w-full min-h-[44px] sm:w-auto" onClick={stopGps} variant="destructive" disabled={gpsStatus === 'Inactive'}>
 									Stop GPS
 								</Button>
 								<Button
+									className="w-full min-h-[44px] sm:w-auto"
 									onClick={() => {
 										const acceptedBookings = acceptedRequests.filter((item) => item.status === 'accepted')
 										if (acceptedBookings.length === 1) {
@@ -1039,23 +1108,23 @@ export default function DriverDashboard({ token, user, onLogout }) {
 									Mark Arrived at Pickup
 								</Button>
 								<Button
+									className="w-full min-h-[44px] sm:w-auto bg-blue-600 hover:bg-blue-700 text-white"
 									onClick={() => setIsPickedUpModalOpen(true)}
 									disabled={!canMarkPickedUp}
-									className="bg-blue-600 hover:bg-blue-700 text-white"
 								>
 									Mark Picked Up
 								</Button>
 								<Button
+									className="w-full min-h-[44px] sm:w-auto bg-green-600 hover:bg-green-700 text-white"
 									onClick={() => setIsArrivedAtSchoolModalOpen(true)}
 									disabled={!canMarkArrivedAtSchool}
-									className="bg-green-600 hover:bg-green-700 text-white"
 								>
 									Arrived at School
 								</Button>
 								<Button
+									className="col-span-2 w-full min-h-[44px] sm:col-span-1 sm:w-auto bg-purple-600 hover:bg-purple-700 text-white"
 									onClick={handleCompleteSchoolRun}
 									disabled={arrivedAtSchoolRequests.length === 0}
-									className="bg-purple-600 hover:bg-purple-700 text-white"
 								>
 									Complete School Run
 								</Button>
