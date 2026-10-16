@@ -63,6 +63,40 @@ const studentSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const studentListItemSchema = new mongoose.Schema({
+  fullName: {
+    type: String,
+    trim: true,
+  },
+  age: {
+    type: Number,
+    min: 3,
+    max: 25,
+  },
+  gradeLevel: {
+    type: String,
+    trim: true,
+  },
+  studentNumber: {
+    type: String,
+    trim: true,
+  },
+  schoolName: {
+    type: String,
+    trim: true,
+  },
+  schoolLatitude: {
+    type: Number,
+    min: -90,
+    max: 90,
+  },
+  schoolLongitude: {
+    type: Number,
+    min: -180,
+    max: 180,
+  },
+});
+
 const documentUploadSchema = new mongoose.Schema(
   {
     originalName: {
@@ -335,6 +369,10 @@ const userSchema = new mongoose.Schema(
     student: {
       type: studentSchema,
     },
+    students: {
+      type: [studentListItemSchema],
+      default: [],
+    },
     driver: {
       type: driverSchema,
     },
@@ -387,6 +425,12 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.index({ firebaseUid: 1 }, { unique: true, sparse: true });
+
+userSchema.methods.getStudentList = function() {
+  if (this.students?.length) return this.students;
+  if (this.student?.fullName) return [this.student];
+  return [];
+};
 
 // Hash password before saving if it's modified and not already hashed
 userSchema.pre('save', async function() {

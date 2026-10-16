@@ -46,6 +46,16 @@ const requesterLocationSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const requestStudentSchema = new mongoose.Schema({
+  studentId: {
+    type: mongoose.Schema.Types.ObjectId,
+  },
+  studentName: {
+    type: String,
+    trim: true,
+  },
+});
+
 const vanRequestSchema = new mongoose.Schema(
   {
     parent: {
@@ -73,6 +83,25 @@ const vanRequestSchema = new mongoose.Schema(
       type: String,
       trim: true,
       required: true,
+    },
+    students: {
+      type: [requestStudentSchema],
+      default: [],
+    },
+    seatsNeeded: {
+      type: Number,
+      min: 1,
+      max: 20,
+      default: 1,
+    },
+    slot: {
+      type: String,
+      enum: ['AM', 'PM'],
+      default: 'AM',
+    },
+    scheduledDate: {
+      type: Date,
+      default: null,
     },
     gradeSection: {
       type: String,
@@ -142,6 +171,12 @@ const vanRequestSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+vanRequestSchema.methods.getStudentList = function() {
+  if (this.students?.length) return this.students;
+  if (this.studentName) return [{ studentName: this.studentName }];
+  return [];
+};
 
 const VanRequest = mongoose.model('VanRequest', vanRequestSchema);
 
