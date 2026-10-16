@@ -87,17 +87,14 @@ const ARRIVED_RADIUS_METERS = 60;
 
 // Helper function to validate license expiry date
 const isValidLicenseExpiryDate = (expiryDateString) => {
-	if (!expiryDateString) return false;
-	
-	const expiryDate = new Date(expiryDateString);
+	if (typeof expiryDateString !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(expiryDateString)) return false;
+
+	const expiryDate = new Date(`${expiryDateString}T00:00:00.000Z`);
+	if (Number.isNaN(expiryDate.getTime()) || expiryDate.toISOString().slice(0, 10) !== expiryDateString) return false;
 	const today = new Date();
-	
-	// Set both dates to midnight for fair comparison
-	today.setHours(0, 0, 0, 0);
-	expiryDate.setHours(0, 0, 0, 0);
-	
-	// License expiry must be today or in the future
-	return expiryDate >= today;
+	const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+	return expiryDateString >= todayDate;
 };
 
 // Firebase registration retains the existing ID upload and admin review workflow.
@@ -119,13 +116,19 @@ router.post('/create-profile', upload.single('validId'), async (req, res) => {
 		} = req.body || {};
 		const normalizedPhone = normalizePhoneNumber(phone || '');
 		const identity = await verifyRegistrationIdentity(req.body || {});
+		const normalizedLicenseNumber = typeof licenseNumber === 'string'
+			? licenseNumber.trim().replace(/\s+/g, ' ')
+			: '';
+		const normalizedPlateNumber = typeof plateNumber === 'string'
+			? plateNumber.trim().replace(/\s+/g, ' ').toUpperCase()
+			: '';
 
 		// Validate required fields
 		const errors = [];
 		if (typeof fullName !== 'string' || !fullName.trim()) errors.push('Full name is required.');
 		if (!isValidPhoneNumber(phone)) errors.push('A valid Philippine mobile number is required.');
 		if (typeof homeAddress !== 'string' || homeAddress.trim().length < 5) errors.push('Home address is required.');
-		if (typeof licenseNumber !== 'string' || !/^[A-Za-z0-9-]{5,30}$/.test(licenseNumber.trim())) errors.push('License number must be 5-30 characters (letters, numbers, hyphen).');
+		if (typeof licenseNumber !== 'string' || !/^[A-Za-z0-9 -]{5,30}$/.test(normalizedLicenseNumber)) errors.push('License number must be 5-30 characters (letters, numbers, hyphen and spaces).');
 		if (!licenseExpiry) errors.push('License expiry date is required.');
 		if (typeof vehicleType !== 'string' || !vehicleType.trim()) errors.push('Vehicle type is required.');
 		const trimmedVehicleColor = typeof vehicleColor === 'string' ? vehicleColor.trim() : '';
@@ -136,7 +139,7 @@ router.post('/create-profile', upload.single('validId'), async (req, res) => {
 		if (seatCapacity === undefined || seatCapacity === null || String(seatCapacity).trim() === '' || !Number.isInteger(seatCapacityNumber) || seatCapacityNumber < 3 || seatCapacityNumber > 20) {
 			return res.status(400).json({ message: 'Seat capacity must be a whole number between 3 and 20.' });
 		}
-		if (typeof plateNumber !== 'string' || !/^[A-Za-z0-9-]{3,15}$/.test(plateNumber.trim())) errors.push('Plate number must be 3-15 characters (letters, numbers, hyphen).');
+		if (typeof plateNumber !== 'string' || !/^[A-Za-z0-9 -]{3,15}$/.test(normalizedPlateNumber)) errors.push('Plate number must be 3-15 characters (letters, numbers, hyphen and spaces).');
 		if (yearsOfExperience === undefined || yearsOfExperience === null || yearsOfExperience === '') {
 			errors.push('Years of experience is required.');
 		}
@@ -191,12 +194,12 @@ router.post('/create-profile', upload.single('validId'), async (req, res) => {
 			homeAddress: homeAddress.trim(),
 			role: 'driver',
 			driver: {
-				licenseNumber: licenseNumber.trim(),
+				licenseNumber: normalizedLicenseNumber,
 				licenseExpirationDate: new Date(licenseExpiry),
 				vehicleType: vehicleType.trim(),
 				vehicleColor: trimmedVehicleColor,
 				seatCapacity: seatCapacityNumber,
-				plateNumber: plateNumber.trim(),
+				plateNumber: normalizedPlateNumber,
 				yearsOfExperience: yearsNum,
 			},
 			isVerified: false,
@@ -961,6 +964,23 @@ router.patch('/profile', async (req, res) => {
   try {
     const nextPhone = String(req.body?.phone || '').trim();
     const nextAddress = String(req.body?.homeAddress || '').trim();
+    const hasLicenseNumber = Object.prototype.hasOwnProperty.call(req.body || {}, 'licenseNumber');
+    const hasPlateNumber = Object.prototype.hasOwnProperty.call(req.body || {}, 'plateNumber');
+    const licenseNumberProvided = hasLicenseNumber
+      && req.body.licenseNumber !== undefined
+      && req.body.licenseNumber !== null
+      && (typeof req.body.licenseNumber !== 'string' || req.body.licenseNumber.trim() !== '');
+    const plateNumberProvided = hasPlateNumber
+      && req.body.plateNumber !== undefined
+      && req.body.plateNumber !== null
+      && (typeof req.body.plateNumber !== 'string' || req.body.plateNumber.trim() !== '');
+    const normalizedLicenseNumber = typeof req.body?.licenseNumber === 'string'
+      ? req.body.licenseNumber.trim().replace(/\s+/g, ' ')
+      : '';
+    const normalizedPlateNumber = typeof req.body?.plateNumber === 'string'
+      ? req.body.plateNumber.trim().replace(/\s+/g, ' ').toUpperCase()
+      : '';
+    const hasLicenseExpiry = Object.prototype.hasOwnProperty.call(req.body || {}, 'licenseExpiry');
     const hasVehicleColor = Object.prototype.hasOwnProperty.call(req.body || {}, 'vehicleColor');
     const hasSeatCapacity = Object.prototype.hasOwnProperty.call(req.body || {}, 'seatCapacity');
     const trimmedVehicleColor = hasVehicleColor && typeof req.body.vehicleColor === 'string'
@@ -978,14 +998,48 @@ router.patch('/profile', async (req, res) => {
     ) {
       return res.status(400).json({ message: 'Seat capacity must be a whole number between 3 and 20.' });
     }
+    if (
+      licenseNumberProvided
+      && (typeof req.body.licenseNumber !== 'string' || !/^[A-Za-z0-9 -]{5,30}$/.test(normalizedLicenseNumber))
+    ) {
+      return res.status(400).json({ message: 'License number must be 5-30 characters (letters, numbers, hyphen and spaces).' });
+    }
+    if (
+      plateNumberProvided
+      && (typeof req.body.plateNumber !== 'string' || !/^[A-Za-z0-9 -]{3,15}$/.test(normalizedPlateNumber))
+    ) {
+      return res.status(400).json({ message: 'Plate number must be 3-15 characters (letters, numbers, hyphen and spaces).' });
+    }
+    if (hasLicenseExpiry) {
+      const matchesDateFormat = typeof req.body.licenseExpiry === 'string'
+        && /^\d{4}-\d{2}-\d{2}$/.test(req.body.licenseExpiry);
+      const parsedLicenseExpiry = matchesDateFormat
+        ? new Date(`${req.body.licenseExpiry}T00:00:00.000Z`)
+        : null;
+      if (
+        !matchesDateFormat
+        || Number.isNaN(parsedLicenseExpiry.getTime())
+        || parsedLicenseExpiry.toISOString().slice(0, 10) !== req.body.licenseExpiry
+      ) {
+        return res.status(400).json({ message: 'License expiry must be a valid date in YYYY-MM-DD format.' });
+      }
+      const today = new Date();
+      const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      if (req.body.licenseExpiry < todayDate) {
+        return res.status(400).json({ message: 'License expiry cannot be in the past.' });
+      }
+    }
 
     req.user.phone = nextPhone || req.user.phone;
     req.user.homeAddress = nextAddress || req.user.homeAddress;
     req.user.driver = {
       ...req.user.driver?.toObject?.(),
       vehicleType: String(req.body?.vehicleType || req.user.driver?.vehicleType || '').trim(),
-      plateNumber: String(req.body?.plateNumber || req.user.driver?.plateNumber || '').trim(),
-      licenseNumber: String(req.body?.licenseNumber || req.user.driver?.licenseNumber || '').trim(),
+      ...(plateNumberProvided ? { plateNumber: normalizedPlateNumber } : {}),
+      ...(licenseNumberProvided ? { licenseNumber: normalizedLicenseNumber } : {}),
+      ...(hasLicenseExpiry
+        ? { licenseExpirationDate: new Date(`${req.body.licenseExpiry}T00:00:00.000Z`) }
+        : {}),
       vehicleColor: hasVehicleColor ? trimmedVehicleColor : req.user.driver?.vehicleColor ?? null,
       seatCapacity: hasSeatCapacity ? seatCapacityNumber : req.user.driver?.seatCapacity ?? null,
     };

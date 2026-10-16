@@ -47,6 +47,11 @@ const defaultProfile = {
 	emergencyContact: '',
 	driverAddress: '',
 }
+const toDateInputValue = (value) => {
+	if (!value) return ''
+	const datePart = value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10)
+	return /^\d{4}-\d{2}-\d{2}$/.test(datePart) ? datePart : ''
+}
 const DEFAULT_MAP_CENTER = [14.5995, 120.9842]
 const ARRIVED_RADIUS_METERS = 60
 
@@ -113,6 +118,9 @@ export default function DriverDashboard({ token, user, onLogout }) {
 			driverAddress: user.homeAddress || storedProfile.driverAddress || '',
 			vehicleColor: user.driver?.vehicleColor ?? storedProfile.vehicleColor ?? '',
 			seatCapacity: user.driver?.seatCapacity ?? storedProfile.seatCapacity ?? '',
+			licenseExpiry: user.driver?.licenseExpirationDate
+				? toDateInputValue(user.driver.licenseExpirationDate)
+				: storedProfile.licenseExpiry ?? '',
 		}
 	})
 
@@ -588,6 +596,9 @@ export default function DriverDashboard({ token, user, onLogout }) {
 			if (String(profileData.seatCapacity ?? '').trim()) {
 				body.seatCapacity = profileData.seatCapacity
 			}
+			if (profileData.licenseExpiry) {
+				body.licenseExpiry = profileData.licenseExpiry
+			}
 
 			const response = await apiFetch('/api/drivers/profile', {
 				method: 'PATCH',
@@ -602,6 +613,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 				vehicleType: response.user?.driver?.vehicleType ?? profileData.vehicleType,
 				vehicleColor: response.user?.driver?.vehicleColor ?? '',
 				seatCapacity: response.user?.driver?.seatCapacity ?? '',
+				licenseExpiry: toDateInputValue(response.user?.driver?.licenseExpirationDate),
 				plateNumber: response.user?.driver?.plateNumber ?? profileData.plateNumber,
 				licenseNumber: response.user?.driver?.licenseNumber ?? profileData.licenseNumber,
 			}

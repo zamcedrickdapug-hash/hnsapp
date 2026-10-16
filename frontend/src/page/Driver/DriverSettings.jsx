@@ -2,6 +2,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Input } from '../../components/ui/input'
 import { Button } from '../../components/ui/button'
 
+function todayString() {
+	const today = new Date()
+	return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+}
+
 export default function DriverSettings({
 	user,
 	profileData,
@@ -141,9 +146,10 @@ export default function DriverSettings({
 							<label>
 								<span>License Expiry</span>
 								<Input
+									type="date"
 									value={profileData.licenseExpiry}
 									onChange={(event) => onFieldChange('licenseExpiry', event.target.value)}
-									placeholder="MM/YYYY"
+									min={todayString()}
 								/>
 							</label>
 

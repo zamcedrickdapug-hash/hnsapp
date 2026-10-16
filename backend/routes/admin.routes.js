@@ -133,7 +133,7 @@ router.patch('/registrations/:registrationId/status', requireAdmin, async (req, 
       }
 
       const plateNumber = typeof applicant.driver?.plateNumber === 'string'
-        ? applicant.driver.plateNumber.trim()
+        ? applicant.driver.plateNumber.trim().replace(/\s+/g, ' ')
         : '';
       if (!plateNumber) {
         validationErrors.push('Vehicle plate number is required.');
