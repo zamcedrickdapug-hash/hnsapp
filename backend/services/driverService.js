@@ -315,9 +315,9 @@ const updateTripStatus = async (driverId, requestId, tripStatus) => {
     }
 
     const allowedTransitions = {
-      accepted: ['arrived', 'picked_up'],
+      accepted: ['arrived'],
       arrived: ['picked_up'],
-      picked_up: ['arrived_at_school', 'completed'],
+      picked_up: ['arrived_at_school'],
       arrived_at_school: ['completed'],
     };
     if (!allowedTransitions[currentTrip.status]?.includes(tripStatus)) {

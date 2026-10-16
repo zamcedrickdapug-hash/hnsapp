@@ -685,6 +685,68 @@ router.patch('/requests/:requestId/location', async (req, res) => {
       });
     }
 
+    if (previousStatus === 'accepted' && rideRequest.status === 'arrived' && io) {
+      const populatedRequest = await VanRequest.findById(rideRequest._id)
+        .populate('parent', 'fullName phone')
+        .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber')
+        .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model');
+      const eventPayload = { request: populatedRequest };
+      io.to(buildTripRoomName(rideRequest._id)).emit('trip:request-updated', eventPayload);
+      io.to(buildUserRoomName(rideRequest.parent?._id || rideRequest.parent)).emit('trip:request-updated', eventPayload);
+      io.to(buildUserRoomName(req.user._id)).emit('trip:request-updated', eventPayload);
+    }
+
+    const acceptedRequests = await VanRequest.find({
+      driver: req.user._id,
+      status: 'accepted',
+    }).select('_id parent requesterLocation');
+
+    for (const acceptedRequest of acceptedRequests) {
+      const hasRequesterLocation =
+        Number.isFinite(Number(acceptedRequest.requesterLocation?.latitude)) &&
+        Number.isFinite(Number(acceptedRequest.requesterLocation?.longitude));
+      if (!hasRequesterLocation) continue;
+
+      const distanceToPickup = distanceInMeters(
+        { latitude, longitude },
+        acceptedRequest.requesterLocation
+      );
+      if (distanceToPickup > ARRIVED_RADIUS_METERS) continue;
+
+      const arrivedAt = new Date();
+      const arrivedRequest = await VanRequest.findOneAndUpdate(
+        {
+          _id: acceptedRequest._id,
+          driver: req.user._id,
+          status: 'accepted',
+        },
+        { $set: { status: 'arrived', arrivedAtDestinationAt: arrivedAt } },
+        { new: true }
+      ).populate('parent', '_id fullName');
+
+      if (!arrivedRequest) continue;
+
+      await notifyParentArrivalAtPickup(
+        arrivedRequest.parent?._id || arrivedRequest.parent,
+        arrivedRequest._id,
+        req.user.fullName,
+        req.user.driver?.plateNumber || '',
+        arrivedRequest.studentName,
+        arrivedRequest.schoolName
+      );
+
+      if (io) {
+        const populatedRequest = await VanRequest.findById(arrivedRequest._id)
+          .populate('parent', 'fullName phone')
+          .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber')
+          .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model');
+        const eventPayload = { request: populatedRequest };
+        io.to(buildTripRoomName(arrivedRequest._id)).emit('trip:request-updated', eventPayload);
+        io.to(buildUserRoomName(arrivedRequest.parent?._id || arrivedRequest.parent)).emit('trip:request-updated', eventPayload);
+        io.to(buildUserRoomName(req.user._id)).emit('trip:request-updated', eventPayload);
+      }
+    }
+
     try {
       const otherActiveRequests = await VanRequest.find({
         driver: req.user._id,
@@ -791,13 +853,13 @@ router.patch('/requests/:requestId/picked-up', async (req, res) => {
       return res.status(403).json({ message: 'You are not assigned to this request.' });
     }
 
-    if (!['accepted', 'arrived'].includes(currentRequest.status)) {
-      return res.status(409).json({ message: 'Only active pickup trips can be marked as picked up.' });
+    if (currentRequest.status !== 'arrived') {
+      return res.status(409).json({ message: 'Only a request that has arrived at pickup can be marked as picked up.' });
     }
 
     const rideRequest = await VanRequest.findOneAndUpdate(
-      { _id: currentRequest._id, driver: req.user._id, status: { $in: ['accepted', 'arrived'] } },
-      { $set: { status: 'picked_up' } },
+      { _id: currentRequest._id, driver: req.user._id, status: 'arrived' },
+      { $set: { status: 'picked_up', pickedUpAt: new Date() } },
       { new: true }
     ).populate('parent', '_id fullName');
 
@@ -848,7 +910,7 @@ router.patch('/requests/:requestId/picked-up', async (req, res) => {
   }
 });
 
-// Mark that the driver arrived at school (complete trip)
+// Mark every picked-up booking as arrived at school.
 router.patch('/requests/:requestId/arrived-at-school', async (req, res) => {
   try {
     const currentRequest = await VanRequest.findById(req.params.requestId);
@@ -861,107 +923,59 @@ router.patch('/requests/:requestId/arrived-at-school', async (req, res) => {
       return res.status(403).json({ message: 'You are not assigned to this request.' });
     }
 
-    if (currentRequest.status !== 'picked_up') {
-      return res.status(409).json({ message: 'Trip must be in picked_up state to mark arrival at school.' });
+    const pickedUpRequests = await VanRequest.find({
+      driver: req.user._id,
+      status: 'picked_up',
+    }).select('_id');
+    if (pickedUpRequests.length === 0) {
+      return res.status(409).json({ message: 'There are no picked-up bookings to mark as arrived at school.' });
     }
 
-    const arrivalTime = new Date();
-    const rideRequest = await VanRequest.findOneAndUpdate(
-      { _id: currentRequest._id, driver: req.user._id, status: 'picked_up' },
-      {
-        $set: {
-          status: 'completed',
-          arrivedAtSchoolAt: arrivalTime,
-          liveLocation: null,
+    const arrivedRequests = [];
+    for (const pickedUpRequest of pickedUpRequests) {
+      const arrivalTime = new Date();
+      const arrivedRequest = await VanRequest.findOneAndUpdate(
+        {
+          _id: pickedUpRequest._id,
+          driver: req.user._id,
+          status: 'picked_up',
         },
-      },
-      { new: true }
-    ).populate('parent', '_id fullName');
+        { $set: { status: 'arrived_at_school', arrivedAtSchoolAt: arrivalTime } },
+        { new: true }
+      ).populate('parent', '_id fullName');
 
-    if (!rideRequest) {
-      return res.status(409).json({ message: 'Request status changed before arrival could be recorded.' });
-    }
-    await releaseVanRequestAssignment({
-      driverId: req.user._id,
-      requestId: rideRequest._id,
-      vehicleId: rideRequest.vehicleId,
-    });
+      if (!arrivedRequest) continue;
+      arrivedRequests.push(arrivedRequest);
 
-    const populatedRequest = await VanRequest.findById(rideRequest._id)
-      .populate('parent', 'fullName phone')
-      .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber')
-      .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model');
-
-    // Notify parent via in-app and push notifications
-    const parent = await User.findById(rideRequest.parent?._id);
-    if (parent) {
-      const formattedTime = arrivalTime.toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: true 
-      });
-
-      // STAGE 7 (FINAL): Notify parent - arrived at school
       await notifyParentArrivedAtSchool(
-        parent._id,
-        rideRequest._id,
+        arrivedRequest.parent?._id || arrivedRequest.parent,
+        arrivedRequest._id,
         req.user.fullName,
-        rideRequest.studentName,
-        rideRequest.schoolName,
+        arrivedRequest.studentName,
+        arrivedRequest.schoolName,
         arrivalTime
       );
 
-      // Keep old notification for backward compatibility
-      parent.notifications.push({
-        title: 'Trip Completed',
-        message: `${rideRequest.studentName} has arrived safely at ${rideRequest.schoolName} at ${formattedTime}. Driver ${req.user.fullName} completed the trip.`,
-        status: 'info',
-      });
-      await parent.save();
-
-      // Send push notification
-      sendPushToUserIds([String(parent._id)], {
-        title: 'Trip Completed',
-        body: `${rideRequest.studentName} has safely arrived at school with ${req.user.fullName}.`,
-        data: {
-          type: 'trip-completed',
-          requestId: String(rideRequest._id),
-          status: 'completed',
-        },
-      }).catch(() => {});
+      const populatedRequest = await VanRequest.findById(arrivedRequest._id)
+        .populate('parent', 'fullName phone')
+        .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber')
+        .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model');
+      const io = getIo();
+      if (io) {
+        const eventPayload = { request: populatedRequest };
+        io.to(buildTripRoomName(arrivedRequest._id)).emit('trip:request-updated', eventPayload);
+        io.to(buildUserRoomName(arrivedRequest.parent?._id || arrivedRequest.parent)).emit('trip:request-updated', eventPayload);
+        io.to(buildUserRoomName(req.user._id)).emit('trip:request-updated', eventPayload);
+      }
     }
 
-    // Broadcast real-time update via Socket.IO
-    const io = getIo();
-    if (io) {
-      const eventPayload = { request: populatedRequest };
-      
-      // Emit trip completion event to clear active requests
-      io.to(buildTripRoomName(rideRequest._id)).emit('trip:completed', eventPayload);
-      io.to(buildUserRoomName(rideRequest.parent?._id)).emit('trip:completed', eventPayload);
-      io.to(buildUserRoomName(req.user._id)).emit('trip:completed', eventPayload);
-      
-      // Also emit request-updated for backwards compatibility
-      io.to(buildTripRoomName(rideRequest._id)).emit('trip:request-updated', eventPayload);
-      io.to(buildUserRoomName(rideRequest.parent?._id)).emit('trip:request-updated', eventPayload);
-      io.to(buildUserRoomName(req.user._id)).emit('trip:request-updated', eventPayload);
-
-      // Notify admins
-      io.to('admins').emit('trip:completion-notification', {
-        requestId: String(rideRequest._id),
-        driverId: String(req.user._id),
-        driverName: req.user.fullName,
-        studentName: rideRequest.studentName,
-        destination: rideRequest.schoolName,
-        completedAt: arrivalTime,
-        status: 'completed',
-      });
+    if (arrivedRequests.length === 0) {
+      return res.status(409).json({ message: 'There are no picked-up bookings to mark as arrived at school.' });
     }
 
-    return res.status(200).json({ 
-      message: 'Trip completed successfully. Parent and driver notified.', 
-      request: populatedRequest,
-      completedAt: arrivalTime 
+    return res.status(200).json({
+      message: 'Arrival at school recorded.',
+      requests: arrivedRequests,
     });
   } catch (error) {
     console.error('Arrived at school error:', error);
@@ -969,76 +983,106 @@ router.patch('/requests/:requestId/arrived-at-school', async (req, res) => {
   }
 });
 
-// Keep old endpoint for backwards compatibility (redirects to arrived-at-school)
-router.patch('/requests/:requestId/arrived-school', async (req, res) => {
+router.patch('/requests/complete-school-run', async (req, res) => {
   try {
-    const rideRequest = await VanRequest.findById(req.params.requestId).populate('parent', '_id fullName');
-
-    if (!rideRequest) {
-      return res.status(404).json({ message: 'Ride request not found.' });
+    const arrivedAtSchoolRequests = await VanRequest.find({
+      driver: req.user._id,
+      status: 'arrived_at_school',
+    }).select('_id');
+    if (arrivedAtSchoolRequests.length === 0) {
+      return res.status(409).json({ message: 'There are no bookings awaiting school-run completion.' });
     }
 
-    if (!rideRequest.driver || String(rideRequest.driver) !== String(req.user._id)) {
-      return res.status(403).json({ message: 'You are not assigned to this request.' });
-    }
-
-    if (rideRequest.status !== 'picked_up') {
-      return res.status(409).json({ message: 'Trip must be in picked_up state to mark arrival at school.' });
-    }
-
-    const arrivalTime = new Date();
-    rideRequest.status = 'completed';
-    rideRequest.arrivedAtSchoolAt = arrivalTime;
-    await rideRequest.save();
-    await releaseVanRequestAssignment({
-      driverId: req.user._id,
-      requestId: rideRequest._id,
-      vehicleId: rideRequest.vehicleId,
-    });
-
-    const populatedRequest = await VanRequest.findById(rideRequest._id)
-      .populate('parent', 'fullName phone')
-      .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber');
-
-    // notify parent via in-app notification
-    const parent = await User.findById(rideRequest.parent?._id);
-    if (parent) {
-      parent.notifications.push({
-        title: 'Driver arrived at school',
-        message: `${req.user.fullName} has arrived at the school with the student.`,
-        status: 'info',
-      });
-      await parent.save();
-
-      // send push
-      sendPushToUserIds([String(parent._id)], {
-        title: 'Driver arrived at school',
-        body: `${req.user.fullName} has arrived at the school with the student.`,
-        data: {
-          type: 'driver-arrived-school',
-          requestId: String(rideRequest._id),
+    const completedRequestIds = [];
+    for (const arrivedRequest of arrivedAtSchoolRequests) {
+      const completedAt = new Date();
+      const completedRequest = await VanRequest.findOneAndUpdate(
+        {
+          _id: arrivedRequest._id,
+          driver: req.user._id,
+          status: 'arrived_at_school',
         },
-      }).catch(() => {});
-    }
+        { $set: { status: 'completed', liveLocation: null } },
+        { new: true }
+      ).populate('parent', '_id fullName');
 
-    const io = getIo();
-    if (io) {
-      const eventPayload = { request: populatedRequest };
-      io.to(buildTripRoomName(rideRequest._id)).emit('trip:request-updated', eventPayload);
-      io.to(buildUserRoomName(rideRequest.parent?._id)).emit('trip:request-updated', eventPayload);
-      io.to(buildUserRoomName(req.user._id)).emit('trip:request-updated', eventPayload);
+      if (!completedRequest) continue;
+      completedRequestIds.push(String(completedRequest._id));
 
-      io.to(buildTripRoomName(rideRequest._id)).emit('trip:location-updated', {
-        requestId: String(rideRequest._id),
-        liveLocation: rideRequest.liveLocation,
-        status: rideRequest.status,
+      await releaseVanRequestAssignment({
+        driverId: req.user._id,
+        requestId: completedRequest._id,
+        vehicleId: completedRequest.vehicleId,
       });
+      await driverService.updateTripStats(req.user._id, { status: 'completed' });
+
+      const parent = await User.findById(completedRequest.parent?._id || completedRequest.parent);
+      if (parent) {
+        const formattedTime = completedAt.toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        });
+        parent.notifications.push({
+          title: 'Trip Completed',
+          message: `${completedRequest.studentName} has arrived safely at ${completedRequest.schoolName} at ${formattedTime}. Driver ${req.user.fullName} completed the trip.`,
+          status: 'info',
+        });
+        await parent.save();
+        sendPushToUserIds([String(parent._id)], {
+          title: 'Trip Completed',
+          body: `${completedRequest.studentName} has safely arrived at school with ${req.user.fullName}.`,
+          data: {
+            type: 'trip-completed',
+            requestId: String(completedRequest._id),
+            status: 'completed',
+          },
+        }).catch(() => {});
+      }
+
+      const populatedRequest = await VanRequest.findById(completedRequest._id)
+        .populate('parent', 'fullName phone')
+        .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber')
+        .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model');
+      const io = getIo();
+      if (io) {
+        const eventPayload = { request: populatedRequest };
+        io.to(buildTripRoomName(completedRequest._id)).emit('trip:completed', eventPayload);
+        io.to(buildUserRoomName(completedRequest.parent?._id || completedRequest.parent)).emit('trip:completed', eventPayload);
+        io.to(buildUserRoomName(req.user._id)).emit('trip:completed', eventPayload);
+        io.to(buildTripRoomName(completedRequest._id)).emit('trip:request-updated', eventPayload);
+        io.to(buildUserRoomName(completedRequest.parent?._id || completedRequest.parent)).emit('trip:request-updated', eventPayload);
+        io.to(buildUserRoomName(req.user._id)).emit('trip:request-updated', eventPayload);
+        io.to('admins').emit('trip:completion-notification', {
+          requestId: String(completedRequest._id),
+          driverId: String(req.user._id),
+          driverName: req.user.fullName,
+          studentName: completedRequest.studentName,
+          destination: completedRequest.schoolName,
+          completedAt,
+          status: 'completed',
+        });
+      }
     }
 
-    return res.status(200).json({ message: 'Driver arrival at school recorded.', request: populatedRequest });
+    if (completedRequestIds.length === 0) {
+      return res.status(409).json({ message: 'There are no bookings awaiting school-run completion.' });
+    }
+
+    return res.status(200).json({
+      message: 'School run completed successfully.',
+      completedRequestIds,
+    });
   } catch (error) {
-    return res.status(500).json({ message: 'Unable to update trip status right now.' });
+    console.error('Complete school run error:', error);
+    return res.status(500).json({ message: 'Unable to complete school run right now.' });
   }
+});
+
+router.patch('/requests/:requestId/arrived-school', (req, res) => {
+  return res.status(410).json({
+    message: 'This endpoint is no longer available. Use /requests/:requestId/arrived-at-school.',
+  });
 });
 
 

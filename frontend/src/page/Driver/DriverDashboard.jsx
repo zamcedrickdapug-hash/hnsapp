@@ -29,7 +29,6 @@ import {
 	formatLocation,
 	buildMapLink,
 	asLatLng,
-	distanceInMeters,
 	playNotificationSound,
 	showBrowserNotification,
 } from '../../utils/driverDashboard'
@@ -53,7 +52,6 @@ const toDateInputValue = (value) => {
 	return /^\d{4}-\d{2}-\d{2}$/.test(datePart) ? datePart : ''
 }
 const DEFAULT_MAP_CENTER = [14.5995, 120.9842]
-const ARRIVED_RADIUS_METERS = 60
 
 /**
  * Main DriverDashboard Component
@@ -82,6 +80,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 	const [availabilityLoading, setAvailabilityLoading] = useState(false)
 	const [isPickedUpModalOpen, setIsPickedUpModalOpen] = useState(false)
 	const [isArrivedAtSchoolModalOpen, setIsArrivedAtSchoolModalOpen] = useState(false)
+	const [isArrivedAtPickupModalOpen, setIsArrivedAtPickupModalOpen] = useState(false)
 	const [optimizedRoute, setOptimizedRoute] = useState([])
 	const [routeStops, setRouteStops] = useState([])
 
@@ -98,9 +97,9 @@ export default function DriverDashboard({ token, user, onLogout }) {
 
 	// Refs
 	const watchIdRef = useRef(null)
+	const activeBookingsRef = useRef([])
 	const highlightTimeoutRef = useRef(null)
 	const notificationPermissionRef = useRef(null)
-	const arrivalRecordedRequestIdsRef = useRef(new Set())
 
 	// Profile data
 	const [profileData, setProfileData] = useState(() => {
@@ -135,6 +134,15 @@ export default function DriverDashboard({ token, user, onLogout }) {
 		() =>
 			requests.filter(
 				(item) => ['accepted', 'arrived', 'picked_up'].includes(item.status) && item.driver?._id === user.id
+			),
+		[requests, user.id]
+	)
+	activeBookingsRef.current = acceptedRequests
+
+	const arrivedAtSchoolRequests = useMemo(
+		() =>
+			requests.filter(
+				(item) => item.status === 'arrived_at_school' && String(item.driver?._id || item.driver || '') === String(user.id)
 			),
 		[requests, user.id]
 	)
@@ -181,17 +189,20 @@ export default function DriverDashboard({ token, user, onLogout }) {
 			.filter(Boolean)
 	}, [acceptedRequests])
 
-	const canMarkPickedUp = useMemo(() => {
-		if (!selectedTrip) return false
-		if (!['accepted', 'arrived'].includes(selectedTrip.status)) return false
-		return gpsStatus === 'Active'
-	}, [gpsStatus, selectedTrip])
+	const canMarkPickedUp = useMemo(
+		() => acceptedRequests.some((item) => item.status === 'arrived'),
+		[acceptedRequests]
+	)
 
-	const canMarkArrivedAtSchool = useMemo(() => {
-		if (!selectedTrip) return false
-		if (selectedTrip.status !== 'picked_up') return false
-		return gpsStatus === 'Active'
-	}, [gpsStatus, selectedTrip])
+	const canMarkArrivedAtSchool = useMemo(
+		() => acceptedRequests.some((item) => item.status === 'picked_up'),
+		[acceptedRequests]
+	)
+
+	const canMarkArrivedAtPickup = useMemo(
+		() => acceptedRequests.some((item) => item.status === 'accepted'),
+		[acceptedRequests]
+	)
 
 	// ====== API CALLS ======
 	const fetchRequests = async ({ silent = false } = {}) => {
@@ -202,9 +213,12 @@ export default function DriverDashboard({ token, user, onLogout }) {
 			const response = await apiFetch('/api/drivers/requests', {
 				headers: { Authorization: `Bearer ${token}` },
 			})
-			setRequests(response.requests || [])
+			const nextRequests = response.requests || []
+			setRequests(nextRequests)
+			return nextRequests
 		} catch (requestError) {
 			setError(requestError.message || 'Unable to load driver requests right now.')
+			return null
 		} finally {
 			if (!silent) setLoading(false)
 		}
@@ -302,6 +316,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 				headers: { Authorization: `Bearer ${token}` },
 			})
 			setRequestMessage('Arrival at pickup recorded. The parent has been notified.')
+			setIsArrivedAtPickupModalOpen(false)
 			await fetchRequests({ silent: true })
 		} catch (requestError) {
 			setError(requestError.message || 'Unable to record arrival at pickup.')
@@ -309,7 +324,34 @@ export default function DriverDashboard({ token, user, onLogout }) {
 	}
 
 	// ====== GPS TRACKING ======
-	const syncTripLocation = (trackingRequestId, latitude, longitude) => {
+	const getTrackingRequest = () => {
+		const statusOrder = { accepted: 0, arrived: 1, picked_up: 2 }
+		return [...activeBookingsRef.current].sort((first, second) => {
+			const statusDifference = statusOrder[first.status] - statusOrder[second.status]
+			if (statusDifference !== 0) return statusDifference
+			const firstAcceptedAt = Date.parse(first.acceptedAt || '')
+			const secondAcceptedAt = Date.parse(second.acceptedAt || '')
+			const firstTime = Number.isNaN(firstAcceptedAt) ? Number.MAX_VALUE : firstAcceptedAt
+			const secondTime = Number.isNaN(secondAcceptedAt) ? Number.MAX_VALUE : secondAcceptedAt
+			return firstTime - secondTime || String(first._id).localeCompare(String(second._id))
+		})[0] || null
+	}
+
+	const stopGpsLocally = () => {
+		if (watchIdRef.current !== null) {
+			navigator.geolocation.clearWatch(watchIdRef.current)
+			watchIdRef.current = null
+		}
+		setGpsStatus('Inactive')
+	}
+
+	const syncTripLocation = (latitude, longitude) => {
+		const trackingRequest = getTrackingRequest()
+		if (!trackingRequest) {
+			stopGpsLocally()
+			return ''
+		}
+		const trackingRequestId = String(trackingRequest._id)
 		const nextCoords = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
 		setCoords(nextCoords)
 
@@ -318,7 +360,11 @@ export default function DriverDashboard({ token, user, onLogout }) {
 			headers: { Authorization: `Bearer ${token}` },
 			body: JSON.stringify({ latitude, longitude }),
 		}).catch(() => {
-			setError('Location update failed. Please try again.')
+			if (getTrackingRequest()) {
+				setError('Location update failed. Please try again.')
+			} else {
+				stopGpsLocally()
+			}
 		})
 
 		setRequests((current) =>
@@ -335,39 +381,12 @@ export default function DriverDashboard({ token, user, onLogout }) {
 					: item
 			)
 		)
-
-		// Auto-mark arrival if close to school
-		try {
-			if (
-				selectedTrip?.status === 'picked_up' &&
-				selectedTripDestinationPosition &&
-				!arrivalRecordedRequestIdsRef.current.has(trackingRequestId)
-			) {
-				const dist = distanceInMeters([latitude, longitude], selectedTripDestinationPosition)
-				if (Number.isFinite(dist) && dist <= ARRIVED_RADIUS_METERS) {
-					arrivalRecordedRequestIdsRef.current.add(trackingRequestId)
-					apiFetch(`/api/drivers/requests/${trackingRequestId}/arrived-at-school`, {
-						method: 'PATCH',
-						headers: { Authorization: `Bearer ${token}` },
-					})
-						.then(() => {
-							setRequestMessage('Arrived at school. Parent has been notified.')
-							fetchRequests({ silent: true })
-							fetchDriverAvailability()
-						})
-						.catch((arrivalError) => {
-							arrivalRecordedRequestIdsRef.current.delete(trackingRequestId)
-							setError(arrivalError.message || 'Unable to record arrival at school.')
-						})
-				}
-			}
-		} catch (e) {
-			// Ignore
-		}
+		return trackingRequestId
 	}
 
 	const startGps = async () => {
-		if (!selectedTrip) {
+		const trackingRequest = getTrackingRequest()
+		if (!trackingRequest) {
 			setError('Accept a parent request first before starting GPS.')
 			return
 		}
@@ -380,8 +399,8 @@ export default function DriverDashboard({ token, user, onLogout }) {
 		setRequestMessage('')
 		setGpsStatus('Preparing')
 		setCoords(
-			selectedTrip.liveLocation
-				? `${selectedTrip.liveLocation.latitude}, ${selectedTrip.liveLocation.longitude}`
+			trackingRequest.liveLocation
+				? `${trackingRequest.liveLocation.latitude}, ${trackingRequest.liveLocation.longitude}`
 				: ' -- '
 		)
 
@@ -390,13 +409,13 @@ export default function DriverDashboard({ token, user, onLogout }) {
 			watchIdRef.current = null
 		}
 
-		const trackingRequestId = selectedTrip._id
 		const geolocationOptions = { enableHighAccuracy: true, maximumAge: 8000, timeout: 10000 }
 
 		navigator.geolocation.getCurrentPosition(
 			(position) => {
 				const { latitude, longitude } = position.coords
-				syncTripLocation(trackingRequestId, latitude, longitude)
+				const trackingRequestId = syncTripLocation(latitude, longitude)
+				if (!trackingRequestId) return
 				setGpsStatus('Active')
 
 				if (socketRef.current) {
@@ -416,8 +435,9 @@ export default function DriverDashboard({ token, user, onLogout }) {
 		watchIdRef.current = navigator.geolocation.watchPosition(
 			(position) => {
 				const { latitude, longitude } = position.coords
-				syncTripLocation(trackingRequestId, latitude, longitude)
-				setGpsStatus('Active')
+				if (syncTripLocation(latitude, longitude)) {
+					setGpsStatus('Active')
+				}
 			},
 			() => {
 				setGpsStatus('Inactive')
@@ -500,6 +520,32 @@ export default function DriverDashboard({ token, user, onLogout }) {
 			await fetchDriverAvailability()
 		} catch (requestError) {
 			setError(requestError.message || 'Unable to mark arrival at school right now.')
+		}
+	}
+
+	const handleCompleteSchoolRun = async () => {
+		setError('')
+		setRequestMessage('')
+		try {
+			const response = await apiFetch('/api/drivers/requests/complete-school-run', {
+				method: 'PATCH',
+				headers: { Authorization: `Bearer ${token}` },
+			})
+			const refreshedRequests = await fetchRequests({ silent: true })
+			await fetchDriverAvailability()
+			setRequestMessage(response.message || 'School run completed successfully.')
+			if (
+				refreshedRequests &&
+				!refreshedRequests.some(
+					(item) =>
+						['accepted', 'arrived', 'picked_up'].includes(item.status) &&
+						String(item.driver?._id || item.driver || '') === String(user.id)
+				)
+			) {
+				stopGpsLocally()
+			}
+		} catch (requestError) {
+			setError(requestError.message || 'Unable to complete school run right now.')
 		}
 	}
 
@@ -972,15 +1018,22 @@ export default function DriverDashboard({ token, user, onLogout }) {
 						</CardHeader>
 						<CardContent>
 							<div className="flex gap-2 flex-wrap">
-								<Button onClick={startGps} disabled={!selectedTrip || gpsStatus === 'Active'}>
+								<Button onClick={startGps} disabled={acceptedRequests.length === 0 || gpsStatus === 'Active'}>
 									Start GPS
 								</Button>
 								<Button onClick={stopGps} variant="destructive" disabled={gpsStatus === 'Inactive'}>
 									Stop GPS
 								</Button>
 								<Button
-									onClick={() => handleArrivedAtPickup(selectedTrip._id)}
-									disabled={!selectedTrip || selectedTrip.status !== 'accepted' || gpsStatus !== 'Active'}
+									onClick={() => {
+										const acceptedBookings = acceptedRequests.filter((item) => item.status === 'accepted')
+										if (acceptedBookings.length === 1) {
+											handleArrivedAtPickup(acceptedBookings[0]._id)
+										} else {
+											setIsArrivedAtPickupModalOpen(true)
+										}
+									}}
+									disabled={!canMarkArrivedAtPickup}
 									variant="outline"
 								>
 									Mark Arrived at Pickup
@@ -998,6 +1051,13 @@ export default function DriverDashboard({ token, user, onLogout }) {
 									className="bg-green-600 hover:bg-green-700 text-white"
 								>
 									Arrived at School
+								</Button>
+								<Button
+									onClick={handleCompleteSchoolRun}
+									disabled={arrivedAtSchoolRequests.length === 0}
+									className="bg-purple-600 hover:bg-purple-700 text-white"
+								>
+									Complete School Run
 								</Button>
 							</div>
 						</CardContent>
@@ -1043,7 +1103,13 @@ export default function DriverDashboard({ token, user, onLogout }) {
 															: 'bg-blue-100 text-blue-800'
 													}`}
 												>
-													{getStatusLabelClass(trip.status)}
+													{trip.status === 'arrived'
+														? 'Arrived at pickup'
+														: trip.status === 'arrived_at_school'
+															? 'At school'
+															: trip.status === 'completed'
+																? 'Completed'
+																: getStatusLabelClass(trip.status)}
 												</span>
 											</div>
 										</CardHeader>
@@ -1072,6 +1138,58 @@ export default function DriverDashboard({ token, user, onLogout }) {
 					</div>
 
 					{/* Modals */}
+					{isArrivedAtPickupModalOpen && (
+						<div
+							className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4"
+							onClick={() => setIsArrivedAtPickupModalOpen(false)}
+						>
+							<motion.div
+								className="bg-white rounded-lg max-w-md w-full max-h-96 overflow-y-auto"
+								initial={{ opacity: 0, scale: 0.95 }}
+								animate={{ opacity: 1, scale: 1 }}
+								onClick={(e) => e.stopPropagation()}
+							>
+								<div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+									<h3 className="font-bold text-gray-900">Mark Arrived at Pickup</h3>
+									<button
+										onClick={() => setIsArrivedAtPickupModalOpen(false)}
+										className="text-gray-500 hover:text-gray-700"
+									>
+										✕
+									</button>
+								</div>
+								<div className="p-4 space-y-3">
+									{acceptedRequests.filter((item) => item.status === 'accepted').length === 0 ? (
+										<p className="text-gray-600">No bookings awaiting pickup arrival.</p>
+									) : (
+										acceptedRequests
+											.filter((item) => item.status === 'accepted')
+											.map((item) => (
+												<div
+													key={item._id}
+													className="border rounded-lg p-3 flex justify-between items-start gap-2"
+												>
+													<div>
+														<p className="font-semibold text-gray-900">
+															{item.parent?.fullName || 'Parent'}
+														</p>
+														<p className="text-sm text-gray-600">Student: {item.studentName}</p>
+														<p className="text-sm text-gray-600">Pickup: {item.pickupZone}</p>
+													</div>
+													<Button
+														size="sm"
+														onClick={() => handleArrivedAtPickup(item._id)}
+													>
+														Confirm
+													</Button>
+												</div>
+											))
+									)}
+								</div>
+							</motion.div>
+						</div>
+					)}
+
 					{isPickedUpModalOpen && (
 						<div
 							className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4"
@@ -1093,13 +1211,11 @@ export default function DriverDashboard({ token, user, onLogout }) {
 									</button>
 								</div>
 								<div className="p-4 space-y-3">
-									{acceptedRequests.filter((item) =>
-										['accepted', 'arrived'].includes(item.status)
-									).length === 0 ? (
-										<p className="text-gray-600">No active pickup trips.</p>
+									{acceptedRequests.filter((item) => item.status === 'arrived').length === 0 ? (
+										<p className="text-gray-600">No bookings awaiting pickup.</p>
 									) : (
 										acceptedRequests
-											.filter((item) => ['accepted', 'arrived'].includes(item.status))
+											.filter((item) => item.status === 'arrived')
 											.map((item) => (
 												<div
 													key={item._id}
