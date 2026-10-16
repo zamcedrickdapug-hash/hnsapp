@@ -4,6 +4,7 @@ import { API_SERVER_URL } from '../api'
 
 // Global singleton socket instance to prevent multiple connections
 let globalSocket = null
+let handlersRegistered = false
 let socketInitialized = false
 let socketToken = null
 let socketScope = null
@@ -80,7 +81,6 @@ export function useSocket(token, options = {}) {
   const [connectionAttempt, setConnectionAttempt] = useState(0)
   const reconnectAttemptRef = useRef(0)
   const mountedRef = useRef(true)
-  const handlersRegisteredRef = useRef(false)
 
   useEffect(() => {
     mountedRef.current = true
@@ -99,8 +99,8 @@ export function useSocket(token, options = {}) {
     const socket = getGlobalSocket(token, options)
 
     // Only register handlers once per socket instance
-    if (!handlersRegisteredRef.current || !socketInitialized) {
-      handlersRegisteredRef.current = true
+    if (!handlersRegistered || !socketInitialized) {
+      handlersRegistered = true
 
       const handleConnect = () => {
         if (!mountedRef.current) return
@@ -206,6 +206,6 @@ export function disconnectGlobalSocket() {
     socketToken = null
     socketScope = null
     socketInitialized = false
-    handlersRegisteredRef.current = false
+    handlersRegistered = false
   }
 }

@@ -17,7 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Button } from '../../components/ui/button'
 import { DashboardLayout } from '../../components/dashboard'
 import { DriverStatsCards } from '../../components/dashboard/driver'
-import LiveTripMap from '../../components/tracking/LiveTripMap'
+import LiveTripMap from '../../components/tracking/LiveTripGoogleMap'
 import { apiFetch } from '../../api'
 import { useSocket, useSocketEvent } from '../../hooks/useSocket'
 import { registerPushSubscription } from '../../lib/pushNotifications'

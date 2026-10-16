@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { APIProvider, Map, AdvancedMarker, useMap } from '@vis.gl/react-google-maps';
 import { useETACalculation } from '../hooks/useETACalculation';
 import { useTripStatusManager } from '../hooks/useTripStatusManager';
 import './LiveTripTracking.scss';
 
 /**
  * LiveTripTracking Component
- * 
- * Real-time tracking display for parents
+ *
+ * Real-time tracking display for parents (Google Maps)
  * Shows:
  * - Live vehicle location on map
  * - ETA to destination
@@ -20,11 +21,56 @@ const SCHOOL_LOCATION = {
   longitude: 121.07158042431617,
 };
 
+const DEFAULT_CENTER = { lat: 14.5994, lng: 120.9842 };
+
+// Sinusundan ng mapa ang sasakyan
+function FollowVehicle({ position }) {
+  const map = useMap();
+  useEffect(() => {
+    if (map && position) map.panTo(position);
+  }, [map, position]);
+  return null;
+}
+
+// Putol-putol na linya ng ruta
+function RoutePolyline({ path }) {
+  const map = useMap();
+  const lineRef = useRef(null);
+
+  useEffect(() => {
+    if (!map || !path || path.length < 2) return;
+    if (!lineRef.current) {
+      lineRef.current = new window.google.maps.Polyline({
+        strokeOpacity: 0,
+        icons: [
+          {
+            icon: {
+              path: 'M 0,-1 0,1',
+              strokeOpacity: 0.7,
+              strokeColor: '#3b82f6',
+              scale: 3,
+            },
+            offset: '0',
+            repeat: '12px',
+          },
+        ],
+        map,
+      });
+    }
+    lineRef.current.setPath(path);
+  }, [map, path]);
+
+  useEffect(
+    () => () => {
+      if (lineRef.current) lineRef.current.setMap(null);
+    },
+    []
+  );
+
+  return null;
+}
+
 export const LiveTripTracking = ({ trip, socket }) => {
-  const mapRef = useRef(null);
-  const mapInstanceRef = useRef(null);
-  const markerRef = useRef(null);
-  const routePolylineRef = useRef(null);
   const [speedHistory, setSpeedHistory] = useState([]);
 
   // Get ETA
@@ -70,12 +116,14 @@ export const LiveTripTracking = ({ trip, socket }) => {
       if (payload.requestId !== trip?._id) return;
 
       // Update speed history
-      setSpeedHistory(prev => {
+      setSpeedHistory((prev) => {
         const updated = [...prev, payload.speed || 0];
         return updated.slice(-20); // Keep last 20 readings
       });
 
-      console.log(`[LiveTracking] Location update: ${payload.latitude.toFixed(6)}, ${payload.longitude.toFixed(6)}`);
+      console.log(
+        `[LiveTracking] Location update: ${payload.latitude.toFixed(6)}, ${payload.longitude.toFixed(6)}`
+      );
     };
 
     socket.on('trip:location-updated', handleLocationUpdate);
@@ -85,75 +133,39 @@ export const LiveTripTracking = ({ trip, socket }) => {
     };
   }, [socket, trip?._id]);
 
-  // Update map
-  useEffect(() => {
-    if (!mapRef.current) return;
+  // Posisyon ng sasakyan para sa Google Maps
+  const vehiclePosition = useMemo(() => {
+    if (!trip?.liveLocation) return null;
+    return {
+      lat: trip.liveLocation.latitude,
+      lng: trip.liveLocation.longitude,
+    };
+  }, [trip?.liveLocation?.latitude, trip?.liveLocation?.longitude]);
 
-    // Initialize map if not already done
-    if (!mapInstanceRef.current) {
-      const L = window.L;
-      if (!L) return; // Leaflet not loaded
-
-      mapInstanceRef.current = L.map(mapRef.current).setView([14.5994, 120.9842], 13);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19,
-      }).addTo(mapInstanceRef.current);
+  // Ruta: sasakyan -> pickup -> (school kapag nasundo na)
+  const routePath = useMemo(() => {
+    if (!trip?.liveLocation || !trip?.requesterLocation) return null;
+    const path = [
+      { lat: trip.liveLocation.latitude, lng: trip.liveLocation.longitude },
+      {
+        lat: trip.requesterLocation.latitude,
+        lng: trip.requesterLocation.longitude,
+      },
+    ];
+    if (trip.status === 'picked_up') {
+      path.push({
+        lat: SCHOOL_LOCATION.latitude,
+        lng: SCHOOL_LOCATION.longitude,
+      });
     }
-
-    const map = mapInstanceRef.current;
-
-    // Update marker position
-    if (trip?.liveLocation) {
-      const { latitude, longitude } = trip.liveLocation;
-
-      if (markerRef.current) {
-        markerRef.current.setLatLng([latitude, longitude]);
-      } else {
-        markerRef.current = window.L.marker([latitude, longitude], {
-          icon: window.L.divIcon({
-            className: 'live-tracking-marker',
-            html: `
-              <div class="marker-wrapper" style="transform: rotate(${trip.lastHeading || 0}deg)">
-                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                  <circle cx="16" cy="16" r="14" fill="#3b82f6" stroke="#1e40af" stroke-width="2"/>
-                  <path d="M16 4 L20 14 L16 12 L12 14 Z" fill="white"/>
-                </svg>
-              </div>
-            `,
-            iconSize: [32, 32],
-            iconAnchor: [16, 16],
-          }),
-        }).addTo(map);
-      }
-
-      // Auto-follow vehicle
-      map.panTo([latitude, longitude]);
-    }
-
-    // Draw route
-    if (trip?.requesterLocation && trip?.liveLocation) {
-      if (routePolylineRef.current) {
-        map.removeLayer(routePolylineRef.current);
-      }
-
-      const waypoints = [
-        [trip.liveLocation.latitude, trip.liveLocation.longitude],
-        [trip.requesterLocation.latitude, trip.requesterLocation.longitude],
-      ];
-
-      if (trip.status === 'picked_up') {
-        waypoints.push([SCHOOL_LOCATION.latitude, SCHOOL_LOCATION.longitude]);
-      }
-
-      routePolylineRef.current = window.L.polyline(waypoints, {
-        color: '#3b82f6',
-        weight: 3,
-        opacity: 0.7,
-        dashArray: '5, 5',
-      }).addTo(map);
-    }
-  }, [trip?.liveLocation, trip?.requesterLocation, trip?.lastHeading, trip?.status]);
+    return path;
+  }, [
+    trip?.liveLocation?.latitude,
+    trip?.liveLocation?.longitude,
+    trip?.requesterLocation?.latitude,
+    trip?.requesterLocation?.longitude,
+    trip?.status,
+  ]);
 
   // Determine status badge color
   const getStatusColor = () => {
@@ -185,11 +197,70 @@ export const LiveTripTracking = ({ trip, socket }) => {
     <div className="live-tracking-container">
       {/* Map */}
       <div className="map-section">
-        <div ref={mapRef} className="map-container" />
+        <div className="map-container">
+          <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
+            <Map
+              style={{ width: '100%', height: '100%' }}
+              defaultCenter={vehiclePosition || DEFAULT_CENTER}
+              defaultZoom={15}
+              mapId="DEMO_MAP_ID"
+              gestureHandling="greedy"
+              disableDefaultUI
+            >
+              {vehiclePosition && (
+                <>
+                  <AdvancedMarker position={vehiclePosition} title="Vehicle">
+                    <div
+                      style={{
+                        transform: `rotate(${trip.lastHeading || 0}deg)`,
+                      }}
+                    >
+                      <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                        <circle
+                          cx="16"
+                          cy="16"
+                          r="14"
+                          fill="#3b82f6"
+                          stroke="#1e40af"
+                          strokeWidth="2"
+                        />
+                        <path d="M16 4 L20 14 L16 12 L12 14 Z" fill="white" />
+                      </svg>
+                    </div>
+                  </AdvancedMarker>
+                  <FollowVehicle position={vehiclePosition} />
+                </>
+              )}
+
+              {trip.requesterLocation && (
+                <AdvancedMarker
+                  position={{
+                    lat: trip.requesterLocation.latitude,
+                    lng: trip.requesterLocation.longitude,
+                  }}
+                  title="Pickup"
+                />
+              )}
+
+              <AdvancedMarker
+                position={{
+                  lat: SCHOOL_LOCATION.latitude,
+                  lng: SCHOOL_LOCATION.longitude,
+                }}
+                title="School"
+              />
+
+              {routePath && <RoutePolyline path={routePath} />}
+            </Map>
+          </APIProvider>
+        </div>
 
         {/* Status Badge */}
         <div className="status-badge" style={{ borderColor: getStatusColor() }}>
-          <div className="status-dot" style={{ backgroundColor: getStatusColor() }} />
+          <div
+            className="status-dot"
+            style={{ backgroundColor: getStatusColor() }}
+          />
           <div className="status-text">
             <p className="status-label">{statusMessage}</p>
             <p className="status-progress">{progress}% Complete</p>
@@ -237,14 +308,18 @@ export const LiveTripTracking = ({ trip, socket }) => {
             <div className="distance-item">
               <span>To School:</span>
               <strong>
-                {distanceToDestination ? (distanceToDestination / 1000).toFixed(1) : '--'} km
+                {distanceToDestination
+                  ? (distanceToDestination / 1000).toFixed(1)
+                  : '--'}{' '}
+                km
               </strong>
             </div>
           ) : (
             <div className="distance-item">
               <span>To Pickup:</span>
               <strong>
-                {distanceToPickup ? (distanceToPickup / 1000).toFixed(1) : '--'} km
+                {distanceToPickup ? (distanceToPickup / 1000).toFixed(1) : '--'}{' '}
+                km
               </strong>
             </div>
           )}

@@ -1,36 +1,25 @@
-import { useEffect, useRef } from 'react'
-import { APIProvider, AdvancedMarker, Map, useMap, useMapsLibrary } from '@vis.gl/react-google-maps'
+import { useEffect, useMemo, useRef } from 'react'
+import { APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps'
 
 const DEFAULT_CENTER = { lat: 14.5994, lng: 120.9842 }
 
-const toPoint = (point) => {
-  const coordinates = Array.isArray(point)
-    ? point
-    : [point?.lat ?? point?.latitude, point?.lng ?? point?.longitude]
-  if (
-    coordinates.length < 2 ||
-    coordinates[0] === null ||
-    coordinates[0] === undefined ||
-    coordinates[1] === null ||
-    coordinates[1] === undefined
-  ) {
-    return null
-  }
-
-  const [lat, lng] = coordinates.map(Number)
-  return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180
-    ? { lat, lng }
-    : null
+// Tumatanggap ng [lat, lng]; ibinabalik ang null kung hindi valid
+const toPoint = (p) => {
+  if (!Array.isArray(p)) return null
+  const lat = Number(p[0])
+  const lng = Number(p[1])
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+  return { lat, lng }
 }
 
+// Sa una, kasya ang van at target. Pagkatapos, susundan lang ng mapa ang van kapag lumabas ito sa view.
 function FollowVan({ van, target }) {
   const map = useMap()
   const fitted = useRef(false)
 
   useEffect(() => {
     if (!map || !van) return
-
-    if (target && !fitted.current) {
+    if (!fitted.current && target) {
       const bounds = new window.google.maps.LatLngBounds()
       bounds.extend(van)
       bounds.extend(target)
@@ -38,27 +27,52 @@ function FollowVan({ van, target }) {
       fitted.current = true
       return
     }
-
-    map.panTo(van)
+    const bounds = map.getBounds()
+    if (!bounds || !bounds.contains(van)) map.panTo(van)
   }, [map, van?.lat, van?.lng, target?.lat, target?.lng])
 
   return null
 }
 
-function Route({ origin, destination, mode }) {
+// Iginuguhit ang planned route na galing sa backend (walang dagdag na Google API call)
+function PlannedRoute({ path }) {
   const map = useMap()
-  const routesLibrary = useMapsLibrary('routes')
-  const rendererRef = useRef(null)
-  const fallbackRef = useRef(null)
-  const lastRequestRef = useRef(0)
+  const lineRef = useRef(null)
 
   useEffect(() => {
-    if (!map || !routesLibrary || !origin || !destination) return
-    if (Date.now() - lastRequestRef.current < 15000 && rendererRef.current) return
+    if (!map) return
+    if (!lineRef.current) {
+      lineRef.current = new window.google.maps.Polyline({
+        strokeColor: '#3b82f6',
+        strokeOpacity: 0.85,
+        strokeWeight: 5,
+        map,
+      })
+    }
+    lineRef.current.setPath(path)
+  }, [map, path])
 
-    lastRequestRef.current = Date.now()
+  useEffect(() => () => lineRef.current?.setMap(null), [])
+  return null
+}
+
+// Ruta sa kalsada (Directions API) kapag walang planned route.
+// Kapag pumalya, tuwid na linya na lang.
+function DirectionsRoute({ origin, destination }) {
+  const map = useMap()
+  const routesLib = useMapsLibrary('routes')
+  const rendererRef = useRef(null)
+  const fallbackRef = useRef(null)
+  const lastRequest = useRef(0)
+
+  useEffect(() => {
+    if (!map || !routesLib || !origin || !destination) return
+    const now = Date.now()
+    if (rendererRef.current && now - lastRequest.current < 15000) return // limitahan ang requests
+    lastRequest.current = now
+
     if (!rendererRef.current) {
-      rendererRef.current = new routesLibrary.DirectionsRenderer({
+      rendererRef.current = new routesLib.DirectionsRenderer({
         map,
         suppressMarkers: true,
         preserveViewport: true,
@@ -66,69 +80,73 @@ function Route({ origin, destination, mode }) {
       })
     }
 
-    new routesLibrary.DirectionsService().route(
-      {
-        origin,
-        destination,
-        travelMode: mode === 'walking' ? 'WALKING' : 'DRIVING',
-      },
+    new routesLib.DirectionsService().route(
+      { origin, destination, travelMode: 'DRIVING' },
       (result, status) => {
-        if (status === 'OK' && result) {
+        if (status === 'OK') {
           fallbackRef.current?.setMap(null)
-          rendererRef.current?.setDirections(result)
-          return
+          fallbackRef.current = null
+          rendererRef.current.setDirections(result)
+        } else {
+          rendererRef.current.setDirections({ routes: [] })
+          if (!fallbackRef.current) {
+            fallbackRef.current = new window.google.maps.Polyline({
+              strokeColor: '#3b82f6',
+              strokeOpacity: 0.7,
+              strokeWeight: 4,
+              map,
+            })
+          }
+          fallbackRef.current.setPath([origin, destination])
         }
-
-        rendererRef.current?.setDirections({ routes: [] })
-        if (!fallbackRef.current) {
-          fallbackRef.current = new window.google.maps.Polyline({
-            strokeColor: '#3b82f6',
-            strokeOpacity: 0.7,
-            strokeWeight: 4,
-            map,
-          })
-        }
-        fallbackRef.current.setPath([origin, destination])
       },
     )
-  }, [map, routesLibrary, origin?.lat, origin?.lng, destination?.lat, destination?.lng, mode])
+  }, [map, routesLib, origin?.lat, origin?.lng, destination?.lat, destination?.lng])
 
-  useEffect(
-    () => () => {
-      rendererRef.current?.setMap(null)
-      fallbackRef.current?.setMap(null)
-    },
-    [],
-  )
+  useEffect(() => () => {
+    rendererRef.current?.setMap(null)
+    fallbackRef.current?.setMap(null)
+  }, [])
 
   return null
 }
 
 export default function LiveTripGoogleMap({
+  center,
   vanPosition,
   pickupPosition,
+  pickupPositions = [],
+  plannedRoute = [],
   showRoute = false,
-  routeMode = 'road',
+  routeMode = 'road', // pinanatili para tugma sa lumang props
   height = 360,
 }) {
   const van = toPoint(vanPosition)
   const target = toPoint(pickupPosition)
-  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+  const mapCenter = toPoint(center)
 
-  if (!apiKey) {
-    return (
-      <div role="status" style={{ minHeight: height, display: 'grid', placeItems: 'center' }}>
-        Google Maps is not configured. Set VITE_GOOGLE_MAPS_API_KEY to enable the trip map.
-      </div>
-    )
-  }
+  const pins = useMemo(
+    () =>
+      (pickupPositions || [])
+        .map((pin) => ({ id: pin.id, label: pin.label, point: toPoint(pin.position) }))
+        .filter((pin) => pin.point),
+    [pickupPositions],
+  )
+
+  const plannedPath = useMemo(
+    () => (plannedRoute || []).map(toPoint).filter(Boolean),
+    [plannedRoute],
+  )
+
+  // Iwasan ang duplicate na marker kung ang target ay isa nang pickup pin
+  const targetIsPin = target && pins.some((p) => p.point.lat === target.lat && p.point.lng === target.lng)
 
   return (
     <div style={{ width: '100%', height, borderRadius: 12, overflow: 'hidden' }}>
-      <APIProvider apiKey={apiKey}>
+      <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
         <Map
           style={{ width: '100%', height: '100%' }}
-          defaultCenter={van || target || DEFAULT_CENTER}
+          defaultCenter={van || mapCenter || target || DEFAULT_CENTER}
           defaultZoom={15}
           mapId="DEMO_MAP_ID"
           gestureHandling="greedy"
@@ -142,9 +160,38 @@ export default function LiveTripGoogleMap({
               </svg>
             </AdvancedMarker>
           )}
-          {target && <AdvancedMarker position={target} title="Pickup / School" />}
+
+          {pins.map((pin) => (
+            <AdvancedMarker key={pin.id} position={pin.point} title="Pickup">
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
+                  background: '#10b981',
+                  border: '2px solid #fff',
+                  color: '#fff',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                }}
+              >
+                {pin.label}
+              </div>
+            </AdvancedMarker>
+          ))}
+
+          {target && !targetIsPin && <AdvancedMarker position={target} title="Destination" />}
+
           {van && <FollowVan van={van} target={target} />}
-          {showRoute && van && target && <Route origin={van} destination={target} mode={routeMode} />}
+
+          {plannedPath.length > 1 ? (
+            <PlannedRoute path={plannedPath} />
+          ) : (
+            showRoute && van && target && <DirectionsRoute origin={van} destination={target} />
+          )}
         </Map>
       </APIProvider>
     </div>
