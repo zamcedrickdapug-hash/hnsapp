@@ -245,7 +245,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
     try {
       const response = await apiFetch('/api/parents/pickup-zone-check', {
         method: 'POST',
-        headers: { Authorization: `****** },
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ latitude, longitude }),
       })
       if (checkSequence === pickupZoneCheckSequenceRef.current) {
