@@ -175,6 +175,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 		() => acceptedRequests.find((item) => item._id === selectedRequestId) || null,
 		[acceptedRequests, selectedRequestId]
 	)
+	const hasActiveTrip = acceptedRequests.length > 0 || arrivedAtSchoolRequests.length > 0
 
 	const summary = useMemo(() => {
 		const completed = requests.filter((item) => item.status === 'completed').length
@@ -1079,6 +1080,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 					</Card>
 
 					{/* GPS Controls */}
+					{hasActiveTrip ? (
 					<Card>
 						<CardHeader>
 							<CardTitle className="text-base">GPS Controls</CardTitle>
@@ -1131,6 +1133,17 @@ export default function DriverDashboard({ token, user, onLogout }) {
 							</div>
 						</CardContent>
 					</Card>
+					) : (
+						<Card>
+							<CardHeader>
+								<CardTitle className="text-base">GPS Controls</CardTitle>
+								<CardDescription>Manage live location tracking</CardDescription>
+							</CardHeader>
+							<CardContent>
+								<p className="text-sm text-gray-600">Accept a request first to use GPS controls.</p>
+							</CardContent>
+						</Card>
+					)}
 
 					{/* Active Trips List */}
 					<div className="space-y-4">
