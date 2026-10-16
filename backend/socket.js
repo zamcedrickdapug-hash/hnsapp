@@ -208,34 +208,26 @@ const initSocketServer = (server) => {
     socket.on('gps_stopped', async (payload = {}, ack) => {
       try {
         const requestId = String(payload?.requestId || '');
-        const driverId = String(payload?.driverId || '');
+        const driverId = String(socket.user?._id || '');
 
-        if (!requestId || !driverId) {
-          if (typeof ack === 'function') {
-            ack({ ok: false, message: 'Request id and driver id are required.' });
-          }
+        if (!requestId) {
+          console.warn(`[Socket] Unauthorized GPS stop attempt - User: ${userId}`);
           return;
         }
 
-        // Verify this is the driver stopping GPS for their own trip
-        if (String(socket.user?._id) !== driverId) {
-          console.warn(`[Socket] Unauthorized GPS stop attempt - User: ${userId}, Driver: ${driverId}`);
-          if (typeof ack === 'function') {
-            ack({ ok: false, message: 'You are not authorized to stop GPS for this trip.' });
-          }
+        if (socket.user?.role !== 'driver') {
+          console.warn(`[Socket] Unauthorized GPS stop attempt - User: ${userId}`);
           return;
         }
 
-        const request = await VanRequest.findOne({
-          _id: requestId,
-          driver: driverId,
-          status: { $in: ['accepted', 'arrived', 'picked_up'] },
-        }).select('_id parent status');
+        const request = await VanRequest.findById(requestId);
 
-        if (!request) {
-          if (typeof ack === 'function') {
-            ack({ ok: false, message: 'You are not assigned to an active request.' });
-          }
+        if (
+          !request ||
+          String(request.driver?._id || request.driver || '') !== driverId ||
+          !['accepted', 'arrived', 'picked_up', 'arrived_at_school', 'completed'].includes(request.status)
+        ) {
+          console.warn(`[Socket] Unauthorized GPS stop attempt - User: ${userId}`);
           return;
         }
 
@@ -298,24 +290,29 @@ const initSocketServer = (server) => {
     });
 
     // Handle GPS started event - prepares for new route
-    socket.on('gps_started', (payload = {}, ack) => {
+    socket.on('gps_started', async (payload = {}, ack) => {
       try {
         const requestId = String(payload?.requestId || '');
-        const driverId = String(payload?.driverId || '');
+        const driverId = String(socket.user?._id || '');
 
-        if (!requestId || !driverId) {
-          if (typeof ack === 'function') {
-            ack({ ok: false, message: 'Request id and driver id are required.' });
-          }
+        if (!requestId) {
+          console.warn(`[Socket] Unauthorized GPS start attempt - User: ${userId}`);
           return;
         }
 
-        // Verify this is the driver starting GPS for their own trip
-        if (String(socket.user?._id) !== driverId) {
-          console.warn(`[Socket] Unauthorized GPS start attempt - User: ${userId}, Driver: ${driverId}`);
-          if (typeof ack === 'function') {
-            ack({ ok: false, message: 'You are not authorized to start GPS for this trip.' });
-          }
+        if (socket.user?.role !== 'driver') {
+          console.warn(`[Socket] Unauthorized GPS start attempt - User: ${userId}`);
+          return;
+        }
+
+        const request = await VanRequest.findById(requestId);
+
+        if (
+          !request ||
+          String(request.driver?._id || request.driver || '') !== driverId ||
+          !['accepted', 'arrived', 'picked_up'].includes(request.status)
+        ) {
+          console.warn(`[Socket] Unauthorized GPS start attempt - User: ${userId}`);
           return;
         }
 
@@ -339,258 +336,6 @@ const initSocketServer = (server) => {
         if (typeof ack === 'function') {
           ack({ ok: false, message: 'Unable to process GPS start event.' });
         }
-      }
-    });
-
-    // Handle trip completion - clears active requests for both parent and driver
-    socket.on('trip:completed', (payload = {}, ack) => {
-      try {
-        const requestId = String(payload?.requestId || '');
-        const driverId = String(payload?.driverId || '');
-
-        if (!requestId || !driverId) {
-          if (typeof ack === 'function') {
-            ack({ ok: false, message: 'Request id and driver id are required.' });
-          }
-          return;
-        }
-
-        // Verify this is the driver completing the trip
-        if (String(socket.user?._id) !== driverId) {
-          console.warn(`[Socket] Unauthorized trip completion attempt - User: ${userId}, Driver: ${driverId}`);
-          if (typeof ack === 'function') {
-            ack({ ok: false, message: 'You are not authorized to complete this trip.' });
-          }
-          return;
-        }
-
-        // Broadcast trip completion to trip room and affected users
-        const tripRoom = buildTripRoomName(requestId);
-        
-        socket.to(tripRoom).emit('trip:completed', {
-          requestId,
-          driverId,
-          timestamp: new Date().toISOString(),
-          message: 'Trip has been completed. Active request cleared.',
-        });
-
-        console.log(`[Socket] Trip completed - Driver: ${userId}, Trip: ${requestId}`);
-
-        if (typeof ack === 'function') {
-          ack({ ok: true });
-        }
-      } catch (error) {
-        console.error(`[Socket] Trip completion error - User: ${userId}:`, error.message);
-        if (typeof ack === 'function') {
-          ack({ ok: false, message: 'Unable to process trip completion event.' });
-        }
-      }
-    });
-
-    // Handle notification broadcast - sends notification to specific user
-    socket.on('notification:send', (payload = {}, ack) => {
-      try {
-        const { targetUserId, notification } = payload;
-
-        if (!targetUserId || !notification) {
-          if (typeof ack === 'function') {
-            ack({ ok: false, message: 'Target user id and notification are required.' });
-          }
-          return;
-        }
-
-        // Only allow admins, drivers, or the user to send notifications to parents
-        if (socket.user?.role !== 'admin' && socket.user?.role !== 'driver') {
-          console.warn(`[Socket] Unauthorized notification send attempt - User: ${userId}`);
-          if (typeof ack === 'function') {
-            ack({ ok: false, message: 'You are not authorized to send notifications.' });
-          }
-          return;
-        }
-
-        // Broadcast notification to target user
-        const targetUserRoom = buildUserRoomName(targetUserId);
-        
-        ioInstance.to(targetUserRoom).emit('notification:received', {
-          ...notification,
-          sentAt: new Date().toISOString(),
-        });
-
-        console.log(`[Socket] Notification sent - From: ${userId}, To: ${targetUserId}, Type: ${notification.type}`);
-
-        if (typeof ack === 'function') {
-          ack({ ok: true });
-        }
-      } catch (error) {
-        console.error(`[Socket] Notification send error - User: ${userId}:`, error.message);
-        if (typeof ack === 'function') {
-          ack({ ok: false, message: 'Unable to send notification.' });
-        }
-      }
-    });
-
-    // ===== 7-STAGE NOTIFICATION WORKFLOW =====
-    
-    // STAGE 1: Driver started GPS to parent (on the way)
-    socket.on('driver:gps_started_to_parent', (payload = {}, ack) => {
-      try {
-        const { requestId, driverId, eta } = payload;
-        
-        if (!requestId || !driverId) {
-          if (typeof ack === 'function') ack({ ok: false, message: 'Missing required fields' });
-          return;
-        }
-
-        // Broadcast to trip room
-        const tripRoom = buildTripRoomName(requestId);
-        ioInstance.to(tripRoom).emit('driver:gps_started_to_parent', {
-          requestId,
-          driverId,
-          eta,
-          timestamp: new Date().toISOString(),
-        });
-
-        console.log(`[Socket] Driver GPS started to parent - Trip: ${requestId}, Driver: ${driverId}`);
-        if (typeof ack === 'function') ack({ ok: true });
-      } catch (error) {
-        console.error('[Socket] GPS started error:', error.message);
-        if (typeof ack === 'function') ack({ ok: false });
-      }
-    });
-
-    // STAGE 2: Driver arrived at parent location
-    socket.on('driver:arrived_at_pickup', (payload = {}, ack) => {
-      try {
-        const { requestId, driverId } = payload;
-        
-        if (!requestId || !driverId) {
-          if (typeof ack === 'function') ack({ ok: false, message: 'Missing required fields' });
-          return;
-        }
-
-        // Broadcast to trip room
-        const tripRoom = buildTripRoomName(requestId);
-        ioInstance.to(tripRoom).emit('driver:arrived_at_pickup', {
-          requestId,
-          driverId,
-          timestamp: new Date().toISOString(),
-        });
-
-        console.log(`[Socket] Driver arrived at pickup - Trip: ${requestId}, Driver: ${driverId}`);
-        if (typeof ack === 'function') ack({ ok: true });
-      } catch (error) {
-        console.error('[Socket] Arrived at pickup error:', error.message);
-        if (typeof ack === 'function') ack({ ok: false });
-      }
-    });
-
-    // STAGE 3: Student picked up
-    socket.on('student:picked_up', (payload = {}, ack) => {
-      try {
-        const { requestId, driverId, studentName } = payload;
-        
-        if (!requestId || !driverId) {
-          if (typeof ack === 'function') ack({ ok: false, message: 'Missing required fields' });
-          return;
-        }
-
-        // Broadcast to trip room
-        const tripRoom = buildTripRoomName(requestId);
-        ioInstance.to(tripRoom).emit('student:picked_up', {
-          requestId,
-          driverId,
-          studentName,
-          timestamp: new Date().toISOString(),
-        });
-
-        console.log(`[Socket] Student picked up - Trip: ${requestId}, Driver: ${driverId}`);
-        if (typeof ack === 'function') ack({ ok: true });
-      } catch (error) {
-        console.error('[Socket] Student picked up error:', error.message);
-        if (typeof ack === 'function') ack({ ok: false });
-      }
-    });
-
-    // STAGE 4: Driver started GPS to school
-    socket.on('driver:gps_started_to_school', (payload = {}, ack) => {
-      try {
-        const { requestId, driverId, eta } = payload;
-        
-        if (!requestId || !driverId) {
-          if (typeof ack === 'function') ack({ ok: false, message: 'Missing required fields' });
-          return;
-        }
-
-        // Broadcast to trip room
-        const tripRoom = buildTripRoomName(requestId);
-        ioInstance.to(tripRoom).emit('driver:gps_started_to_school', {
-          requestId,
-          driverId,
-          eta,
-          timestamp: new Date().toISOString(),
-        });
-
-        console.log(`[Socket] Driver GPS started to school - Trip: ${requestId}, Driver: ${driverId}`);
-        if (typeof ack === 'function') ack({ ok: true });
-      } catch (error) {
-        console.error('[Socket] GPS started to school error:', error.message);
-        if (typeof ack === 'function') ack({ ok: false });
-      }
-    });
-
-    // STAGE 5: FINAL - Driver arrived at school
-    socket.on('driver:arrived_at_school', (payload = {}, ack) => {
-      try {
-        const { requestId, driverId, studentName, schoolName } = payload;
-        
-        if (!requestId || !driverId) {
-          if (typeof ack === 'function') ack({ ok: false, message: 'Missing required fields' });
-          return;
-        }
-
-        // Broadcast to trip room
-        const tripRoom = buildTripRoomName(requestId);
-        ioInstance.to(tripRoom).emit('driver:arrived_at_school', {
-          requestId,
-          driverId,
-          studentName,
-          schoolName,
-          timestamp: new Date().toISOString(),
-        });
-
-        console.log(`[Socket] Driver arrived at school (FINAL) - Trip: ${requestId}, Driver: ${driverId}`);
-        if (typeof ack === 'function') ack({ ok: true });
-      } catch (error) {
-        console.error('[Socket] Arrived at school error:', error.message);
-        if (typeof ack === 'function') ack({ ok: false });
-      }
-    });
-
-    // STAGE 5: Live location update during trip
-    socket.on('driver:location_update', (payload = {}, ack) => {
-      try {
-        const { requestId, driverId, latitude, longitude, eta } = payload;
-        
-        if (!requestId || !driverId || latitude === undefined || longitude === undefined) {
-          if (typeof ack === 'function') ack({ ok: false, message: 'Missing required fields' });
-          return;
-        }
-
-        // Broadcast to trip room only (real-time map updates)
-        const tripRoom = buildTripRoomName(requestId);
-        ioInstance.to(tripRoom).emit('driver:location_update', {
-          requestId,
-          driverId,
-          latitude,
-          longitude,
-          eta,
-          timestamp: new Date().toISOString(),
-        });
-
-        if (typeof ack === 'function') ack({ ok: true });
-      } catch (error) {
-        console.error('[Socket] Location update error:', error.message);
-        if (typeof ack === 'function') ack({ ok: false });
       }
     });
 
