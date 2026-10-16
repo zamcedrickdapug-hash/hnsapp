@@ -35,6 +35,7 @@ import { NotificationsContainer } from '../../components/notifications/Notificat
 import { ReceiptModal } from '../../components/modals/ReceiptModal'
 import { ReportIssueModal } from '../../components/modals/ReportIssueModal'
 import TripHistoryPage from './TripHistoryPage'
+import { distanceInMeters } from '../../utils/driverDashboard'
 import './ParentDashboard.scss'
 
 // Default settings structure
@@ -161,6 +162,42 @@ export default function ParentDashboard({ token, user, onLogout }) {
       cancelled: 'Trip cancelled',
     }
     return statusMap[activeRideRequest.status] || 'Waiting'
+  }, [activeRideRequest])
+
+  const estimatedArrival = useMemo(() => {
+    if (!activeRideRequest) return null
+    if (activeRideRequest.status === 'arrived') return 'Driver has arrived at pickup'
+    if (['arrived_at_school', 'completed', 'cancelled'].includes(activeRideRequest.status)) return null
+
+    const targetCoordinates =
+      activeRideRequest.status === 'picked_up'
+        ? activeRideRequest.destinationLocation
+        : activeRideRequest.status === 'accepted'
+          ? activeRideRequest.requesterLocation
+          : null
+    const liveLocation = activeRideRequest.liveLocation
+    const hasValidCoordinates = (location) =>
+      location &&
+      location.latitude !== null &&
+      location.latitude !== undefined &&
+      location.latitude !== '' &&
+      location.longitude !== null &&
+      location.longitude !== undefined &&
+      location.longitude !== ''
+    const targetLocation = hasValidCoordinates(targetCoordinates) ? asLatLng(targetCoordinates) : null
+    const currentLocation = hasValidCoordinates(liveLocation) ? asLatLng(liveLocation) : null
+    if (!currentLocation || !targetLocation) return 'Calculating...'
+
+    const distance = distanceInMeters(currentLocation, targetLocation)
+    if (!Number.isFinite(distance)) return 'Calculating...'
+    if (distance < 150) {
+      return activeRideRequest.status === 'picked_up' ? 'Arriving at school' : 'Arriving'
+    }
+
+    const minutes = Math.max(1, Math.ceil((distance * 1.3 * 60) / 22000))
+    return activeRideRequest.status === 'picked_up'
+      ? `about ${minutes} min to school`
+      : `about ${minutes} min`
   }, [activeRideRequest])
 
   const hasRequiredStudentDetails = [
@@ -637,8 +674,9 @@ export default function ParentDashboard({ token, user, onLogout }) {
                       'Locating...'
                     }
                     destination={activeRideRequest.schoolName || settingsData.schoolName || 'School destination not provided'}
-                    estimatedArrival={activeRideRequest.estimatedArrival || 'Calculating...'}
+                    estimatedArrival={estimatedArrival}
                     socketConnected={socketConnected}
+                    liveLocationUpdatedAt={activeRideRequest.liveLocation?.updatedAt}
                   />
 
                   <Card>

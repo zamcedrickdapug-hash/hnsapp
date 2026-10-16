@@ -7,6 +7,7 @@
  * Shows: Driver info, vehicle details, location, ETA, trip progress
  */
 
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card'
 import { Phone, MapPin, Clock, AlertCircle } from 'lucide-react'
@@ -20,8 +21,20 @@ export function ParentTrackingPanel({
   destination = null,
   estimatedArrival = null,
   socketConnected = false,
+  liveLocationUpdatedAt = null,
   isLoading = false,
 }) {
+  const [currentTime, setCurrentTime] = useState(Date.now())
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(Date.now()), 5000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const locationUpdatedAt = Date.parse(liveLocationUpdatedAt || '')
+  const locationAge = currentTime - locationUpdatedAt
+  const hasRecentLocationUpdate =
+    Number.isFinite(locationUpdatedAt) && locationAge >= 0 && locationAge <= 30000
+
   const statusConfig = {
     searching: { label: 'Finding Driver', color: 'text-yellow-600', bg: 'bg-yellow-50' },
     accepted: { label: 'Driver Assigned', color: 'text-blue-600', bg: 'bg-blue-50' },
@@ -121,7 +134,7 @@ export function ParentTrackingPanel({
           </div>
 
           {/* Status Alert */}
-          {!socketConnected && (
+          {!hasRecentLocationUpdate && (
             <motion.div
               className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2"
               initial={{ opacity: 0, y: -5 }}
