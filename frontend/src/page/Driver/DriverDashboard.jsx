@@ -69,6 +69,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 	const [requests, setRequests] = useState([])
 	const [loading, setLoading] = useState(false)
 	const [error, setError] = useState('')
+	const [acceptError, setAcceptError] = useState('')
 	const [requestMessage, setRequestMessage] = useState('')
 	const [gpsStatus, setGpsStatus] = useState('Inactive')
 	const [coords, setCoords] = useState(' -- ')
@@ -196,6 +197,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 	const fetchRequests = async ({ silent = false } = {}) => {
 		if (!silent) setLoading(true)
 		setError('')
+		setAcceptError('')
 		try {
 			const response = await apiFetch('/api/drivers/requests', {
 				headers: { Authorization: `Bearer ${token}` },
@@ -250,6 +252,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 
 	const handleAcceptRequest = async (requestId) => {
 		setAcceptingRequestId(requestId)
+		setAcceptError('')
 		setRequestMessage('')
 		setError('')
 		try {
@@ -257,12 +260,14 @@ export default function DriverDashboard({ token, user, onLogout }) {
 				method: 'PATCH',
 				headers: { Authorization: `Bearer ${token}` },
 			})
+			setAcceptError('')
 			setRequestMessage('Request accepted successfully. It will now appear on your dashboard.')
 			setActiveSection('dashboard')
 			await fetchRequests({ silent: true })
 			await fetchDriverAvailability()
 			setSelectedRequestId(requestId)
 		} catch (requestError) {
+			setAcceptError(requestError.message || 'Unable to accept request right now.')
 			setError(requestError.message || 'Unable to accept request right now.')
 		} finally {
 			setAcceptingRequestId('')
@@ -1186,6 +1191,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 				<Requests
 					requests={requests}
 					acceptingRequestId={acceptingRequestId}
+					acceptError={acceptError}
 					onAcceptRequest={handleAcceptRequest}
 					onRejectRequest={handleRejectRequest}
 					highlightedRequestId={highlightedRequestId}

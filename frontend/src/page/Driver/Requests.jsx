@@ -28,6 +28,7 @@ function buildMapLink(location) {
 export default function Requests({
 	requests,
 	acceptingRequestId,
+	acceptError,
 	onAcceptRequest,
 	onRejectRequest,
 	highlightedRequestId,
@@ -67,6 +68,11 @@ export default function Requests({
 					<CardDescription>These requests are waiting for an available driver.</CardDescription>
 				</CardHeader>
 				<CardContent className="driver-requests-list">
+					{acceptError ? (
+						<div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
+							{acceptError}
+						</div>
+					) : null}
 					{searchingRequests.length === 0 ? (
 						<p className="driver-empty-text">No pending requests right now.</p>
 					) : null}
@@ -101,7 +107,7 @@ export default function Requests({
 							<div className="flex gap-2">
 								<Button
 									onClick={() => onAcceptRequest(request._id)}
-									disabled={acceptingRequestId === request._id || !driverOnline || driverBusy}
+									disabled={acceptingRequestId === request._id || !driverOnline}
 								>
 									{acceptingRequestId === request._id ? 'Processing...' : 'Accept Request'}
 								</Button>
