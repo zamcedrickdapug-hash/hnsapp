@@ -34,6 +34,7 @@ import LiveTripMap from '../../components/tracking/LiveTripGoogleMap'
 import { NotificationsContainer } from '../../components/notifications/NotificationToast'
 import { ReceiptModal } from '../../components/modals/ReceiptModal'
 import { ReportIssueModal } from '../../components/modals/ReportIssueModal'
+import PickupLocationPicker from '../../components/dashboard/parent/PickupLocationPicker'
 import TripHistoryPage from './TripHistoryPage'
 import { distanceInMeters } from '../../utils/driverDashboard'
 import './ParentDashboard.scss'
@@ -48,6 +49,8 @@ const defaultSettings = {
   schoolLatitude: '',
   schoolLongitude: '',
   pickupZone: '',
+  pickupLatitude: '',
+  pickupLongitude: '',
   emergencyContact: '',
   notes: '',
 }
@@ -99,6 +102,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
   const [loadingSettings, setLoadingSettings] = useState(true)
   const [savingSettings, setSavingSettings] = useState(false)
   const [settingsStatus, setSettingsStatus] = useState('')
+  const [pickupZoneStatus, setPickupZoneStatus] = useState('')
 
   // ====== MODAL STATE ======
   const [selectedReceiptId, setSelectedReceiptId] = useState(null)
@@ -107,6 +111,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
   // Refs
   const notificationSoundRef = useRef(null)
   const highlightTimeoutRef = useRef(null)
+  const pickupZoneCheckSequenceRef = useRef(0)
 
   // ====== COMPUTED VALUES ======
 
@@ -121,6 +126,8 @@ export default function ParentDashboard({ token, user, onLogout }) {
     schoolLatitude: profile.schoolLatitude ?? '',
     schoolLongitude: profile.schoolLongitude ?? '',
     pickupZone: profile.pickupZone || user.homeAddress || '',
+    pickupLatitude: profile.pickupLatitude ?? '',
+    pickupLongitude: profile.pickupLongitude ?? '',
   }), [user])
 
   const loadParentProfile = useCallback(async () => {
@@ -225,6 +232,34 @@ export default function ParentDashboard({ token, user, onLogout }) {
     })
   }
 
+  const handlePickupLocationChange = useCallback(async ({ pickupZone, latitude, longitude }) => {
+    const checkSequence = ++pickupZoneCheckSequenceRef.current
+    setSettingsData((current) => ({
+      ...current,
+      pickupZone: pickupZone || current.pickupZone,
+      pickupLatitude: latitude,
+      pickupLongitude: longitude,
+    }))
+    setPickupZoneStatus('Checking pickup service area...')
+
+    try {
+      const response = await apiFetch('/api/parents/pickup-zone-check', {
+        method: 'POST',
+        headers: { Authorization: `****** },
+        body: JSON.stringify({ latitude, longitude }),
+      })
+      if (checkSequence === pickupZoneCheckSequenceRef.current) {
+        setPickupZoneStatus(response.inside
+          ? 'Pickup is inside our service area.'
+          : 'This pickup is outside our service area')
+      }
+    } catch (error) {
+      if (checkSequence === pickupZoneCheckSequenceRef.current) {
+        setPickupZoneStatus(error.message || 'Unable to check this pickup location.')
+      }
+    }
+  }, [token])
+
   // ====== API CALLS ======
 
   const loadActiveTrip = useCallback(async () => {
@@ -308,6 +343,18 @@ export default function ParentDashboard({ token, user, onLogout }) {
 
   const bookTrip = useCallback(async () => {
     setBookingError('')
+    const pickupLatitude = Number(savedSettingsData.pickupLatitude)
+    const pickupLongitude = Number(savedSettingsData.pickupLongitude)
+    const hasPickupCoordinates =
+      String(savedSettingsData.pickupLatitude ?? '').trim() !== '' &&
+      String(savedSettingsData.pickupLongitude ?? '').trim() !== '' &&
+      Number.isFinite(pickupLatitude) && pickupLatitude >= -90 && pickupLatitude <= 90 &&
+      Number.isFinite(pickupLongitude) && pickupLongitude >= -180 && pickupLongitude <= 180
+    if (!hasPickupCoordinates) {
+      setBookingError('Set your pickup location in Settings first')
+      setActiveSection('settings')
+      return
+    }
     setBookingLoading(true)
 
     try {
@@ -330,20 +377,6 @@ export default function ParentDashboard({ token, user, onLogout }) {
         throw new Error('Enter valid school destination coordinates.')
       }
 
-      const requesterLocation = navigator.geolocation
-        ? await new Promise((resolve) => {
-            navigator.geolocation.getCurrentPosition(
-              ({ coords }) => resolve({
-                latitude: coords.latitude,
-                longitude: coords.longitude,
-                accuracy: coords.accuracy,
-              }),
-              () => resolve(undefined),
-              { enableHighAccuracy: true, maximumAge: 10000, timeout: 5000 },
-            )
-          })
-        : undefined
-
       const response = await apiFetch('/api/parents/van-requests', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
@@ -354,7 +387,6 @@ export default function ParentDashboard({ token, user, onLogout }) {
           schoolName: settingsData.schoolName,
           emergencyContact: settingsData.emergencyContact || settingsData.contactNumber,
           notes: settingsData.notes,
-          requesterLocation,
           destinationLocation,
         }),
       })
@@ -366,18 +398,11 @@ export default function ParentDashboard({ token, user, onLogout }) {
         title: 'Trip Booked',
         message: 'Your trip has been booked. Waiting for driver...',
       })
-      if (!requesterLocation) {
-        showToast({
-          type: 'info',
-          title: 'Pickup GPS unavailable',
-          message: 'Your pickup address was saved, but live arrival proximity needs a shared device location.',
-        })
-      }
     } catch (error) {
       setBookingError(error.message || 'Unable to book trip.')
       setBookingLoading(false)
     }
-  }, [token, settingsData])
+  }, [token, savedSettingsData, settingsData])
 
   const cancelTrip = useCallback(async () => {
     if (!activeRideRequest?._id) return
@@ -433,6 +458,8 @@ export default function ParentDashboard({ token, user, onLogout }) {
           gradeSection: updatedData.studentGradeSection.trim(),
           schoolName: updatedData.schoolName.trim(),
           pickupZone: updatedData.pickupZone.trim(),
+          pickupLatitude: updatedData.pickupLatitude,
+          pickupLongitude: updatedData.pickupLongitude,
           schoolLatitude: updatedData.schoolLatitude,
           schoolLongitude: updatedData.schoolLongitude,
         }),
@@ -831,6 +858,12 @@ export default function ParentDashboard({ token, user, onLogout }) {
                 </div>
               </section>
 
+              {bookingError && (
+                <div className="parent-settings__status is-error" role="alert">
+                  {bookingError}
+                </div>
+              )}
+
               {settingsStatus && (
                 <div
                   className={`parent-settings__status ${settingsStatus.includes('successfully') ? 'is-success' : 'is-error'}`}
@@ -946,6 +979,25 @@ export default function ParentDashboard({ token, user, onLogout }) {
                       onChange={(event) => updateSettingsField('pickupZone', event.target.value)}
                       disabled={savingSettings}
                     />
+                    <PickupLocationPicker
+                      pickupZone={settingsData.pickupZone}
+                      latitude={settingsData.pickupLatitude}
+                      longitude={settingsData.pickupLongitude}
+                      onLocationChange={handlePickupLocationChange}
+                      disabled={savingSettings}
+                    />
+                    {pickupZoneStatus && (
+                      <p
+                        className={`mt-2 text-sm ${
+                          pickupZoneStatus === 'This pickup is outside our service area'
+                            ? 'text-amber-800'
+                            : 'text-gray-600'
+                        }`}
+                        role="status"
+                      >
+                        {pickupZoneStatus}
+                      </p>
+                    )}
                   </div>
                   <div className="parent-settings__field">
                     <label htmlFor="school-latitude">School Destination Latitude</label>
