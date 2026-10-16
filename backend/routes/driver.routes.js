@@ -20,6 +20,10 @@ const { sendPushToUserIds } = require('../utils/pushNotifications');
 const { normalizePhoneNumber, isValidPhoneNumber } = require('../utils/validation');
 const { verifyRegistrationIdentity } = require('../utils/firebaseIdentity');
 const { releaseVanRequestAssignment } = require('../services/releaseVanRequestAssignment');
+const {
+  getDriverEligibility,
+  areScheduleDetailsCompatible,
+} = require('../services/driverEligibility');
 
 const router = express.Router();
 const MAX_VALID_ID_SIZE = 2 * 1024 * 1024;
@@ -284,21 +288,27 @@ router.get('/requests', async (req, res) => {
         { driver: req.user._id },
       ],
     })
-      .populate('parent', 'fullName phone')
-      .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber')
-      .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model')
       .sort({ createdAt: -1 });
 
-    return res.status(200).json({ requests });
+    const filteredRequests = await Promise.all(requests.map(async (request) => {
+      if (String(request.driver || '') === String(req.user._id)) return request;
+      const eligibility = await getDriverEligibility(req.user._id, request);
+      return eligibility.eligible ? request : null;
+    }));
+    const eligibleRequests = filteredRequests.filter(Boolean);
+    const populatedRequests = await VanRequest.populate(eligibleRequests, [
+      { path: 'parent', select: 'fullName phone' },
+      { path: 'driver', select: 'fullName phone driver.vehicleType driver.plateNumber' },
+      { path: 'vehicleId', select: 'plateNumber vehicleType seatCapacity color manufacturer model' },
+    ]);
+
+    return res.status(200).json({ requests: populatedRequests });
   } catch (error) {
     return res.status(500).json({ message: 'Unable to load driver requests right now.' });
   }
 });
 
 router.patch('/requests/:requestId/accept', async (req, res) => {
-  let reservedRequestId = null;
-  let reservedVehicleId = null;
-  let requestClaimed = false;
   try {
     if (req.user.status !== 'approved' || (req.user.accountState || 'active') !== 'active') {
       return res.status(403).json({ message: 'Only active, approved drivers can accept requests.' });
@@ -313,42 +323,21 @@ router.patch('/requests/:requestId/accept', async (req, res) => {
       return res.status(409).json({ message: 'This request is already handled by another driver.' });
     }
 
-    const activeRequest = await VanRequest.exists({
-      driver: req.user._id,
-      status: { $in: ['accepted', 'arrived', 'picked_up'] },
-    });
-    if (activeRequest) {
-      return res.status(409).json({ message: 'Finish your active request before accepting another.' });
+    const eligibility = await getDriverEligibility(req.user._id, existingRequest);
+    if (!eligibility.vehicle) {
+      return res.status(400).json({ message: 'You need an assigned vehicle before accepting requests.' });
     }
-
-    const driverStatus = await DriverStatus.findOneAndUpdate(
-      {
-        driverId: req.user._id,
-        isOnline: true,
-        status: { $in: ['online', 'idle'] },
-        activeRequestId: null,
-      },
-      {
-        $set: {
-          activeRequestId: existingRequest._id,
-          status: 'on-trip',
-          lastStatusUpdate: new Date(),
-        },
-      },
-      { new: true }
-    );
-
-    if (!driverStatus) {
-      return res.status(409).json({ message: 'Go online and finish any active request before accepting another.' });
+    if (!eligibility.isOnline) {
+      return res.status(409).json({ message: 'Go online before accepting a request.' });
     }
-    reservedRequestId = existingRequest._id;
-
-    const vehicle = await Vehicle.findOneAndUpdate(
-      { assignedDriver: req.user._id, status: 'available', isAvailable: true },
-      { $set: { status: 'assigned', isAvailable: false } },
-      { new: true }
-    );
-    reservedVehicleId = vehicle?._id || null;
+    if (!eligibility.slotDateCompatible) {
+      return res.status(409).json({ message: 'All active bookings must use the same time slot and scheduled date.' });
+    }
+    const requestedSeats = Math.max(1, Number(existingRequest.seatsNeeded) || 1);
+    if (eligibility.freeSeats < requestedSeats) {
+      return res.status(409).json({ message: 'This booking exceeds your vehicle’s remaining seat capacity.' });
+    }
+    const vehicle = eligibility.vehicle;
 
     const rideRequest = await VanRequest.findOneAndUpdate(
       {
@@ -370,15 +359,82 @@ router.patch('/requests/:requestId/accept', async (req, res) => {
     ).populate('parent', '_id fullName phone');
 
     if (!rideRequest) {
-      await releaseVanRequestAssignment({
-        driverId: req.user._id,
-        requestId: existingRequest._id,
-        vehicleId: vehicle?._id,
-      });
-      reservedRequestId = null;
       return res.status(409).json({ message: 'This request is already handled or unavailable to you.' });
     }
-    requestClaimed = true;
+
+    const activeRequests = await VanRequest.find({
+      driver: req.user._id,
+      status: { $in: ['accepted', 'arrived', 'picked_up'] },
+    }).sort({ acceptedAt: 1, _id: 1 }).select('_id seatsNeeded slot scheduledDate');
+    let cumulativeSeats = 0;
+    let claimedRequestIsActive = false;
+    let claimedRequestExceedsCapacity = false;
+    for (const activeRequest of activeRequests) {
+      cumulativeSeats += Math.max(1, Number(activeRequest.seatsNeeded) || 1);
+      if (String(activeRequest._id) === String(rideRequest._id)) {
+        claimedRequestIsActive = true;
+        claimedRequestExceedsCapacity = cumulativeSeats > vehicle.seatCapacity;
+        break;
+      }
+    }
+    if (!claimedRequestIsActive) {
+      return res.status(409).json({ message: 'This request is no longer active.' });
+    }
+    if (claimedRequestExceedsCapacity) {
+      await VanRequest.findOneAndUpdate(
+        {
+          _id: rideRequest._id,
+          driver: req.user._id,
+          status: 'accepted',
+        },
+        {
+          $set: {
+            status: 'searching',
+            driver: null,
+            vehicleId: null,
+            acceptedAt: null,
+          },
+        }
+      );
+      return res.status(409).json({ message: 'This booking exceeds your vehicle’s remaining seat capacity.' });
+    }
+
+    if (!areScheduleDetailsCompatible(rideRequest, activeRequests)) {
+      await VanRequest.findOneAndUpdate(
+        {
+          _id: rideRequest._id,
+          driver: req.user._id,
+          status: 'accepted',
+        },
+        {
+          $set: {
+            status: 'searching',
+            driver: null,
+            vehicleId: null,
+            acceptedAt: null,
+          },
+        }
+      );
+      return res.status(409).json({ message: 'All active bookings must use the same time slot and scheduled date.' });
+    }
+
+    await DriverStatus.findOneAndUpdate(
+      { driverId: req.user._id },
+      {
+        $set: {
+          activeRequestId: activeRequests[0]?._id || null,
+          status: 'on-trip',
+          isOnline: true,
+          lastStatusUpdate: new Date(),
+        },
+      },
+      { new: true }
+    );
+    await Vehicle.findOneAndUpdate(
+      { _id: vehicle._id, assignedDriver: req.user._id },
+      { $set: { status: 'assigned', isAvailable: false } },
+      { new: true }
+    );
 
     const populatedRequest = await VanRequest.findById(rideRequest._id)
       .populate('parent', 'fullName phone')
@@ -436,13 +492,6 @@ router.patch('/requests/:requestId/accept', async (req, res) => {
       request: populatedRequest,
     });
   } catch (error) {
-    if (reservedRequestId && !requestClaimed) {
-      await releaseVanRequestAssignment({
-        driverId: req.user._id,
-        requestId: reservedRequestId,
-        vehicleId: reservedVehicleId,
-      });
-    }
     return res.status(500).json({ message: 'Unable to accept ride request right now.' });
   }
 });
@@ -634,6 +683,39 @@ router.patch('/requests/:requestId/location', async (req, res) => {
         tripStatus: rideRequest.status,
         location: nextLiveLocation,
       });
+    }
+
+    try {
+      const otherActiveRequests = await VanRequest.find({
+        driver: req.user._id,
+        _id: { $ne: rideRequest._id },
+        status: { $in: ['accepted', 'arrived', 'picked_up'] },
+      }).select('_id parent status');
+
+      if (otherActiveRequests.length > 0) {
+        await VanRequest.updateMany(
+          {
+            _id: { $in: otherActiveRequests.map((request) => request._id) },
+            driver: req.user._id,
+            status: { $in: ['accepted', 'arrived', 'picked_up'] },
+          },
+          { $set: { liveLocation: nextLiveLocation } }
+        );
+
+        if (io) {
+          otherActiveRequests.forEach((request) => {
+            const payload = {
+              requestId: String(request._id),
+              liveLocation: nextLiveLocation,
+              status: request.status,
+            };
+            io.to(buildTripRoomName(request._id)).emit('trip:location-updated', payload);
+            io.to(buildUserRoomName(request.parent)).emit('trip:location-updated', payload);
+          });
+        }
+      }
+    } catch {
+      console.warn('[DRIVER] Location fan-out failed.');
     }
 
     return res.status(200).json({
