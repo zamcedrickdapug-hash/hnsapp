@@ -178,6 +178,9 @@ const createFixture = async (t) => {
       const result = [...requests.values()].filter((record) => matches(record, query));
       return new FakeQuery(result, populateRequest);
     }
+    static async populate(records) {
+      return records;
+    }
     static findOneAndUpdate(query, update) {
       const record = [...requests.values()].find((item) => matches(item, query));
       if (record) applyUpdate(record, update);
@@ -205,6 +208,9 @@ const createFixture = async (t) => {
   }
 
   class Vehicle {
+    static async findOne(query) {
+      return new FakeQuery([...vehicles.values()].find((vehicle) => matches(vehicle, query)) || null);
+    }
     static async findOneAndUpdate(query, update) {
       const vehicle = [...vehicles.values()].find((item) => matches(item, query));
       if (!vehicle) return null;
@@ -245,6 +251,13 @@ const createFixture = async (t) => {
   const releaseVanRequestAssignment = loadWithDependencies('services/releaseVanRequestAssignment.js', {
     '../models/DriverStatus': DriverStatus,
     '../models/Vehicle': Vehicle,
+    '../models/VanRequest': VanRequest,
+  });
+  const driverEligibility = loadWithDependencies('services/driverEligibility.js', {
+    '../models/User': User,
+    '../models/DriverStatus': DriverStatus,
+    '../models/Vehicle': Vehicle,
+    '../models/VanRequest': VanRequest,
   });
   const identity = { verifyRegistrationIdentity: async () => { throw new Error('Registration is not part of this test.'); } };
   const noOpNotification = async (...args) => { notifications.push(args); };
@@ -275,6 +288,7 @@ const createFixture = async (t) => {
     },
     '../services/driverService': driverService,
     '../services/releaseVanRequestAssignment': releaseVanRequestAssignment,
+    '../services/driverEligibility': driverEligibility,
   };
 
   const app = express();
@@ -286,7 +300,13 @@ const createFixture = async (t) => {
   });
   t.after(async () => new Promise((resolve) => server.close(resolve)));
 
-  const parent = await new User({ role: 'parent', status: 'approved', fullName: 'Parent One', email: 'parent@example.test' }).save();
+  const parent = await new User({
+    role: 'parent',
+    status: 'approved',
+    fullName: 'Parent One',
+    email: 'parent@example.test',
+    student: { pickupLatitude: 14.7118, pickupLongitude: 121.0679 },
+  }).save();
   const driverOne = await new User({
     role: 'driver', status: 'approved', fullName: 'Driver One', email: 'driver1@example.test',
     driver: { vehicleType: 'van', plateNumber: 'ONE-123' },
@@ -296,11 +316,13 @@ const createFixture = async (t) => {
     driver: { vehicleType: 'mpv', plateNumber: 'TWO-123' },
   }).save();
   const addVehicle = (driver, plateNumber) => {
+    driverEligibility.SERVICE_ZONE_CONFIG.vehicleZonesByPlate[plateNumber] = 'FAIRVIEW';
     const vehicle = {
       _id: randomBytes(12).toString('hex'),
       assignedDriver: driver._id,
       plateNumber,
       vehicleType: 'van',
+      seatCapacity: 10,
       status: 'available',
       isAvailable: true,
     };
@@ -354,9 +376,7 @@ test('Parent request creation, live updates, vehicle assignment, and completion 
   });
   assert.equal(invalidDestination.status, 400);
 
-  const create = await createRequest(f, {
-    requesterLocation: { latitude: 14.5, longitude: 121.0 },
-  });
+  const create = await createRequest(f);
   assert.equal(create.status, 201);
   const requestId = create.body.request._id;
   assert.deepEqual(create.body.request.destinationLocation, { latitude: 14.6, longitude: 121.0, updatedAt: create.body.request.destinationLocation.updatedAt });
@@ -391,14 +411,14 @@ test('Parent request creation, live updates, vehicle assignment, and completion 
 
   const location = await f.request(`/api/drivers/requests/${requestId}/location`, assignedDriverId === f.driverOne._id ? f.driverOne : f.driverTwo, {
     method: 'PATCH',
-    body: { latitude: 14.51, longitude: 121.01 },
+    body: { latitude: 14.7128, longitude: 121.0689 },
   });
   assert.equal(location.status, 200);
   assert.ok(f.emitted.some((event) => event.room === `user:${f.parent._id}` && event.event === 'trip:location-updated'));
 
   const arrived = await f.request(`/api/drivers/requests/${requestId}/location`, assignedDriverId === f.driverOne._id ? f.driverOne : f.driverTwo, {
     method: 'PATCH',
-    body: { latitude: 14.5001, longitude: 121.0001 },
+    body: { latitude: 14.71181, longitude: 121.06791 },
   });
   assert.equal(arrived.status, 200);
   assert.equal(arrived.body.request.status, 'arrived');
@@ -409,20 +429,49 @@ test('Parent request creation, live updates, vehicle assignment, and completion 
   assert.equal(pickedUp.status, 200);
   assert.equal(pickedUp.body.request.status, 'picked_up');
 
-  const completed = await f.request(`/api/drivers/requests/${requestId}/arrived-at-school`, assignedDriverId === f.driverOne._id ? f.driverOne : f.driverTwo, {
+  const arrivedAtSchool = await f.request(`/api/drivers/requests/${requestId}/arrived-at-school`, assignedDriverId === f.driverOne._id ? f.driverOne : f.driverTwo, {
+    method: 'PATCH',
+  });
+  assert.equal(arrivedAtSchool.status, 200);
+  assert.equal(arrivedAtSchool.body.requests[0].status, 'arrived_at_school');
+  const completed = await f.request('/api/drivers/requests/complete-school-run', assignedDriverId === f.driverOne._id ? f.driverOne : f.driverTwo, {
     method: 'PATCH',
   });
   assert.equal(completed.status, 200);
-  assert.equal(completed.body.request.status, 'completed');
+  assert.ok(completed.body.completedRequestIds.includes(requestId));
   assert.equal(f.vehicles.get(assignedVehicleId).status, 'available');
   assert.equal(f.statuses.get(assignedDriverId).activeRequestId, null);
   assert.ok(f.emitted.some((event) => event.room === `user:${f.parent._id}` && event.event === 'trip:completed'));
+});
+
+test('booking requires saved student pickup coordinates', async (t) => {
+  const f = await createFixture(t);
+  f.parent.student = {};
+
+  const result = await createRequest(f);
+
+  assert.equal(result.status, 400);
+  assert.equal(result.body.message, 'Set your pickup location first');
+});
+
+test('booking rejects saved student pickup coordinates outside all service zones', async (t) => {
+  const f = await createFixture(t);
+  f.parent.student.pickupLatitude = 14.65;
+  f.parent.student.pickupLongitude = 120.983;
+
+  const result = await createRequest(f);
+
+  assert.equal(result.status, 400);
+  assert.equal(result.body.message, 'Outside our service area');
 });
 
 test('rejecting a searching request excludes that driver but leaves it available to others', async (t) => {
   const f = await createFixture(t);
   const create = await createRequest(f);
   const requestId = create.body.request._id;
+  f.addVehicle(f.driverOne, 'ONE-REJECT');
+  f.addVehicle(f.driverTwo, 'TWO-REJECT');
+  await Promise.all([setOnline(f, f.driverOne), setOnline(f, f.driverTwo)]);
 
   const reject = await f.request(`/api/drivers/requests/${requestId}/reject`, f.driverOne, { method: 'PATCH' });
   assert.equal(reject.status, 200);
@@ -459,6 +508,8 @@ test('an assigned driver can reject before pickup and release the request, statu
 
   const retry = await f.request(`/api/drivers/requests/${requestId}/accept`, f.driverOne, { method: 'PATCH' });
   assert.equal(retry.status, 409);
+  f.addVehicle(f.driverTwo, 'TWO-456');
+  await setOnline(f, f.driverTwo);
   const otherDriverRetry = await f.request('/api/drivers/requests', f.driverTwo);
   assert.equal(otherDriverRetry.body.requests.some((item) => item._id === requestId), true);
 });
@@ -486,6 +537,8 @@ test('Parent can cancel an eligible request but cannot cancel after pickup', asy
   await setOnline(f, f.driverOne);
   const thirdAccepted = await f.request(`/api/drivers/requests/${third.body.request._id}/accept`, f.driverOne, { method: 'PATCH' });
   assert.equal(thirdAccepted.status, 200);
+  const thirdArrived = await f.request(`/api/drivers/requests/${third.body.request._id}/arrived`, f.driverOne, { method: 'PATCH' });
+  assert.equal(thirdArrived.status, 200);
   const pickedUp = await f.request(`/api/drivers/requests/${third.body.request._id}/picked-up`, f.driverOne, { method: 'PATCH' });
   assert.equal(pickedUp.status, 200);
   const lateCancel = await f.request(`/api/parents/van-requests/${third.body.request._id}/cancel`, f.parent, { method: 'PATCH' });

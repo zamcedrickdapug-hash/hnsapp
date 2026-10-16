@@ -362,6 +362,8 @@ test('parent profile endpoint reads and persists editable parent and student det
     gradeSection: 'Grade 5 - A',
     schoolName: 'Example School',
     pickupZone: 'New pickup zone',
+    pickupLatitude: '',
+    pickupLongitude: '',
     schoolLatitude: 14.5995,
     schoolLongitude: 120.9842,
   });
