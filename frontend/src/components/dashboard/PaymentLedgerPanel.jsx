@@ -213,7 +213,7 @@ export default function PaymentLedgerPanel({ role, token, user }) {
               ))}
             </select>
             {requests.length === 0 && (
-              <span className="block text-xs text-on-dark-label">
+              <span className="block text-sm text-on-dark-label">
                 {role === 'parent'
                   ? 'A trip with an assigned driver is required to submit a payment.'
                   : 'No active or completed trips are assigned to this driver.'}
