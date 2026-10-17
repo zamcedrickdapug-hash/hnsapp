@@ -29,6 +29,7 @@ import {
 	formatLocation,
 	buildMapLink,
 	asLatLng,
+	distanceInMeters,
 	playNotificationSound,
 	showBrowserNotification,
 } from '../../utils/driverDashboard'
@@ -100,6 +101,14 @@ export default function DriverDashboard({ token, user, onLogout }) {
 	const activeBookingsRef = useRef([])
 	const highlightTimeoutRef = useRef(null)
 	const notificationPermissionRef = useRef(null)
+	const routeRequestRef = useRef({
+		targetKey: '',
+		lastRequestedAt: 0,
+		lastSuccessfulPosition: null,
+		hasRoute: false,
+		pending: false,
+		requestId: 0,
+	})
 
 	// Profile data
 	const [profileData, setProfileData] = useState(() => {
@@ -869,13 +878,55 @@ export default function DriverDashboard({ token, user, onLogout }) {
 	}, [acceptedRequests.length, token])
 
 	useEffect(() => {
-		if (!selectedTripVanPosition || !selectedTripRequesterPosition || !selectedTripDestinationPosition) {
+		if (
+			!selectedTrip ||
+			gpsStatus !== 'Active' ||
+			!selectedTripVanPosition ||
+			!selectedTripMapTargetPosition
+		) {
+			routeRequestRef.current = {
+				targetKey: '',
+				lastRequestedAt: 0,
+				lastSuccessfulPosition: null,
+				hasRoute: false,
+				pending: false,
+				requestId: routeRequestRef.current.requestId + 1,
+			}
 			setOptimizedRoute([])
 			setRouteStops([])
 			return
 		}
 
-		const abortController = new AbortController()
+		const targetPhase = selectedTrip.status === 'picked_up' ? 'school' : 'pickup'
+		const targetKey = `${selectedTrip._id}:${targetPhase}:${selectedTripMapTargetPosition[0]},${selectedTripMapTargetPosition[1]}`
+		const routeState = routeRequestRef.current
+		const targetChanged = routeState.targetKey !== targetKey
+		if (targetChanged) {
+			routeState.targetKey = targetKey
+			routeState.lastRequestedAt = 0
+			routeState.lastSuccessfulPosition = null
+			routeState.hasRoute = false
+			routeState.pending = false
+		}
+
+		const now = Date.now()
+		const elapsedSinceRequest = now - routeState.lastRequestedAt
+		const movedSinceSuccess = routeState.lastSuccessfulPosition
+			? distanceInMeters(routeState.lastSuccessfulPosition, selectedTripVanPosition)
+			: 0
+		const shouldRequestRoute =
+			targetChanged ||
+			(!routeState.pending &&
+				(elapsedSinceRequest >= 15000 &&
+					(!routeState.hasRoute || movedSinceSuccess >= 100)))
+
+		if (!shouldRequestRoute || routeState.pending) return
+
+		routeState.lastRequestedAt = now
+		routeState.pending = true
+		const requestId = routeState.requestId + 1
+		routeState.requestId = requestId
+		const requestPosition = selectedTripVanPosition
 
 		apiFetch('/api/routing/multi-route', {
 			method: 'POST',
@@ -888,28 +939,54 @@ export default function DriverDashboard({ token, user, onLogout }) {
 				pickups: [selectedTripRequesterPosition],
 				end: selectedTripDestinationPosition,
 			}),
-			signal: abortController.signal,
 		})
 			.then((payload) => {
+				if (
+					routeRequestRef.current.requestId !== requestId ||
+					routeRequestRef.current.targetKey !== targetKey
+				) return
+
 				const coordinates = payload?.route?.coordinates
-				if (!Array.isArray(coordinates) || coordinates.length < 2) {
-					setOptimizedRoute([])
-				} else {
-					setOptimizedRoute(
-						coordinates
+				const route = Array.isArray(coordinates)
+					? coordinates
 							.filter((point) => Array.isArray(point) && point.length >= 2)
 							.map(([lng, lat]) => [Number(lat), Number(lng)])
-					)
+							.filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng))
+					: []
+				if (route.length < 2) {
+					routeRequestRef.current.pending = false
+					routeRequestRef.current.hasRoute = false
+					setOptimizedRoute([requestPosition, selectedTripMapTargetPosition])
+					setRouteStops([])
+				} else {
+					routeRequestRef.current.pending = false
+					routeRequestRef.current.hasRoute = true
+					routeRequestRef.current.lastSuccessfulPosition = requestPosition
+					setOptimizedRoute(route)
+					setRouteStops(Array.isArray(payload?.stops) ? payload.stops : [])
 				}
-				setRouteStops(Array.isArray(payload?.stops) ? payload.stops : [])
 			})
 			.catch(() => {
-				setOptimizedRoute([])
+				if (
+					routeRequestRef.current.requestId !== requestId ||
+					routeRequestRef.current.targetKey !== targetKey
+				) return
+
+				routeRequestRef.current.pending = false
+				routeRequestRef.current.hasRoute = false
+				setOptimizedRoute([requestPosition, selectedTripMapTargetPosition])
 				setRouteStops([])
 			})
 
-		return () => abortController.abort()
-	}, [selectedTripDestinationPosition, selectedTripRequesterPosition, selectedTripVanPosition, token])
+	}, [
+		selectedTrip,
+		selectedTripDestinationPosition,
+		selectedTripMapTargetPosition,
+		selectedTripRequesterPosition,
+		selectedTripVanPosition,
+		gpsStatus,
+		token,
+	])
 
 	// ====== RENDER ======
 	return (
