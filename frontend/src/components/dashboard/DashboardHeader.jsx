@@ -11,7 +11,6 @@
  * - User profile menu (logout, settings)
  * 
  * Features:
- * - Mobile hamburger menu toggle
  * - Notification indicator
  * - User profile dropdown
  * - Professional animations
@@ -20,7 +19,7 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Bell, User, LogOut, Settings, ChevronDown, Menu } from 'lucide-react'
+import { Bell, User, LogOut, Settings, ChevronDown } from 'lucide-react'
 
 /**
  * DashboardHeader Component
@@ -31,17 +30,14 @@ import { Bell, User, LogOut, Settings, ChevronDown, Menu } from 'lucide-react'
  * @param {Function} props.onNotificationClick - Callback for notification bell
  * @param {Function} props.onSettingsClick - Callback for settings
  * @param {Function} props.onLogout - Callback for logout
- * @param {Function} props.onMenuToggle - Callback for mobile menu toggle
  */
 function DashboardHeader({
   title = 'Dashboard',
-  mobileTitleTruncate = false,
   userName = 'User',
   notificationCount = 0,
   onNotificationClick = () => {},
   onSettingsClick = () => {},
   onLogout = () => {},
-  onMenuToggle = () => {},
 }) {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
 
@@ -142,32 +138,21 @@ function DashboardHeader({
       </header>
 
       {/* Mobile Header */}
-      <header className={`md:hidden h-16 bg-white border-b border-gray-200 flex items-center justify-between ${mobileTitleTruncate ? 'gap-1 px-2 sm:px-4' : 'px-4'} sticky top-0 z-40`}>
-        {/* Mobile Menu Toggle */}
-        <motion.button
-          onClick={onMenuToggle}
-          className={`${mobileTitleTruncate ? 'shrink-0 ' : ''}p-2 hover:bg-gray-100 rounded-lg transition-colors`}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          aria-label="Toggle menu"
-        >
-          <Menu size={24} className="text-gray-900" />
-        </motion.button>
-
+      <header className="dashboard-mobile-header md:hidden sticky top-0 z-40 flex items-center justify-between border-b border-gray-200 bg-white">
         {/* Mobile Title */}
-        <h1 className={`${mobileTitleTruncate ? 'min-w-0 flex-1 text-base sm:text-lg px-1' : 'flex-1 text-lg px-2'} font-bold text-gray-900 text-center truncate`} title={title}>{title}</h1>
+        <h1 className="min-w-0 flex-1 truncate text-left text-lg font-semibold text-gray-900" title={title}>{title}</h1>
 
         {/* Mobile Actions */}
-        <div className={`${mobileTitleTruncate ? 'shrink-0 gap-1 sm:gap-2' : 'gap-2'} flex items-center`}>
+        <div className="ml-2 flex shrink-0 items-center gap-1">
           {/* Mobile Notifications */}
           <motion.button
             onClick={onNotificationClick}
-            className={`relative ${mobileTitleTruncate ? 'shrink-0 ' : ''}p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors`}
+            className="relative flex h-11 w-11 items-center justify-center rounded-lg p-2 text-gray-600 transition-colors hover:bg-gray-100"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             aria-label="Notifications"
           >
-            <Bell size={20} />
+            <Bell size={22} />
             {notificationCount > 0 && (
               <motion.span
                 className="absolute top-0 right-0 bg-red-700 text-white text-sm font-bold rounded-full min-w-5 min-h-5 flex items-center justify-center"
@@ -182,12 +167,12 @@ function DashboardHeader({
           {/* Mobile Profile */}
           <motion.button
             onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-            className={`${mobileTitleTruncate ? 'shrink-0 ' : ''}p-2 hover:bg-gray-100 rounded-lg transition-colors`}
+            className="flex h-11 w-11 items-center justify-center rounded-lg p-2 transition-colors hover:bg-gray-100"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             aria-label="Open profile menu"
           >
-            <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-700 rounded-full flex items-center justify-center">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700">
               <User size={16} className="text-white" />
             </div>
           </motion.button>
@@ -200,7 +185,7 @@ function DashboardHeader({
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="absolute right-4 top-16 w-44 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden z-50"
+              className="dashboard-mobile-profile-menu absolute right-4 z-50 w-44 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
             >
               <motion.button
                 onClick={() => {

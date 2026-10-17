@@ -216,6 +216,12 @@ export const SECONDARY_NAVIGATION = [
   },
 ]
 
+export const MOBILE_PRIMARY_NAVIGATION = {
+  parent: ['dashboard', 'trips', 'messages', 'notifications'],
+  driver: ['dashboard', 'requests', 'messages', 'trips'],
+  admin: ['dashboard', 'users', 'applications', 'issues'],
+}
+
 /**
  * Dashboard config constants
  */

@@ -7,22 +7,20 @@
  * Architecture Decision:
  * - One sidebar component for all roles
  * - Role-based navigation via dashboardNavigation config
- * - Mobile drawer on small screens
  * - Active link highlighting
  * - Smooth animations
  * 
  * Features:
  * - Role-based navigation items
  * - Active page highlighting
- * - Mobile responsive drawer
  * - Notification badges
  * - Professional animations
  * - User profile section
  */
 
 import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { X, ChevronRight, LogOut } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { ChevronRight, LogOut } from 'lucide-react'
 import { getNavigationByRole, SECONDARY_NAVIGATION, DASHBOARD_CONFIG } from '../../constants/dashboardNavigation'
 
 /**
@@ -32,8 +30,6 @@ import { getNavigationByRole, SECONDARY_NAVIGATION, DASHBOARD_CONFIG } from '../
  * @param {string} props.currentPage - Current active page
  * @param {Function} props.onNavigate - Callback when navigation item clicked
  * @param {Function} props.onLogout - Callback for logout
- * @param {boolean} props.isOpen - Sidebar open state (mobile)
- * @param {Function} props.onToggle - Callback to toggle sidebar
  * @param {string} props.userName - User name for profile section
  * @param {Object} props.badgeValues - Dynamic badge values (e.g., newRequestCount)
  */
@@ -42,8 +38,6 @@ function DashboardSidebar({
   currentPage = 'dashboard',
   onNavigate = () => {},
   onLogout = () => {},
-  isOpen = false,
-  onToggle = () => {},
   userName = 'User',
   badgeValues = {},
 }) {
@@ -61,16 +55,12 @@ function DashboardSidebar({
 
   const handleNavigate = (page) => {
     onNavigate(page)
-    // Close sidebar on mobile after navigation
-    if (window.innerWidth < 768) {
-      onToggle()
-    }
   }
 
   // Sidebar content
   const sidebarContent = (
     <div className="dashboard-sidebar flex flex-col h-full bg-slate-900 text-slate-50 overflow-hidden">
-      {/* Header with logo and close button */}
+      {/* Header */}
       <div className="flex items-center justify-between p-6 border-b border-gray-800">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center font-bold">
@@ -78,14 +68,6 @@ function DashboardSidebar({
           </div>
           <span className="font-bold text-lg">H&S Booking</span>
         </div>
-        <motion.button
-          onClick={onToggle}
-          className="md:hidden p-1 hover:bg-gray-800 rounded-lg transition-colors"
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          <X size={20} className="text-slate-200" />
-        </motion.button>
       </div>
 
       {/* User Profile Section */}
@@ -194,39 +176,9 @@ function DashboardSidebar({
   )
 
   return (
-    <>
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col w-72 bg-gray-900 border-r border-gray-800 h-screen sticky top-0">
-        {sidebarContent}
-      </aside>
-
-      {/* Mobile Sidebar Drawer */}
-      <AnimatePresence>
-        {isOpen && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={onToggle}
-              className="fixed inset-0 bg-black/50 z-40 md:hidden"
-            />
-
-            {/* Drawer */}
-            <motion.aside
-              initial={{ x: '-100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '-100%' }}
-              transition={{ duration: 0.3, ease: 'easeInOut' }}
-              className="fixed left-0 top-0 w-72 h-screen bg-gray-900 z-50 md:hidden flex flex-col overflow-hidden"
-            >
-              {sidebarContent}
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
-    </>
+    <aside className="hidden md:flex flex-col w-72 bg-gray-900 border-r border-gray-800 h-screen sticky top-0">
+      {sidebarContent}
+    </aside>
   )
 }
 

@@ -33,6 +33,8 @@ import { useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import DashboardSidebar from './DashboardSidebar'
 import DashboardHeader from './DashboardHeader'
+import MobileBottomNav from './MobileBottomNav'
+import { useNotifications } from '../../context/NotificationContext'
 
 /**
  * DashboardLayout Component
@@ -68,12 +70,8 @@ function DashboardLayout({
   topBar = null,
   contentClassName = '',
 }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [notificationPanelOpen, setNotificationPanelOpen] = useState(false)
-
-  const handleSidebarToggle = useCallback(() => {
-    setSidebarOpen((prev) => !prev)
-  }, [])
+  const { unreadCount: unreadNotificationCount } = useNotifications()
 
   const handleNotificationClick = useCallback(() => {
     setNotificationPanelOpen((prev) => !prev)
@@ -81,15 +79,13 @@ function DashboardLayout({
   }, [onNotificationClick])
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="dashboard-layout-shell flex h-screen overflow-hidden bg-gray-50">
       {/* Sidebar */}
       <DashboardSidebar
         role={role}
         currentPage={currentPage}
         onNavigate={onNavigate}
         onLogout={onLogout}
-        isOpen={sidebarOpen}
-        onToggle={handleSidebarToggle}
         userName={userName}
         badgeValues={badgeValues}
       />
@@ -99,11 +95,9 @@ function DashboardLayout({
         {/* Header */}
         <DashboardHeader
           title={pageTitle}
-          mobileTitleTruncate={role === 'admin'}
           userName={userName}
           notificationCount={notificationCount}
           onNotificationClick={handleNotificationClick}
-          onMenuToggle={handleSidebarToggle}
           onLogout={onLogout}
         />
 
@@ -111,7 +105,7 @@ function DashboardLayout({
         {topBar && <div className="border-b border-gray-200">{topBar}</div>}
 
         {/* Scrollable Content */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden">
+        <main className="dashboard-main-scroll flex-1 overflow-y-auto overflow-x-hidden">
           <motion.div
             className={`w-full h-full ${contentClassName}`}
             initial={{ opacity: 0, y: 10 }}
@@ -119,7 +113,7 @@ function DashboardLayout({
             transition={{ duration: 0.3, ease: 'easeOut' }}
           >
             {/* Mobile Safe Area Padding */}
-            <div className="md:p-8 p-4 pb-20 md:pb-8">
+            <div className="dashboard-mobile-content p-4 md:p-8">
               {children}
             </div>
           </motion.div>
@@ -143,6 +137,15 @@ function DashboardLayout({
           </div>
         </motion.aside>
       )}
+
+      <MobileBottomNav
+        role={role}
+        currentPage={currentPage}
+        onNavigate={onNavigate}
+        onLogout={onLogout}
+        badgeValues={badgeValues}
+        notificationUnreadCount={unreadNotificationCount}
+      />
     </div>
   )
 }
