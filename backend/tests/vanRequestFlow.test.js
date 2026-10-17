@@ -647,6 +647,29 @@ test('driver trip history status and range filters work', async (t) => {
   assert.equal(lastThirtyDays.body.trips.length, 2);
 });
 
+test('driver trip history today range uses the Asia/Manila calendar day', async (t) => {
+  t.mock.timers.enable({
+    apis: ['Date'],
+    now: new Date('2026-10-17T12:00:00.000Z'),
+  });
+  const f = await createFixture(t);
+  const todayMorningUtc = new Date('2026-10-16T22:30:00.000Z');
+  const yesterdayLateUtc = new Date('2026-10-16T15:30:00.000Z');
+  const todayTrip = f.addFinishedTrip(f.driverOne, {
+    createdAt: todayMorningUtc,
+    updatedAt: todayMorningUtc,
+  });
+  f.addFinishedTrip(f.driverOne, {
+    createdAt: yesterdayLateUtc,
+    updatedAt: yesterdayLateUtc,
+  });
+
+  const response = await f.request('/api/drivers/trips/history?range=today', f.driverOne);
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body.trips.map((trip) => trip.requestId), [String(todayTrip._id)]);
+});
+
 test('driver trip history limit and cursor paginate newest first', async (t) => {
   const f = await createFixture(t);
   const trips = [0, 1, 2].map((daysAgo) => f.addFinishedTrip(f.driverOne, {

@@ -336,7 +336,11 @@ router.get('/trips/history', async (req, res) => {
     };
     if (range !== 'all') {
       const rangeStart = new Date();
-      if (range === 'today') rangeStart.setHours(0, 0, 0, 0);
+      if (range === 'today') {
+        rangeStart.setTime(now.getTime() + 8 * 60 * 60 * 1000);
+        rangeStart.setUTCHours(0, 0, 0, 0);
+        rangeStart.setTime(rangeStart.getTime() - 8 * 60 * 60 * 1000);
+      }
       else rangeStart.setTime(now.getTime() - (range === '7d' ? 7 : 30) * 24 * 60 * 60 * 1000);
       query.createdAt = { $gte: rangeStart };
     }
