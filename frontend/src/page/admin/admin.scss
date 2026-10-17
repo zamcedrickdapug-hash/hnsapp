@@ -845,11 +845,13 @@
   .admin-mobile-nav-group {
     margin: 0.75rem 0 0.2rem;
     padding: 0 0.75rem;
-    color: #cbd5e1;
-    font-size: 14px;
+    color: #94a3b8;
+    font-size: 12px;
     font-weight: 700;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.1em;
+    pointer-events: none;
     text-transform: uppercase;
+    user-select: none;
   }
 
   .admin-section {

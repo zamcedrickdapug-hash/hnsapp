@@ -17,7 +17,7 @@
  * - Consistent styling across dashboards
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Bell, User, LogOut, Settings, ChevronDown } from 'lucide-react'
 
@@ -42,11 +42,21 @@ function DashboardHeader({
   onLogout = () => {},
 }) {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 768px)').matches)
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(min-width: 768px)')
+    const updateViewport = (event) => {
+      setIsDesktop(event.matches)
+      setProfileMenuOpen(false)
+    }
+    mediaQuery.addEventListener('change', updateViewport)
+    return () => mediaQuery.removeEventListener('change', updateViewport)
+  }, [])
 
   return (
-    <>
-      {/* Desktop Header */}
-      <header className="dashboard-header hidden md:flex h-20 bg-white border-b border-gray-200 items-center justify-between px-8 shadow-sm sticky top-0 z-40">
+    isDesktop ? (
+      <header className={`${role === 'admin' ? 'dashboard-header ' : ''}hidden md:flex h-20 bg-white border-b border-gray-200 items-center justify-between px-8 shadow-sm sticky top-0 z-40`}>
         {/* Left: Title */}
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
@@ -139,9 +149,8 @@ function DashboardHeader({
           </div>
         </div>
       </header>
-
-      {/* Mobile Header */}
-      <header className="dashboard-header dashboard-mobile-header md:hidden sticky top-0 z-40 flex items-center justify-between border-b border-gray-200 bg-white">
+    ) : (
+      <header className="dashboard-mobile-header md:hidden sticky top-0 z-40 flex items-center justify-between border-b border-gray-200 bg-white">
         {/* Mobile Title */}
         {role === 'admin' ? (
           <div className="min-w-0 flex-1">
@@ -224,7 +233,7 @@ function DashboardHeader({
           )}
         </AnimatePresence>
       </header>
-    </>
+    )
   )
 }
 
