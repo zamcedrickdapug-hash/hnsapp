@@ -31,7 +31,7 @@ export function EmptyState({ children }) {
   return <p className="admin-empty-state" role="status">{children}</p>
 }
 
-export function TableLoading({ label = 'Loading records…' }) {
+export function TableLoading({ label = 'Loading records...' }) {
   return (
     <div className="admin-table-loading" role="status" aria-live="polite">
       <span className="admin-loading-indicator" aria-hidden="true" />
@@ -145,7 +145,7 @@ export function ConfirmDialog({
             onClick={onConfirm}
             disabled={busy || (Boolean(requireText) && typedValue !== requireText)}
           >
-            {busy ? 'Working…' : confirmLabel}
+            {busy ? 'Working...' : confirmLabel}
           </button>
         </div>
       </section>

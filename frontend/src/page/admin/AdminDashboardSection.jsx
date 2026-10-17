@@ -167,7 +167,7 @@ export default function AdminDashboardSection({
       </div>
 
       {error ? <p className="feedback error">{error}</p> : null}
-      {loading ? <p className="admin-inline-result" role="status">Loading driver locations…</p> : null}
+      {loading ? <p className="admin-inline-result" role="status">Loading driver locations...</p> : null}
 
       <div className="admin-map-card">
         <div className="admin-map-card__canvas">
@@ -232,7 +232,7 @@ export default function AdminDashboardSection({
         {activityError ? (
           <p className="admin-inline-result admin-inline-result--error" role="alert">{activityError}</p>
         ) : activityLoading ? (
-          <p className="admin-inline-result" role="status">Loading recent activity…</p>
+          <p className="admin-inline-result" role="status">Loading recent activity...</p>
         ) : recentActivity.length === 0 ? (
           <EmptyState>No recent activity to show.</EmptyState>
         ) : (

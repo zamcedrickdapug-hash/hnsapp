@@ -62,7 +62,7 @@ export default function AdminApplySection({
         </div>
         <button type="button" className="admin-button admin-button--secondary" onClick={onRefresh} disabled={loading}>
           <RefreshCw size={17} aria-hidden="true" className={loading ? 'admin-spin' : ''} />
-          {loading ? 'Refreshing…' : 'Refresh'}
+          {loading ? 'Refreshing...' : 'Refresh'}
         </button>
       </div>
 
@@ -82,7 +82,7 @@ export default function AdminApplySection({
       </div>
 
       {error && <p className="admin-inline-result admin-inline-result--error" role="alert">{error}</p>}
-      {loading && <TableLoading label="Loading applications…" />}
+      {loading && <TableLoading label="Loading applications..." />}
       {!loading && filteredRegistrations.length === 0 && (
         <EmptyState>{statusFilter === 'all' ? 'No applications yet.' : `No ${statusFilter} applications.`}</EmptyState>
       )}

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Download, MoreVertical, Search } from 'lucide-react'
 import { ConfirmDialog, EmptyState, StatusBadge, TableLoading } from './AdminUI'
 
@@ -39,7 +39,7 @@ export default function AdminUsersSection({
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [confirmAction, setConfirmAction] = useState(null)
-  const actionTriggerRef = useRef(null)
+  const [openMenuId, setOpenMenuId] = useState(null)
 
   const duplicatePhones = useMemo(() => {
     const counts = new Map()
@@ -117,7 +117,7 @@ export default function AdminUsersSection({
           <p>Manage user accounts, verification, and account access.</p>
         </div>
         <button type="button" className="admin-button admin-button--secondary" onClick={onRefresh} disabled={loading}>
-          {loading ? 'Refreshing…' : 'Refresh users'}
+          {loading ? 'Refreshing...' : 'Refresh users'}
         </button>
       </div>
 
@@ -172,7 +172,7 @@ export default function AdminUsersSection({
 
       {notice && <p className="admin-inline-result admin-inline-result--success" role="status">{notice}</p>}
       {error && <p className="admin-inline-result admin-inline-result--error" role="alert">{error}</p>}
-      {loading && <TableLoading label="Loading users…" />}
+      {loading && <TableLoading label="Loading users..." />}
       {!loading && !matchingUsers.length && <EmptyState>No users match these filters.</EmptyState>}
 
       {!loading && matchingUsers.length > 0 && (
@@ -187,75 +187,28 @@ export default function AdminUsersSection({
               </thead>
               <tbody>
                 {visibleUsers.map((user) => {
-                  const accountState = user.accountState || 'active'
-                  const isAdmin = user.role === 'admin'
-                  const isSignedInUser = String(user.id) === String(signedInUserId)
-                  const protectedAdmin = isAdmin || isSignedInUser
-                  const phoneKey = normalizedPhone(user.phone)
                   return (
-                    <tr key={user.id}>
-                      <td data-label="Name" className="admin-user-name">
-                        <span>{user.fullName || 'Name unavailable'}</span>
-                        {phoneKey && duplicatePhones.has(phoneKey) && <StatusBadge status="warning" label="Possible duplicate" />}
-                      </td>
-                      <td data-label="Role"><StatusBadge status="neutral" label={user.role} /></td>
-                      <td data-label="Email" className="admin-break-word">{user.email || 'Not available'}</td>
-                      <td data-label="Phone" className="admin-break-word">{user.phone || 'Not available'}</td>
-                      <td data-label="Status"><StatusBadge status={user.status} /></td>
-                      <td data-label="Account state"><StatusBadge status={accountState} /></td>
-                      <td data-label="Created">{formatDate(user.createdAt)}</td>
-                      <td data-label="Actions" className="admin-user-actions-cell">
-                        <details className="admin-row-menu">
-                          <summary ref={actionTriggerRef} aria-label={`Actions for ${user.fullName || 'user'}`}>
-                            <MoreVertical size={20} aria-hidden="true" />
-                          </summary>
-                          <div className="admin-row-menu__items">
-                            {accountState !== 'active' && (
-                              <button type="button" onClick={() => onUpdateState(user.id, 'active')} disabled={actioningId === user.id}>
-                                Activate
-                              </button>
-                            )}
-                            {!protectedAdmin && accountState === 'active' && (
-                              <button type="button" onClick={() => onUpdateState(user.id, 'suspended')} disabled={actioningId === user.id}>
-                                Suspend
-                              </button>
-                            )}
-                            {!protectedAdmin && accountState !== 'banned' && (
-                              <button
-                                type="button"
-                                disabled={actioningId === user.id}
-                                onClick={(event) => {
-                                  actionTriggerRef.current = event.currentTarget.closest('details')?.querySelector('summary')
-                                  setConfirmAction({ user, action: 'ban' })
-                                }}
-                              >
-                                Ban
-                              </button>
-                            )}
-                            {!isAdmin && (
-                              <button
-                                type="button"
-                                className="is-danger"
-                                disabled={actioningId === user.id}
-                                onClick={(event) => {
-                                  actionTriggerRef.current = event.currentTarget.closest('details')?.querySelector('summary')
-                                  setConfirmAction({ user, action: 'delete' })
-                                }}
-                              >
-                                Delete
-                              </button>
-                            )}
-                          </div>
-                        </details>
-                      </td>
-                    </tr>
+                    <UserTableRow
+                      key={user.id}
+                      user={user}
+                      duplicate={duplicatePhones.has(normalizedPhone(user.phone))}
+                      signedInUserId={signedInUserId}
+                      actioning={actioningId === user.id}
+                      open={openMenuId === user.id}
+                      onMenuChange={setOpenMenuId}
+                      onConfirm={(action, returnFocusRef) => {
+                        setOpenMenuId(null)
+                        setConfirmAction({ user, action, returnFocusRef })
+                      }}
+                      onUpdateState={onUpdateState}
+                    />
                   )
                 })}
               </tbody>
             </table>
           </div>
           <div className="admin-pagination">
-            <span>Showing {Math.min(matchingUsers.length, (Math.min(page, pageCount) - 1) * PAGE_SIZE + 1)}–{Math.min(matchingUsers.length, Math.min(page, pageCount) * PAGE_SIZE)} of {matchingUsers.length}</span>
+            <span>Showing {Math.min(matchingUsers.length, (Math.min(page, pageCount) - 1) * PAGE_SIZE + 1)}-{Math.min(matchingUsers.length, Math.min(page, pageCount) * PAGE_SIZE)} of {matchingUsers.length}</span>
             <div>
               <button type="button" className="admin-button admin-button--secondary" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>Previous</button>
               <span>Page {Math.min(page, pageCount)} of {pageCount}</span>
@@ -268,7 +221,7 @@ export default function AdminUsersSection({
       <ConfirmDialog
         open={Boolean(confirmAction)}
         title={confirmAction?.action === 'delete' ? 'Delete user account?' : 'Ban user account?'}
-        returnFocusRef={actionTriggerRef}
+        returnFocusRef={confirmAction?.returnFocusRef}
         confirmLabel={confirmAction?.action === 'delete' ? 'Delete account' : 'Ban account'}
         requireText={confirmAction?.action === 'delete' ? 'DELETE' : undefined}
         onClose={() => setConfirmAction(null)}
@@ -283,5 +236,130 @@ export default function AdminUsersSection({
         )}
       </ConfirmDialog>
     </section>
+  )
+}
+
+function UserTableRow({
+  user,
+  duplicate,
+  signedInUserId,
+  actioning,
+  open,
+  onMenuChange,
+  onConfirm,
+  onUpdateState,
+}) {
+  const detailsRef = useRef(null)
+  const summaryRef = useRef(null)
+  const itemsRef = useRef(null)
+  const [menuPosition, setMenuPosition] = useState({})
+  const accountState = user.accountState || 'active'
+  const isAdmin = user.role === 'admin'
+  const protectedAdmin = isAdmin || String(user.id) === String(signedInUserId)
+  const phoneKey = normalizedPhone(user.phone)
+
+  useLayoutEffect(() => {
+    if (!open || !summaryRef.current || !itemsRef.current) return undefined
+
+    const positionMenu = () => {
+      const anchor = summaryRef.current.getBoundingClientRect()
+      const menuHeight = itemsRef.current.scrollHeight
+      const spaceBelow = window.innerHeight - anchor.bottom
+      const spaceAbove = anchor.top
+      const openAbove = spaceBelow < menuHeight + 8 && spaceAbove > spaceBelow
+      setMenuPosition({
+        top: openAbove ? Math.max(8, anchor.top - menuHeight - 4) : Math.min(window.innerHeight - menuHeight - 8, anchor.bottom + 4),
+        right: Math.max(8, window.innerWidth - anchor.right),
+      })
+    }
+
+    positionMenu()
+    window.addEventListener('resize', positionMenu)
+    window.addEventListener('scroll', positionMenu, true)
+    return () => {
+      window.removeEventListener('resize', positionMenu)
+      window.removeEventListener('scroll', positionMenu, true)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return undefined
+
+    const closeOnOutsideClick = (event) => {
+      if (!detailsRef.current?.contains(event.target)) onMenuChange(null)
+    }
+    const closeOnEscape = (event) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      onMenuChange(null)
+      summaryRef.current?.focus()
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsideClick)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [onMenuChange, open])
+
+  const runAction = (action, accountStateTarget) => {
+    onMenuChange(null)
+    if (action === 'confirm') onConfirm(accountStateTarget, summaryRef)
+    else onUpdateState(user.id, accountStateTarget)
+  }
+
+  return (
+    <tr>
+      <td data-label="Name" className="admin-user-name">
+        <span>{user.fullName || 'Name unavailable'}</span>
+        {duplicate && phoneKey && <StatusBadge status="warning" label="Possible duplicate" />}
+      </td>
+      <td data-label="Role"><StatusBadge status="neutral" label={user.role} /></td>
+      <td data-label="Email" className="admin-break-word">{user.email || 'Not available'}</td>
+      <td data-label="Phone" className="admin-break-word">{user.phone || 'Not available'}</td>
+      <td data-label="Status"><StatusBadge status={user.status} /></td>
+      <td data-label="Account state"><StatusBadge status={accountState} /></td>
+      <td data-label="Created">{formatDate(user.createdAt)}</td>
+      <td data-label="Actions" className="admin-user-actions-cell">
+        <div className="admin-row-menu" ref={detailsRef}>
+          <button
+            ref={summaryRef}
+            type="button"
+            className="admin-row-menu__trigger"
+            aria-label={`Actions for ${user.fullName || 'user'}`}
+            aria-haspopup="menu"
+            aria-expanded={open}
+            onClick={() => onMenuChange(open ? null : user.id)}
+          >
+            <MoreVertical size={20} aria-hidden="true" />
+          </button>
+          {open && (
+            <div ref={itemsRef} className="admin-row-menu__items" role="menu" style={menuPosition}>
+              {accountState !== 'active' && (
+                <button type="button" role="menuitem" onClick={() => runAction('state', 'active')} disabled={actioning}>
+                  Activate
+                </button>
+              )}
+              {!protectedAdmin && accountState === 'active' && (
+                <button type="button" role="menuitem" onClick={() => runAction('state', 'suspended')} disabled={actioning}>
+                  Suspend
+                </button>
+              )}
+              {!protectedAdmin && accountState !== 'banned' && (
+                <button type="button" role="menuitem" onClick={() => runAction('confirm', 'ban')} disabled={actioning}>
+                  Ban
+                </button>
+              )}
+              {!isAdmin && (
+                <button type="button" role="menuitem" className="is-danger" onClick={() => runAction('confirm', 'delete')} disabled={actioning}>
+                  Delete
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </td>
+    </tr>
   )
 }

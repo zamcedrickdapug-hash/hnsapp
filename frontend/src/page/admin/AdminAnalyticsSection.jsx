@@ -91,25 +91,19 @@ export default function AdminAnalyticsSection({ token }) {
   const { summary = {}, collections = {}, approvals = {} } = data || {}
 
   return (
-    <section className="admin-section admin-analytics" aria-labelledby="admin-analytics-heading">
-      <header className="admin-analytics__header">
-        <div>
-          <h2 id="admin-analytics-heading">Analytics</h2>
-          <p>Operational trends and aggregate payment performance.</p>
-        </div>
-        <div className="admin-analytics__controls">
-          <label>
-            Date range
-            <select value={range} onChange={(event) => setRange(event.target.value)}>
-              {ranges.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-          </label>
-          <button type="button" className="admin-button admin-button--secondary" onClick={() => loadAnalytics()} disabled={loading}>
-            <RefreshCw size={17} aria-hidden="true" className={loading ? 'admin-spin' : ''} />
-            Refresh
-          </button>
-        </div>
-      </header>
+    <section className="admin-section admin-analytics" aria-label="Analytics">
+      <div className="admin-analytics__controls">
+        <label>
+          Date range
+          <select value={range} onChange={(event) => setRange(event.target.value)}>
+            {ranges.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        </label>
+        <button type="button" className="admin-button admin-button--secondary" onClick={() => loadAnalytics()} disabled={loading}>
+          <RefreshCw size={17} aria-hidden="true" className={loading ? 'admin-spin' : ''} />
+          Refresh
+        </button>
+      </div>
 
       {error && (
         <div className="admin-inline-result admin-inline-result--error" role="alert">
@@ -133,7 +127,7 @@ export default function AdminAnalyticsSection({ token }) {
               ['Cancelled', formatNumber(summary.cancelledTrips), `${formatNumber((summary.cancelledRate || 0) * 100, 1)}% of trips`],
               ['Active drivers', formatNumber(summary.activeDrivers), 'Approved, active accounts'],
               ['Approvals pending', formatNumber(approvals.pending), 'Current applications'],
-              ['New registrations', formatNumber(totalRegistrations), `Parents and drivers · ${range}`],
+              ['New registrations', formatNumber(totalRegistrations), `Parents and drivers - ${range}`],
             ].map(([label, value, detail]) => (
               <article className="admin-analytics-kpi" key={label}>
                 <span>{label}</span>

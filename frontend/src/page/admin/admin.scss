@@ -730,11 +730,13 @@
   .dashboard-sidebar-group-label {
     margin: 1rem 0 0.35rem;
     padding: 0 1rem;
-    color: #cbd5e1;
-    font-size: 0.875rem;
+    color: #94a3b8;
+    font-size: 12px;
     font-weight: 700;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.1em;
+    pointer-events: none;
     text-transform: uppercase;
+    user-select: none;
   }
 
   .dashboard-sidebar button {
@@ -1427,32 +1429,33 @@
   }
 
   .admin-row-menu {
-    position: relative;
+    position: static;
   }
 
-  .admin-row-menu summary {
+  .admin-row-menu__trigger {
     display: grid;
     width: 40px;
     height: 40px;
     place-items: center;
-    list-style: none;
     border: 1px solid var(--admin-slate-300);
     border-radius: 8px;
+    background: #fff;
     color: var(--admin-slate-700);
     cursor: pointer;
   }
 
-  .admin-row-menu summary::-webkit-details-marker {
-    display: none;
+  .admin-row-menu__trigger:focus-visible {
+    outline: 3px solid #93c5fd;
+    outline-offset: 2px;
   }
 
   .admin-row-menu__items {
-    position: absolute;
-    z-index: 10;
-    top: calc(100% + 0.25rem);
-    right: 0;
+    position: fixed;
+    z-index: 1000;
     display: grid;
     min-width: 9rem;
+    max-height: min(75vh, 260px);
+    overflow-y: auto;
     padding: 0.25rem;
     border: 1px solid var(--admin-slate-200);
     border-radius: 8px;
@@ -1987,7 +1990,6 @@
   }
 
   .admin-analytics__header,
-  .admin-settings__header,
   .admin-analytics-card > header {
     display: flex;
     align-items: center;
@@ -2020,6 +2022,7 @@
   .admin-analytics__controls {
     display: flex;
     align-items: end;
+    justify-content: flex-end;
     gap: 0.6rem;
 
     label {
@@ -2028,6 +2031,11 @@
       color: var(--admin-slate-600);
       font-size: 14px;
       font-weight: 650;
+    }
+
+    .admin-settings__actions {
+      display: flex;
+      justify-content: flex-end;
     }
 
     select {
@@ -2368,7 +2376,6 @@
 @media (max-width: 520px) {
   .admin-console-shell {
     .admin-analytics__header,
-    .admin-settings__header,
     .admin-analytics-card > header {
       align-items: stretch;
       flex-direction: column;
@@ -2377,6 +2384,14 @@
     .admin-analytics__controls {
       align-items: stretch;
       flex-direction: column;
+    }
+
+    .admin-settings__actions {
+      justify-content: stretch;
+    }
+
+    .admin-settings__actions .admin-button {
+      width: 100%;
     }
 
     .admin-analytics__controls .admin-button,
