@@ -67,28 +67,6 @@ const upload = multer({
   },
 });
 
-const distanceInMeters = (first, second) => {
-  const lat1 = Number(first?.latitude);
-  const lon1 = Number(first?.longitude);
-  const lat2 = Number(second?.latitude);
-  const lon2 = Number(second?.longitude);
-
-  if (![lat1, lon1, lat2, lon2].every((value) => Number.isFinite(value))) {
-    return Number.POSITIVE_INFINITY;
-  }
-
-  const toRad = (deg) => (deg * Math.PI) / 180;
-  const R = 6371000;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-};
-
-const ARRIVED_RADIUS_METERS = 60;
-
 // Helper function to validate license expiry date
 const isValidLicenseExpiryDate = (expiryDateString) => {
 	if (typeof expiryDateString !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(expiryDateString)) return false;
@@ -607,25 +585,13 @@ router.patch('/requests/:requestId/location', async (req, res) => {
       updatedAt: new Date(),
     };
 
-    const hasRequesterLocation =
-      Number.isFinite(Number(currentRequest.requesterLocation?.latitude)) &&
-      Number.isFinite(Number(currentRequest.requesterLocation?.longitude));
-    let nextStatus = previousStatus;
-
-    if (previousStatus === 'accepted' && hasRequesterLocation) {
-      const distanceToPickup = distanceInMeters({ latitude, longitude }, currentRequest.requesterLocation);
-      if (distanceToPickup <= ARRIVED_RADIUS_METERS) {
-        nextStatus = 'arrived';
-      }
-    }
-
     const rideRequest = await VanRequest.findOneAndUpdate(
       {
         _id: currentRequest._id,
         driver: req.user._id,
         status: previousStatus,
       },
-      { $set: { liveLocation: nextLiveLocation, status: nextStatus } },
+      { $set: { liveLocation: nextLiveLocation } },
       { new: true }
     );
 
@@ -649,17 +615,6 @@ router.patch('/requests/:requestId/location', async (req, res) => {
         rideRequest.schoolName
       );
     }
-    if (previousStatus === 'accepted' && rideRequest.status === 'arrived') {
-      await notifyParentArrivalAtPickup(
-        rideRequest.parent,
-        rideRequest._id,
-        req.user.fullName,
-        req.user.driver?.plateNumber || '',
-        rideRequest.studentName,
-        rideRequest.schoolName
-      );
-    }
-
     const io = getIo();
     if (io) {
       io.to(buildTripRoomName(rideRequest._id)).emit('trip:location-updated', {
@@ -686,68 +641,6 @@ router.patch('/requests/:requestId/location', async (req, res) => {
         tripStatus: rideRequest.status,
         location: nextLiveLocation,
       });
-    }
-
-    if (previousStatus === 'accepted' && rideRequest.status === 'arrived' && io) {
-      const populatedRequest = await VanRequest.findById(rideRequest._id)
-        .populate('parent', 'fullName phone')
-        .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber')
-        .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model');
-      const eventPayload = { request: populatedRequest };
-      io.to(buildTripRoomName(rideRequest._id)).emit('trip:request-updated', eventPayload);
-      io.to(buildUserRoomName(rideRequest.parent?._id || rideRequest.parent)).emit('trip:request-updated', eventPayload);
-      io.to(buildUserRoomName(req.user._id)).emit('trip:request-updated', eventPayload);
-    }
-
-    const acceptedRequests = await VanRequest.find({
-      driver: req.user._id,
-      status: 'accepted',
-    }).select('_id parent requesterLocation');
-
-    for (const acceptedRequest of acceptedRequests) {
-      const hasRequesterLocation =
-        Number.isFinite(Number(acceptedRequest.requesterLocation?.latitude)) &&
-        Number.isFinite(Number(acceptedRequest.requesterLocation?.longitude));
-      if (!hasRequesterLocation) continue;
-
-      const distanceToPickup = distanceInMeters(
-        { latitude, longitude },
-        acceptedRequest.requesterLocation
-      );
-      if (distanceToPickup > ARRIVED_RADIUS_METERS) continue;
-
-      const arrivedAt = new Date();
-      const arrivedRequest = await VanRequest.findOneAndUpdate(
-        {
-          _id: acceptedRequest._id,
-          driver: req.user._id,
-          status: 'accepted',
-        },
-        { $set: { status: 'arrived', arrivedAtDestinationAt: arrivedAt } },
-        { new: true }
-      ).populate('parent', '_id fullName');
-
-      if (!arrivedRequest) continue;
-
-      await notifyParentArrivalAtPickup(
-        arrivedRequest.parent?._id || arrivedRequest.parent,
-        arrivedRequest._id,
-        req.user.fullName,
-        req.user.driver?.plateNumber || '',
-        arrivedRequest.studentName,
-        arrivedRequest.schoolName
-      );
-
-      if (io) {
-        const populatedRequest = await VanRequest.findById(arrivedRequest._id)
-          .populate('parent', 'fullName phone')
-          .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber')
-          .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model');
-        const eventPayload = { request: populatedRequest };
-        io.to(buildTripRoomName(arrivedRequest._id)).emit('trip:request-updated', eventPayload);
-        io.to(buildUserRoomName(arrivedRequest.parent?._id || arrivedRequest.parent)).emit('trip:request-updated', eventPayload);
-        io.to(buildUserRoomName(req.user._id)).emit('trip:request-updated', eventPayload);
-      }
     }
 
     try {

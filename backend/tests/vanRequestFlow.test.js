@@ -65,6 +65,7 @@ const createFixture = async (t) => {
   const vehicles = new Map();
   const emitted = [];
   const notifications = [];
+  const pickupArrivalNotifications = [];
   const plainUser = (user) => {
     if (!user) return null;
     return {
@@ -280,7 +281,7 @@ const createFixture = async (t) => {
       notifyParentSearching: noOpNotification,
       notifyParentDriverAccepted: noOpNotification,
       notifyParentOnTheWay: noOpNotification,
-      notifyParentArrivalAtPickup: noOpNotification,
+      notifyParentArrivalAtPickup: async (...args) => { pickupArrivalNotifications.push(args); },
       notifyParentStudentPickedUp: noOpNotification,
       notifyParentHeadingToSchool: noOpNotification,
       notifyParentArrivedAtSchool: noOpNotification,
@@ -350,7 +351,7 @@ const createFixture = async (t) => {
     };
   };
 
-  return { parent, driverOne, driverTwo, users, requests, statuses, vehicles, emitted, notifications, addVehicle, request };
+  return { parent, driverOne, driverTwo, users, requests, statuses, vehicles, emitted, notifications, pickupArrivalNotifications, addVehicle, request };
 };
 
 const createRequest = (fixture, data = {}) => fixture.request('/api/parents/van-requests', fixture.parent, {
@@ -416,25 +417,34 @@ test('Parent request creation, live updates, vehicle assignment, and completion 
   assert.equal(location.status, 200);
   assert.ok(f.emitted.some((event) => event.room === `user:${f.parent._id}` && event.event === 'trip:location-updated'));
 
-  const arrived = await f.request(`/api/drivers/requests/${requestId}/location`, assignedDriverId === f.driverOne._id ? f.driverOne : f.driverTwo, {
-    method: 'PATCH',
-    body: { latitude: 14.71181, longitude: 121.06791 },
-  });
+  const assignedDriver = assignedDriverId === f.driverOne._id ? f.driverOne : f.driverTwo;
+  const arrived = await f.request(`/api/drivers/requests/${requestId}/arrived`, assignedDriver, { method: 'PATCH' });
   assert.equal(arrived.status, 200);
   assert.equal(arrived.body.request.status, 'arrived');
+  assert.equal(f.pickupArrivalNotifications.length, 1);
+  for (const room of [`trip:${requestId}`, `user:${f.parent._id}`, `user:${assignedDriverId}`]) {
+    assert.ok(f.emitted.some((event) =>
+      event.room === room &&
+      event.event === 'trip:request-updated' &&
+      event.payload.request.status === 'arrived'
+    ));
+  }
+  const repeatedArrival = await f.request(`/api/drivers/requests/${requestId}/arrived`, assignedDriver, { method: 'PATCH' });
+  assert.equal(repeatedArrival.status, 409);
+  assert.equal(f.pickupArrivalNotifications.length, 1);
 
-  const pickedUp = await f.request(`/api/drivers/requests/${requestId}/picked-up`, assignedDriverId === f.driverOne._id ? f.driverOne : f.driverTwo, {
+  const pickedUp = await f.request(`/api/drivers/requests/${requestId}/picked-up`, assignedDriver, {
     method: 'PATCH',
   });
   assert.equal(pickedUp.status, 200);
   assert.equal(pickedUp.body.request.status, 'picked_up');
 
-  const arrivedAtSchool = await f.request(`/api/drivers/requests/${requestId}/arrived-at-school`, assignedDriverId === f.driverOne._id ? f.driverOne : f.driverTwo, {
+  const arrivedAtSchool = await f.request(`/api/drivers/requests/${requestId}/arrived-at-school`, assignedDriver, {
     method: 'PATCH',
   });
   assert.equal(arrivedAtSchool.status, 200);
   assert.equal(arrivedAtSchool.body.requests[0].status, 'arrived_at_school');
-  const completed = await f.request('/api/drivers/requests/complete-school-run', assignedDriverId === f.driverOne._id ? f.driverOne : f.driverTwo, {
+  const completed = await f.request('/api/drivers/requests/complete-school-run', assignedDriver, {
     method: 'PATCH',
   });
   assert.equal(completed.status, 200);
@@ -442,6 +452,37 @@ test('Parent request creation, live updates, vehicle assignment, and completion 
   assert.equal(f.vehicles.get(assignedVehicleId).status, 'available');
   assert.equal(f.statuses.get(assignedDriverId).activeRequestId, null);
   assert.ok(f.emitted.some((event) => event.room === `user:${f.parent._id}` && event.event === 'trip:completed'));
+});
+
+test('location near pickup updates position without automatically marking arrival', async (t) => {
+  const f = await createFixture(t);
+  const create = await createRequest(f);
+  const requestId = create.body.request._id;
+  f.addVehicle(f.driverOne, 'ONE-MANUAL-ARRIVAL');
+  await setOnline(f, f.driverOne);
+
+  const accepted = await f.request(`/api/drivers/requests/${requestId}/accept`, f.driverOne, { method: 'PATCH' });
+  assert.equal(accepted.status, 200);
+
+  const location = await f.request(`/api/drivers/requests/${requestId}/location`, f.driverOne, {
+    method: 'PATCH',
+    body: { latitude: 14.71198, longitude: 121.0679 },
+  });
+
+  assert.equal(location.status, 200);
+  assert.equal(location.body.request.status, 'accepted');
+  assert.equal(location.body.request.liveLocation.latitude, 14.71198);
+  assert.equal(f.pickupArrivalNotifications.length, 0);
+  assert.ok(f.emitted.some((event) =>
+    event.room === `user:${f.parent._id}` &&
+    event.event === 'trip:location-updated' &&
+    event.payload.status === 'accepted'
+  ));
+  assert.equal(f.emitted.some((event) =>
+    event.event === 'trip:request-updated' &&
+    event.payload.request?._id === requestId &&
+    event.payload.request?.status === 'arrived'
+  ), false);
 });
 
 test('booking requires saved student pickup coordinates', async (t) => {
