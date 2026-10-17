@@ -23,6 +23,22 @@ const formatThreadTime = (value) => {
 
 const authHeaders = (token) => ({ Authorization: `Bearer ${token}` })
 
+const uniqueThreads = (items) => {
+  const byRequestId = new Map()
+  items.forEach((thread) => {
+    const requestId = String(thread.requestId)
+    if (!byRequestId.has(requestId)) byRequestId.set(requestId, thread)
+  })
+  return [...byRequestId.values()]
+}
+
+const formatMessageDate = (value) => {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? ''
+    : date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
 export default function TripMessages({
   role,
   token,
@@ -51,8 +67,9 @@ export default function TripMessages({
     const response = await apiFetch('/api/messages/threads', {
       headers: authHeaders(token),
     })
-    setThreads(response.threads || [])
-    return response.threads || []
+    const nextThreads = uniqueThreads(response.threads || [])
+    setThreads(nextThreads)
+    return nextThreads
   }, [token])
 
   useEffect(() => {
@@ -60,7 +77,7 @@ export default function TripMessages({
     setLoadingThreads(true)
     apiFetch('/api/messages/threads', { headers: authHeaders(token) })
       .then((response) => {
-        if (current) setThreads(response.threads || [])
+        if (current) setThreads(uniqueThreads(response.threads || []))
       })
       .catch((requestError) => {
         if (current) setError(requestError.message || 'Unable to load conversations.')
@@ -209,11 +226,53 @@ export default function TripMessages({
     }
   }, [token])
 
+  const updateThreadForMessage = useCallback((message, requestId) => {
+    const fallbackThread = String(selectedThread?.requestId) === requestId
+      ? selectedThread
+      : null
+    const threadIsKnown = threads.some((thread) => String(thread.requestId) === requestId) ||
+      Boolean(fallbackThread)
+    setThreads((currentThreads) => {
+      const existingThread = currentThreads.find(
+        (thread) => String(thread.requestId) === requestId
+      )
+      const thread = existingThread || fallbackThread
+      if (!thread) return uniqueThreads(currentThreads)
+
+      const isOpen = requestId === String(selectedRequestId)
+      const unreadCount = isOpen
+        ? 0
+        : message.senderRole !== role
+          ? (Number(thread.unreadCount) || 0) + 1
+          : Number(thread.unreadCount) || 0
+      const updatedThread = {
+        ...thread,
+        lastMessage: {
+          text: message.text,
+          createdAt: message.createdAt,
+          senderRole: message.senderRole,
+        },
+        unreadCount,
+      }
+      return uniqueThreads([
+        updatedThread,
+        ...currentThreads.filter((item) => String(item.requestId) !== requestId),
+      ])
+    })
+
+    if (!threadIsKnown) {
+      fetchThreads().catch((requestError) => {
+        setError(requestError.message || 'Unable to refresh conversations.')
+      })
+    }
+  }, [fetchThreads, role, selectedRequestId, selectedThread, threads])
+
   const handleIncomingMessage = useCallback((event) => {
     const message = event?.message
     const requestId = String(event?.requestId || message?.requestId || '')
     if (!message?._id || !requestId) return
 
+    updateThreadForMessage(message, requestId)
     if (requestId === String(selectedRequestId)) {
       shouldScrollToBottomRef.current = true
       setMessages((currentMessages) => (
@@ -224,11 +283,7 @@ export default function TripMessages({
       if (message.senderRole !== role) markSelectedThreadRead(requestId)
       return
     }
-
-    fetchThreads().catch((requestError) => {
-      setError(requestError.message || 'Unable to refresh conversations.')
-    })
-  }, [fetchThreads, markSelectedThreadRead, role, selectedRequestId])
+  }, [markSelectedThreadRead, role, selectedRequestId, updateThreadForMessage])
 
   useSocketEvent(socket, 'trip:message', handleIncomingMessage, [handleIncomingMessage])
 
@@ -291,6 +346,7 @@ export default function TripMessages({
           ? currentMessages
           : [...currentMessages, response.message]
       ))
+      updateThreadForMessage(response.message, String(selectedRequestId))
       shouldScrollToBottomRef.current = true
       setDraft('')
       await fetchThreads()
@@ -323,6 +379,16 @@ export default function TripMessages({
           ) : visibleThreads.length ? (
             visibleThreads.map((thread) => {
               const isSelected = String(thread.requestId) === String(selectedRequestId)
+              const statusLabel = CHAT_OPEN_STATUSES.includes(thread.status)
+                ? 'Active'
+                : thread.status === 'completed'
+                  ? 'Completed'
+                  : thread.status === 'cancelled'
+                    ? 'Cancelled'
+                    : null
+              const previewSender = thread.lastMessage?.senderRole === role
+                ? 'You'
+                : thread.otherParty?.name
               return (
                 <button
                   key={thread.requestId}
@@ -332,26 +398,44 @@ export default function TripMessages({
                     isSelected ? 'bg-blue-50' : 'hover:bg-white'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="truncate text-sm font-semibold text-gray-900">
+                  <div className="flex min-w-0 items-start justify-between gap-2">
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">
                       {thread.otherParty?.name || (role === 'parent' ? 'Driver' : 'Parent')}
                     </span>
                     <span className="shrink-0 text-xs text-gray-500">
                       {thread.lastMessage?.createdAt ? formatThreadTime(thread.lastMessage.createdAt) : ''}
                     </span>
                   </div>
-                  <p className="mt-1 truncate text-xs text-gray-600">
-                    {[thread.studentName, thread.schoolName].filter(Boolean).join(' · ') || 'Trip conversation'}
+                  <p className="mt-1 min-w-0 truncate text-xs text-gray-600">
+                    {thread.studentName || 'Student'} · {thread.schoolName || 'School'}
                   </p>
-                  <div className="mt-1 flex items-center justify-between gap-2">
-                    <p className="truncate text-sm text-gray-600">
-                      {thread.lastMessage?.text || 'No messages yet'}
+                  <div className="mt-1 flex min-w-0 items-center justify-between gap-2">
+                    <p className="min-w-0 flex-1 truncate text-sm text-gray-600">
+                      {thread.lastMessage?.text
+                        ? `${previewSender || 'Message'}: ${thread.lastMessage.text}`
+                        : 'No messages yet'}
                     </p>
                     {thread.unreadCount > 0 && (
                       <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 px-1.5 text-xs font-semibold text-white">
                         {thread.unreadCount > 99 ? '99+' : thread.unreadCount}
                       </span>
                     )}
+                  </div>
+                  <div className="mt-1 flex min-w-0 items-center justify-between gap-2">
+                    {statusLabel && (
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        statusLabel === 'Active'
+                          ? 'bg-green-100 text-green-700'
+                          : statusLabel === 'Completed'
+                            ? 'bg-gray-200 text-gray-700'
+                            : 'bg-red-100 text-red-700'
+                      }`}>
+                        {statusLabel}
+                      </span>
+                    )}
+                    <span className="min-w-0 truncate text-[10px] text-gray-500">
+                      {thread.lastMessage?.createdAt ? formatMessageDate(thread.lastMessage.createdAt) : ''}
+                    </span>
                   </div>
                 </button>
               )
@@ -415,13 +499,13 @@ export default function TripMessages({
             {error && <p role="alert" className="border-t border-red-100 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</p>}
             {canSend ? (
               <form
-                className="border-t border-gray-200 bg-white p-3"
+                className="w-full min-w-0 max-w-full border-t border-gray-200 bg-white p-3"
                 onSubmit={(event) => {
                   event.preventDefault()
                   sendMessage()
                 }}
               >
-                <div className="flex min-w-0 flex-col gap-2">
+                <div className="flex w-full min-w-0 flex-col gap-2">
                   <label className="sr-only" htmlFor="trip-message-composer">Write a message</label>
                   <textarea
                     ref={composerRef}
@@ -434,7 +518,7 @@ export default function TripMessages({
                     placeholder="Write a message..."
                     className="min-h-12 w-full min-w-0 flex-1 resize-none overflow-y-auto rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   />
-                  <div className="flex min-w-0 items-center gap-2">
+                  <div className="flex w-full min-w-0 items-center gap-2">
                     <span className="shrink-0 text-xs text-gray-500">{draft.length}/500</span>
                     <p
                       className="min-w-0 flex-1 truncate text-xs text-gray-500"
@@ -445,7 +529,7 @@ export default function TripMessages({
                     <button
                       type="submit"
                       disabled={!draft.trim() || sending}
-                      className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex h-10 max-w-full shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3"
                     >
                       <Send size={16} aria-hidden="true" />
                       <span>{sending ? 'Sending...' : 'Send'}</span>
