@@ -49,6 +49,15 @@ export const DRIVER_NAVIGATION = [
     badge: 'newRequestCount', // Key for dynamic badge value
   },
   {
+    id: 'messages',
+    label: 'Messages',
+    icon: MessageSquare,
+    path: '/driver/messages',
+    description: 'Conversations with parents',
+    color: 'from-pink-500 to-pink-600',
+    badge: 'unreadMessageCount',
+  },
+  {
     id: 'trips',
     label: 'Trip History',
     icon: MapPin,
@@ -110,6 +119,7 @@ export const PARENT_NAVIGATION = [
     path: '/parent/messages',
     description: 'Communication with drivers',
     color: 'from-pink-500 to-pink-600',
+    badge: 'unreadMessageCount',
   },
   {
     id: 'payments',

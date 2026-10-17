@@ -21,11 +21,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Wifi, WifiOff, AlertCircle, MessageSquare, CreditCard, UserRound, CheckCircle2, AlertTriangle, Save, RotateCcw } from 'lucide-react'
+import { Wifi, WifiOff, AlertCircle, CreditCard, UserRound, CheckCircle2, AlertTriangle, Save, RotateCcw } from 'lucide-react'
 import { isValidPhoneNumber, normalizePhoneNumber } from '../../constants/authConstants'
 import { apiFetch } from '../../api'
 import { useSocket, useSocketEvent } from '../../hooks/useSocket'
 import { DashboardLayout } from '../../components/dashboard'
+import TripMessages from '../../components/common/TripMessages'
 import { ParentChildrenCard, ParentTrackingPanel } from '../../components/dashboard/parent'
 import NotificationHistory from '../../components/ui/NotificationHistory'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
@@ -79,6 +80,8 @@ export default function ParentDashboard({ token, user, onLogout }) {
 
   // ====== BOOKING STATE ======
   const [activeRideRequest, setActiveRideRequest] = useState(null)
+  const [selectedMessageRequestId, setSelectedMessageRequestId] = useState(null)
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0)
   const [selectedStudentNames, setSelectedStudentNames] = useState(null)
   const [plannedRoute, setPlannedRoute] = useState([])
   const [bookingError, setBookingError] = useState('')
@@ -810,6 +813,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
       currentPage={activeSection}
       onNavigate={setActiveSection}
       onLogout={onLogout}
+      badgeValues={{ unreadMessageCount }}
       pageTitle={{
         dashboard: 'Parent Dashboard',
         trips: 'Trip History',
@@ -822,7 +826,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
         dashboard: 'Book and track your student transportation.',
         trips: 'View your ride requests and past trips.',
         notifications: 'Review updates about your account and trips.',
-        messages: 'Messages with drivers will be available here.',
+        messages: 'Chat with the driver assigned to your trip.',
         payments: 'Payment information will be available here.',
         settings: 'Manage your profile and preferences.',
       }[activeSection] || ''}
@@ -981,6 +985,12 @@ export default function ParentDashboard({ token, user, onLogout }) {
                     estimatedArrival={estimatedArrival}
                     socketConnected={socketConnected}
                     liveLocationUpdatedAt={activeRideRequest.liveLocation?.updatedAt}
+                    onMessageDriver={activeRideRequest.driver
+                      ? () => {
+                          setSelectedMessageRequestId(String(activeRideRequest._id))
+                          setActiveSection('messages')
+                        }
+                      : null}
                   />
 
                   <Card>
@@ -1071,17 +1081,18 @@ export default function ParentDashboard({ token, user, onLogout }) {
         </div>
       )}
 
-      {activeSection === 'messages' && (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-            <MessageSquare size={40} aria-hidden="true" className="text-slate-500" />
-            <h2 className="text-lg font-semibold text-gray-900">Messages are coming soon</h2>
-            <p className="max-w-md text-sm text-gray-600">
-              Driver conversations will appear here when messaging becomes available.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      <div className={activeSection === 'messages' ? '' : 'hidden'}>
+        <TripMessages
+          role="parent"
+          token={token}
+          socket={socket}
+          activeRequestId={selectedMessageRequestId || (
+            activeSection === 'messages' ? activeRideRequest?._id : null
+          )}
+          activeRequest={activeRideRequest}
+          onUnreadCount={setUnreadMessageCount}
+        />
+      </div>
 
       {activeSection === 'payments' && (
         <Card>

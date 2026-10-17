@@ -10,7 +10,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card'
-import { Phone, MapPin, Clock, AlertCircle } from 'lucide-react'
+import { Phone, MapPin, Clock, AlertCircle, MessageCircle } from 'lucide-react'
 import { apiFetch } from '../../../api'
 
 export function ParentTrackingPanel({
@@ -27,6 +27,7 @@ export function ParentTrackingPanel({
   estimatedArrival = null,
   socketConnected = false,
   liveLocationUpdatedAt = null,
+  onMessageDriver = null,
   isLoading = false,
 }) {
   const [currentTime, setCurrentTime] = useState(Date.now())
@@ -177,6 +178,16 @@ export function ParentTrackingPanel({
                   <div className={`inline-block px-2 py-1 rounded text-xs font-semibold ${socketConnected ? 'bg-green-50 text-green-600' : 'bg-gray-50 text-gray-600'}`}>
                     {socketConnected ? '🟢 Live' : '⚪ Offline'}
                   </div>
+                  {onMessageDriver && (
+                    <button
+                      type="button"
+                      onClick={onMessageDriver}
+                      className="mt-2 inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                    >
+                      <MessageCircle size={14} aria-hidden="true" />
+                      Message driver
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

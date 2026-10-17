@@ -17,6 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Button } from '../../components/ui/button'
 import { DashboardLayout } from '../../components/dashboard'
 import { DriverStatsCards } from '../../components/dashboard/driver'
+import TripMessages from '../../components/common/TripMessages'
 import LiveTripMap from '../../components/tracking/LiveTripGoogleMap'
 import { apiFetch } from '../../api'
 import { useSocket, useSocketEvent } from '../../hooks/useSocket'
@@ -65,6 +66,8 @@ export default function DriverDashboard({ token, user, onLogout }) {
 
 	// ====== STATE ======
 	const [activeSection, setActiveSection] = useState('dashboard')
+	const [selectedMessageRequestId, setSelectedMessageRequestId] = useState(null)
+	const [unreadMessageCount, setUnreadMessageCount] = useState(0)
 	const [requests, setRequests] = useState([])
 	const [loading, setLoading] = useState(false)
 	const [error, setError] = useState('')
@@ -1038,10 +1041,12 @@ export default function DriverDashboard({ token, user, onLogout }) {
 					? 'Driver Dashboard'
 					: activeSection === 'requests'
 						? 'Requests'
+						: activeSection === 'messages'
+							? 'Messages'
 						: 'Settings'
 			}
 			notificationCount={newRequestCount}
-			badgeValues={{ newRequestCount }}
+			badgeValues={{ newRequestCount, unreadMessageCount }}
 		>
 			{activeSection === 'dashboard' ? (
 				<>
@@ -1109,6 +1114,16 @@ export default function DriverDashboard({ token, user, onLogout }) {
 													{gpsStatus}
 												</p>
 											</div>
+											<Button
+												size="sm"
+												onClick={() => {
+													setSelectedMessageRequestId(String(selectedTrip._id))
+													setActiveSection('messages')
+												}}
+												className="bg-blue-600 text-white hover:bg-blue-700"
+											>
+												Message parent
+											</Button>
 										</>
 									) : (
 										<p className="text-sm text-gray-600">Accept a request first</p>
@@ -1542,6 +1557,18 @@ export default function DriverDashboard({ token, user, onLogout }) {
 					onSave={saveDriverSettings}
 				/>
 			) : null}
+			<div className={activeSection === 'messages' ? '' : 'hidden'}>
+				<TripMessages
+					role="driver"
+					token={token}
+					socket={socket}
+					activeRequestId={selectedMessageRequestId || (
+						activeSection === 'messages' ? selectedTrip?._id : null
+					)}
+					activeRequest={selectedTrip}
+					onUnreadCount={setUnreadMessageCount}
+				/>
+			</div>
 		</DashboardLayout>
 	)
 }
