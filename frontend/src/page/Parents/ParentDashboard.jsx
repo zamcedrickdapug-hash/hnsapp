@@ -77,6 +77,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
 
   // ====== BOOKING STATE ======
   const [activeRideRequest, setActiveRideRequest] = useState(null)
+  const [plannedRoute, setPlannedRoute] = useState([])
   const [bookingError, setBookingError] = useState('')
   const [bookingLoading, setBookingLoading] = useState(false)
 
@@ -112,6 +113,14 @@ export default function ParentDashboard({ token, user, onLogout }) {
   const notificationSoundRef = useRef(null)
   const highlightTimeoutRef = useRef(null)
   const pickupZoneCheckSequenceRef = useRef(0)
+  const routeRequestRef = useRef({
+    targetKey: '',
+    lastRequestedAt: 0,
+    lastSuccessfulPosition: null,
+    hasRoute: false,
+    pending: false,
+    requestId: 0,
+  })
 
   // ====== COMPUTED VALUES ======
 
@@ -508,6 +517,132 @@ export default function ParentDashboard({ token, user, onLogout }) {
     return () => clearInterval(interval)
   }, [loadActiveTrip])
 
+  const routeTripId = activeRideRequest?._id
+  const routeTripStatus = activeRideRequest?.status
+  const routeVanLatitude = Number(activeRideRequest?.liveLocation?.latitude)
+  const routeVanLongitude = Number(activeRideRequest?.liveLocation?.longitude)
+  const routeTargetLatitude = Number(
+    routeTripStatus === 'picked_up'
+      ? activeRideRequest?.destinationLocation?.latitude
+      : activeRideRequest?.requesterLocation?.latitude
+  )
+  const routeTargetLongitude = Number(
+    routeTripStatus === 'picked_up'
+      ? activeRideRequest?.destinationLocation?.longitude
+      : activeRideRequest?.requesterLocation?.longitude
+  )
+
+  useEffect(() => {
+    if (
+      !routeTripId ||
+      !Number.isFinite(routeVanLatitude) ||
+      !Number.isFinite(routeVanLongitude) ||
+      !Number.isFinite(routeTargetLatitude) ||
+      !Number.isFinite(routeTargetLongitude)
+    ) {
+      routeRequestRef.current = {
+        targetKey: '',
+        lastRequestedAt: 0,
+        lastSuccessfulPosition: null,
+        hasRoute: false,
+        pending: false,
+        requestId: routeRequestRef.current.requestId + 1,
+      }
+      setPlannedRoute((current) => (current.length ? [] : current))
+      return
+    }
+
+    const vanPosition = [routeVanLatitude, routeVanLongitude]
+    const targetPosition = [routeTargetLatitude, routeTargetLongitude]
+    const targetPhase = routeTripStatus === 'picked_up' ? 'school' : 'pickup'
+    const targetKey = `${routeTripId}:${targetPhase}:${routeTargetLatitude},${routeTargetLongitude}`
+    const routeState = routeRequestRef.current
+    const targetChanged = routeState.targetKey !== targetKey
+
+    if (targetChanged) {
+      routeState.targetKey = targetKey
+      routeState.lastRequestedAt = 0
+      routeState.lastSuccessfulPosition = null
+      routeState.hasRoute = false
+      routeState.pending = false
+      setPlannedRoute((current) => (current.length ? [] : current))
+    }
+
+    const now = Date.now()
+    const elapsedSinceRequest = now - routeState.lastRequestedAt
+    const movedSinceSuccess = routeState.lastSuccessfulPosition
+      ? distanceInMeters(routeState.lastSuccessfulPosition, vanPosition)
+      : 0
+    const shouldRequestRoute =
+      targetChanged ||
+      (!routeState.pending &&
+        elapsedSinceRequest >= 15000 &&
+        (!routeState.hasRoute || movedSinceSuccess >= 100))
+
+    if (!shouldRequestRoute || routeState.pending) return
+
+    routeState.lastRequestedAt = now
+    routeState.pending = true
+    const requestId = routeState.requestId + 1
+    routeState.requestId = requestId
+    const requestPosition = vanPosition
+
+    apiFetch('/api/routing/route', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        start: vanPosition,
+        end: targetPosition,
+      }),
+    })
+      .then((payload) => {
+        if (
+          routeRequestRef.current.requestId !== requestId ||
+          routeRequestRef.current.targetKey !== targetKey
+        ) return
+
+        const coordinates = payload?.route?.coordinates
+        const route = Array.isArray(coordinates)
+          ? coordinates
+              .filter((point) => Array.isArray(point) && point.length >= 2)
+              .map(([lng, lat]) => [Number(lat), Number(lng)])
+              .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng))
+          : []
+
+        routeRequestRef.current.pending = false
+        if (route.length < 2) {
+          routeRequestRef.current.hasRoute = false
+          setPlannedRoute([])
+          return
+        }
+
+        routeRequestRef.current.hasRoute = true
+        routeRequestRef.current.lastSuccessfulPosition = requestPosition
+        setPlannedRoute(route)
+      })
+      .catch(() => {
+        if (
+          routeRequestRef.current.requestId !== requestId ||
+          routeRequestRef.current.targetKey !== targetKey
+        ) return
+
+        routeRequestRef.current.pending = false
+        routeRequestRef.current.hasRoute = false
+        setPlannedRoute([])
+      })
+  }, [
+    routeTripId,
+    routeTripStatus,
+    routeVanLatitude,
+    routeVanLongitude,
+    routeTargetLatitude,
+    routeTargetLongitude,
+    token,
+  ])
+
   useEffect(() => {
     if (activeSection === 'trips') {
       loadTripHistory()
@@ -714,6 +849,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
                     <CardContent>
                       <LiveTripMap
                         vanPosition={asLatLng(activeRideRequest.liveLocation)}
+                        plannedRoute={plannedRoute}
                         pickupPosition={
                           activeRideRequest.status === 'picked_up'
                             ? asLatLng(activeRideRequest.destinationLocation)
