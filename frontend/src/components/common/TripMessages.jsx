@@ -42,6 +42,7 @@ export default function TripMessages({
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const listRef = useRef(null)
+  const composerRef = useRef(null)
   const activeLoadRef = useRef(0)
   const shouldScrollToBottomRef = useRef(false)
   const olderScrollPositionRef = useRef(null)
@@ -185,6 +186,13 @@ export default function TripMessages({
     }
   }, [messages])
 
+  useLayoutEffect(() => {
+    const composer = composerRef.current
+    if (!composer) return
+    composer.style.height = 'auto'
+    composer.style.height = `${Math.min(composer.scrollHeight, 120)}px`
+  }, [draft])
+
   const markSelectedThreadRead = useCallback(async (requestId) => {
     try {
       await apiFetch(`/api/messages/threads/${requestId}/read`, {
@@ -301,15 +309,15 @@ export default function TripMessages({
   }
 
   return (
-    <section className="grid min-h-[520px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm md:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.6fr)]">
-      <aside className="flex max-h-[280px] flex-col border-b border-gray-200 bg-gray-50 md:max-h-[680px] md:border-b-0 md:border-r">
+    <section className="grid h-[min(68vh,680px)] min-h-[400px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm md:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.6fr)] md:grid-rows-1">
+      <aside className="flex max-h-[140px] min-h-0 flex-col border-b border-gray-200 bg-gray-50 md:max-h-none md:border-b-0 md:border-r">
         <div className="border-b border-gray-200 px-4 py-4">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
             <MessageCircle size={19} aria-hidden="true" />
             Conversations
           </h2>
         </div>
-        <div className="flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {loadingThreads && !visibleThreads.length ? (
             <p className="p-4 text-sm text-gray-600">Loading conversations...</p>
           ) : visibleThreads.length ? (
@@ -337,7 +345,7 @@ export default function TripMessages({
                   </p>
                   <div className="mt-1 flex items-center justify-between gap-2">
                     <p className="truncate text-sm text-gray-600">
-                      {thread.lastMessage?.text || 'Start a conversation'}
+                      {thread.lastMessage?.text || 'No messages yet'}
                     </p>
                     {thread.unreadCount > 0 && (
                       <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 px-1.5 text-xs font-semibold text-white">
@@ -358,7 +366,7 @@ export default function TripMessages({
         </div>
       </aside>
 
-      <div className="flex min-h-[520px] min-w-0 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-col">
         {selectedThread ? (
           <>
             <header className="border-b border-gray-200 px-4 py-3">
@@ -368,7 +376,7 @@ export default function TripMessages({
               </p>
             </header>
 
-            <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto bg-gray-50 p-4">
+            <div ref={listRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-gray-50 p-4">
               {hasMore && (
                 <div className="text-center">
                   <button
@@ -413,29 +421,36 @@ export default function TripMessages({
                   sendMessage()
                 }}
               >
-                <div className="flex items-end gap-2">
-                  <div className="min-w-0 flex-1">
-                    <label className="sr-only" htmlFor="trip-message-composer">Write a message</label>
-                    <textarea
-                      id="trip-message-composer"
-                      value={draft}
-                      onChange={(event) => setDraft(event.target.value.slice(0, 500))}
-                      onKeyDown={handleComposerKeyDown}
-                      rows={2}
-                      maxLength={500}
-                      placeholder="Write a message..."
-                      className="max-h-32 min-h-12 w-full resize-y rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                    />
-                    <p className="mt-1 text-right text-xs text-gray-500">{draft.length}/500 · Enter to send, Shift+Enter for a new line</p>
+                <div className="flex min-w-0 flex-col gap-2">
+                  <label className="sr-only" htmlFor="trip-message-composer">Write a message</label>
+                  <textarea
+                    ref={composerRef}
+                    id="trip-message-composer"
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value.slice(0, 500))}
+                    onKeyDown={handleComposerKeyDown}
+                    rows={2}
+                    maxLength={500}
+                    placeholder="Write a message..."
+                    className="min-h-12 w-full min-w-0 flex-1 resize-none overflow-y-auto rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="shrink-0 text-xs text-gray-500">{draft.length}/500</span>
+                    <p
+                      className="min-w-0 flex-1 truncate text-xs text-gray-500"
+                      title="Enter to send, Shift+Enter for a new line"
+                    >
+                      Enter to send, Shift+Enter for a new line
+                    </p>
+                    <button
+                      type="submit"
+                      disabled={!draft.trim() || sending}
+                      className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Send size={16} aria-hidden="true" />
+                      <span>{sending ? 'Sending...' : 'Send'}</span>
+                    </button>
                   </div>
-                  <button
-                    type="submit"
-                    disabled={!draft.trim() || sending}
-                    className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Send size={16} aria-hidden="true" />
-                    <span className="hidden sm:inline">{sending ? 'Sending...' : 'Send'}</span>
-                  </button>
                 </div>
               </form>
             ) : (
