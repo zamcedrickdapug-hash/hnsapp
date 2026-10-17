@@ -394,36 +394,30 @@ export default function TripMessages({
                   key={thread.requestId}
                   type="button"
                   onClick={() => setSelectedRequestId(String(thread.requestId))}
-                  className={`w-full border-b border-gray-200 px-4 py-3 text-left transition-colors ${
+                  className={`flex w-full min-w-0 flex-col gap-1 border-b border-gray-200 px-4 py-3 text-left transition-colors ${
                     isSelected ? 'bg-blue-50' : 'hover:bg-white'
                   }`}
                 >
-                  <div className="flex min-w-0 items-start justify-between gap-2">
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">
+                  <div className="flex w-full min-w-0 items-center justify-between gap-2">
+                    <span className="block min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">
                       {thread.otherParty?.name || (role === 'parent' ? 'Driver' : 'Parent')}
                     </span>
-                    <span className="shrink-0 text-xs text-gray-500">
+                    <span className="shrink-0 whitespace-nowrap text-xs text-gray-500">
                       {thread.lastMessage?.createdAt ? formatThreadTime(thread.lastMessage.createdAt) : ''}
                     </span>
                   </div>
-                  <p className="mt-1 min-w-0 truncate text-xs text-gray-600">
+                  <p className="block w-full min-w-0 truncate text-xs text-gray-600">
                     {thread.studentName || 'Student'} · {thread.schoolName || 'School'}
                   </p>
-                  <div className="mt-1 flex min-w-0 items-center justify-between gap-2">
-                    <p className="min-w-0 flex-1 truncate text-sm text-gray-600">
+                  <div className="flex w-full min-w-0 items-center gap-2">
+                    <p className="block min-w-0 flex-1 truncate text-sm text-gray-600">
                       {thread.lastMessage?.text
                         ? `${previewSender || 'Message'}: ${thread.lastMessage.text}`
                         : 'No messages yet'}
                     </p>
-                    {thread.unreadCount > 0 && (
-                      <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 px-1.5 text-xs font-semibold text-white">
-                        {thread.unreadCount > 99 ? '99+' : thread.unreadCount}
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-1 flex min-w-0 items-center justify-between gap-2">
-                    {statusLabel && (
-                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    <div className="flex min-w-0 shrink-0 items-center gap-1">
+                      {statusLabel && (
+                        <span className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                         statusLabel === 'Active'
                           ? 'bg-green-100 text-green-700'
                           : statusLabel === 'Completed'
@@ -431,11 +425,17 @@ export default function TripMessages({
                             : 'bg-red-100 text-red-700'
                       }`}>
                         {statusLabel}
+                        </span>
+                      )}
+                      <span className="whitespace-nowrap text-[10px] text-gray-500">
+                        {thread.lastMessage?.createdAt ? formatMessageDate(thread.lastMessage.createdAt) : ''}
+                      </span>
+                    </div>
+                    {thread.unreadCount > 0 && (
+                      <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 px-1.5 text-xs font-semibold text-white">
+                        {thread.unreadCount > 99 ? '99+' : thread.unreadCount}
                       </span>
                     )}
-                    <span className="min-w-0 truncate text-[10px] text-gray-500">
-                      {thread.lastMessage?.createdAt ? formatMessageDate(thread.lastMessage.createdAt) : ''}
-                    </span>
                   </div>
                 </button>
               )
@@ -518,7 +518,7 @@ export default function TripMessages({
                     placeholder="Write a message..."
                     className="min-h-12 w-full min-w-0 flex-1 resize-none overflow-y-auto rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   />
-                  <div className="flex w-full min-w-0 items-center gap-2">
+                  <div className="box-border flex w-full min-w-0 items-center justify-between gap-2">
                     <span className="shrink-0 text-xs text-gray-500">{draft.length}/500</span>
                     <p
                       className="min-w-0 flex-1 truncate text-xs text-gray-500"
@@ -529,7 +529,7 @@ export default function TripMessages({
                     <button
                       type="submit"
                       disabled={!draft.trim() || sending}
-                      className="inline-flex h-10 max-w-full shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3"
+                      className="inline-flex h-10 max-w-full shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-blue-600 px-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3"
                     >
                       <Send size={16} aria-hidden="true" />
                       <span>{sending ? 'Sending...' : 'Send'}</span>
