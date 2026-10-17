@@ -581,15 +581,21 @@ function PaymentHistory({
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <StatusChip status={payment.status} />
-                  <p className="mt-2 text-lg font-semibold text-slate-900">{formatMoney(payment.amount, payment.currency)}</p>
-                  <p className="mt-1 text-sm text-slate-600">
-                    {payment.method === 'cash' ? 'Cash' : 'Payment'} · {dateTimeInManila(payment.createdAt)}
-                  </p>
-                  {payment.referenceNo && (
-                    <p className="mt-1 break-all text-sm font-medium text-slate-700">Reference: {payment.referenceNo}</p>
+                  {role === 'driver' && (
+                    <>
+                      <p className="mt-2 text-lg font-semibold text-slate-900">{formatMoney(payment.amount, payment.currency)}</p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {payment.method === 'cash' ? 'Cash' : 'Payment'} · {dateTimeInManila(payment.createdAt)}
+                      </p>
+                      {payment.referenceNo && (
+                        <p className="mt-1 break-all text-sm font-medium text-slate-700">Reference: {payment.referenceNo}</p>
+                      )}
+                    </>
                   )}
-                  {payment.parentName && <p className="mt-1 text-sm text-slate-700">Parent: {payment.parentName}</p>}
-                  {payment.rejectReason && (
+                  {role === 'driver' && payment.parentName && (
+                    <p className="mt-1 text-sm text-slate-700">Parent: {payment.parentName}</p>
+                  )}
+                  {role === 'driver' && payment.rejectReason && (
                     <p className="mt-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
                       Rejection reason: {payment.rejectReason}
                     </p>
@@ -605,7 +611,7 @@ function PaymentHistory({
                   </button>
                 )}
               </div>
-              {!!tripIdsForPayment(payment).length && (
+              {role === 'driver' && !!tripIdsForPayment(payment).length && (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                   <p className="text-sm font-semibold text-slate-700">Trips covered</p>
                   <ul className="mt-2 space-y-2">
