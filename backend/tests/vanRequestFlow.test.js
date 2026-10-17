@@ -946,9 +946,11 @@ test('driver photos are readable only by the trip parent or that driver', async 
       schoolName: 'Example School',
     },
   });
+  assert.equal(noDriverRequest.status, 201);
+  const noDriverRequestId = noDriverRequest.body.request._id;
   const noDriverPhoto = await f.request(
-    `/api/parents/van-requests/${noDriverRequest.body.request._id}/driver-photo`,
-    f.parent,
+    `/api/parents/van-requests/${noDriverRequestId}/driver-photo`,
+    secondParent,
     { responseType: 'arrayBuffer' }
   );
   assert.equal(noDriverPhoto.status, 404);
@@ -963,6 +965,14 @@ test('driver photos are readable only by the trip parent or that driver', async 
     `${f.baseUrl}/api/parents/van-requests/${created.body.request._id}/driver-photo`
   );
   assert.equal(unauthenticated.status, 401);
+});
+
+test('parent driver-photo route returns 404 for an invalid request id', async (t) => {
+  const f = await createFixture(t);
+  const response = await f.request('/api/parents/van-requests/not-an-id/driver-photo', f.parent);
+
+  assert.equal(response.status, 404);
+  assert.deepEqual(response.body, { message: 'Driver photo not found.' });
 });
 
 test('parent must select a non-empty unique list of saved children', async (t) => {

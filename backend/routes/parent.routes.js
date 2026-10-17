@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const VanRequest = require('../models/VanRequest');
@@ -721,6 +722,10 @@ router.get('/van-requests', requireParent, async (req, res) => {
 
 router.get('/van-requests/:requestId/driver-photo', requireParent, async (req, res) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.requestId)) {
+      return res.status(404).json({ message: 'Driver photo not found.' });
+    }
+
     const request = await VanRequest.findOne({
       _id: req.params.requestId,
       parent: req.user._id,
