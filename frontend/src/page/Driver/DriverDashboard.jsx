@@ -928,7 +928,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 		routeState.requestId = requestId
 		const requestPosition = selectedTripVanPosition
 
-		apiFetch('/api/routing/multi-route', {
+		apiFetch('/api/routing/route', {
 			method: 'POST',
 			headers: {
 				Authorization: `Bearer ${token}`,
@@ -936,8 +936,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 			},
 			body: JSON.stringify({
 				start: selectedTripVanPosition,
-				pickups: [selectedTripRequesterPosition],
-				end: selectedTripDestinationPosition,
+				end: selectedTripMapTargetPosition,
 			}),
 		})
 			.then((payload) => {
@@ -963,7 +962,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 					routeRequestRef.current.hasRoute = true
 					routeRequestRef.current.lastSuccessfulPosition = requestPosition
 					setOptimizedRoute(route)
-					setRouteStops(Array.isArray(payload?.stops) ? payload.stops : [])
+					setRouteStops([])
 				}
 			})
 			.catch(() => {
