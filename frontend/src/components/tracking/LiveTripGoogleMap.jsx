@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps'
+import { APIProvider, Map, AdvancedMarker, useMap } from '@vis.gl/react-google-maps'
 
 const DEFAULT_CENTER = { lat: 14.5994, lng: 120.9842 }
 
@@ -46,67 +46,12 @@ function PlannedRoute({ path }) {
         strokeColor: '#3b82f6',
         strokeOpacity: 0.85,
         strokeWeight: 5,
-        map,
       })
     }
+    lineRef.current.setMap(map)
     lineRef.current.setPath(path)
+    return () => lineRef.current?.setMap(null)
   }, [map, path])
-
-  useEffect(() => () => lineRef.current?.setMap(null), [])
-  return null
-}
-
-// Ruta sa kalsada (Directions API) kapag walang planned route.
-// Kapag pumalya, tuwid na linya na lang.
-function DirectionsRoute({ origin, destination }) {
-  const map = useMap()
-  const routesLib = useMapsLibrary('routes')
-  const rendererRef = useRef(null)
-  const fallbackRef = useRef(null)
-  const lastRequest = useRef(0)
-
-  useEffect(() => {
-    if (!map || !routesLib || !origin || !destination) return
-    const now = Date.now()
-    if (rendererRef.current && now - lastRequest.current < 15000) return // limitahan ang requests
-    lastRequest.current = now
-
-    if (!rendererRef.current) {
-      rendererRef.current = new routesLib.DirectionsRenderer({
-        map,
-        suppressMarkers: true,
-        preserveViewport: true,
-        polylineOptions: { strokeColor: '#3b82f6', strokeWeight: 5, strokeOpacity: 0.85 },
-      })
-    }
-
-    new routesLib.DirectionsService().route(
-      { origin, destination, travelMode: 'DRIVING' },
-      (result, status) => {
-        if (status === 'OK') {
-          fallbackRef.current?.setMap(null)
-          fallbackRef.current = null
-          rendererRef.current.setDirections(result)
-        } else {
-          rendererRef.current.setDirections({ routes: [] })
-          if (!fallbackRef.current) {
-            fallbackRef.current = new window.google.maps.Polyline({
-              strokeColor: '#3b82f6',
-              strokeOpacity: 0.7,
-              strokeWeight: 4,
-              map,
-            })
-          }
-          fallbackRef.current.setPath([origin, destination])
-        }
-      },
-    )
-  }, [map, routesLib, origin?.lat, origin?.lng, destination?.lat, destination?.lng])
-
-  useEffect(() => () => {
-    rendererRef.current?.setMap(null)
-    fallbackRef.current?.setMap(null)
-  }, [])
 
   return null
 }
@@ -189,9 +134,9 @@ export default function LiveTripGoogleMap({
 
           {plannedPath.length > 1 ? (
             <PlannedRoute path={plannedPath} />
-          ) : (
-            showRoute && van && target && <DirectionsRoute origin={van} destination={target} />
-          )}
+          ) : showRoute && van && target ? (
+            <PlannedRoute path={[van, target]} />
+          ) : null}
         </Map>
       </APIProvider>
     </div>
