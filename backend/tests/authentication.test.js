@@ -49,6 +49,10 @@ const createFixture = async (t) => {
     constructor(data) {
       Object.assign(this, { _id: randomBytes(12).toString('hex'), notifications: [], accountState: 'active' }, data);
     }
+    getStudentList() {
+      if (this.students?.length) return this.students;
+      return this.student?.fullName ? [this.student] : [];
+    }
     async save() { users.set(this._id, this); return this; }
     async comparePassword(value) { return bcrypt.compare(value, this.passwordHash); }
     static findOne(query) {
@@ -361,6 +365,13 @@ test('parent profile endpoint reads and persists editable parent and student det
     studentName: 'Student Example',
     gradeSection: 'Grade 5 - A',
     schoolName: 'Example School',
+    students: [{
+      fullName: 'Student Example',
+      gradeLevel: 'Grade 5 - A',
+      schoolName: 'Example School',
+      schoolLatitude: 14.5995,
+      schoolLongitude: 120.9842,
+    }],
     pickupZone: 'New pickup zone',
     pickupLatitude: '',
     pickupLongitude: '',
@@ -384,6 +395,127 @@ test('parent profile endpoint reads and persists editable parent and student det
     schoolLongitude: '',
   }, token, 'PUT');
   assert.equal(incompleteCoordinates.status, 400);
+});
+
+test('parent profile saves multiple children while preserving household pickup fields', async (t) => {
+  const f = await createFixture(t);
+  const parent = await f.addUser({
+    phone: '+639171234567',
+    homeAddress: 'Home pickup',
+    student: {
+      fullName: 'Legacy Child',
+      gradeLevel: 'Grade 1',
+      pickupZone: 'Home pickup',
+      pickupLatitude: 14.7,
+      pickupLongitude: 121.1,
+    },
+  });
+  const token = f.sessionToken(parent);
+  const students = [
+    {
+      fullName: ' First Child ',
+      gradeLevel: ' Grade 3 - A ',
+      schoolName: 'La Concepcion College',
+      schoolLatitude: '14.81286',
+      schoolLongitude: '121.07172',
+      pickupLatitude: 0,
+      arbitraryField: 'must be ignored',
+    },
+    {
+      fullName: 'Second Child',
+      gradeLevel: 'Grade 5 - B',
+      schoolName: 'La Concepcion College',
+      schoolLatitude: 14.81286,
+      schoolLongitude: 121.07172,
+    },
+  ];
+  const saved = await f.request('/api/parents/profile', {
+    parentName: 'Test Account',
+    contactNumber: '+639171234567',
+    students,
+  }, token, 'PUT');
+
+  assert.equal(saved.status, 200);
+  assert.deepEqual(saved.body.profile.students, [
+    {
+      fullName: 'First Child',
+      gradeLevel: 'Grade 3 - A',
+      schoolName: 'La Concepcion College',
+      schoolLatitude: 14.81286,
+      schoolLongitude: 121.07172,
+    },
+    {
+      fullName: 'Second Child',
+      gradeLevel: 'Grade 5 - B',
+      schoolName: 'La Concepcion College',
+      schoolLatitude: 14.81286,
+      schoolLongitude: 121.07172,
+    },
+  ]);
+  assert.equal(parent.student.fullName, 'First Child');
+  assert.equal(parent.student.gradeLevel, 'Grade 3 - A');
+  assert.equal(parent.student.schoolName, 'La Concepcion College');
+  assert.equal(parent.student.schoolLatitude, 14.81286);
+  assert.equal(parent.student.schoolLongitude, 121.07172);
+  assert.equal(parent.student.pickupZone, 'Home pickup');
+  assert.equal(parent.student.pickupLatitude, 14.7);
+  assert.equal(parent.student.pickupLongitude, 121.1);
+  assert.equal(parent.students[0].pickupLatitude, undefined);
+
+  const tooManyStudents = await f.request('/api/parents/profile', {
+    parentName: 'Test Account',
+    contactNumber: '+639171234567',
+    students: Array.from({ length: 6 }, (_, index) => ({
+      fullName: `Child ${index}`,
+      gradeLevel: 'Grade 1',
+    })),
+  }, token, 'PUT');
+  assert.equal(tooManyStudents.status, 400);
+
+  const duplicateNames = await f.request('/api/parents/profile', {
+    parentName: 'Test Account',
+    contactNumber: '+639171234567',
+    students: [
+      { fullName: 'Same Name', gradeLevel: 'Grade 1' },
+      { fullName: ' same name ', gradeLevel: 'Grade 2' },
+    ],
+  }, token, 'PUT');
+  assert.equal(duplicateNames.status, 400);
+
+  const invalidCoordinates = await f.request('/api/parents/profile', {
+    parentName: 'Test Account',
+    contactNumber: '+639171234567',
+    students: [{
+      fullName: 'Child',
+      gradeLevel: 'Grade 1',
+      schoolLatitude: 91,
+      schoolLongitude: 121,
+    }],
+  }, token, 'PUT');
+  assert.equal(invalidCoordinates.status, 400);
+});
+
+test('parent profile returns a legacy singular student as a one-item list', async (t) => {
+  const f = await createFixture(t);
+  const parent = await f.addUser({
+    student: {
+      fullName: 'Legacy Child',
+      gradeLevel: 'Grade 2',
+      schoolName: 'Legacy School',
+      schoolLatitude: 14.8,
+      schoolLongitude: 121.0,
+    },
+  });
+
+  const response = await f.request('/api/parents/profile', undefined, f.sessionToken(parent));
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body.profile.students, [{
+    fullName: 'Legacy Child',
+    gradeLevel: 'Grade 2',
+    schoolName: 'Legacy School',
+    schoolLatitude: 14.8,
+    schoolLongitude: 121.0,
+  }]);
 });
 
 test('one password login returns each stored role and a compatible session token', async (t) => {

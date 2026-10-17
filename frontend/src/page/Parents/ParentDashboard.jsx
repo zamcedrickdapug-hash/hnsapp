@@ -35,7 +35,7 @@ import { NotificationsContainer } from '../../components/notifications/Notificat
 import { ReceiptModal } from '../../components/modals/ReceiptModal'
 import { ReportIssueModal } from '../../components/modals/ReportIssueModal'
 import PickupLocationPicker from '../../components/dashboard/parent/PickupLocationPicker'
-import SchoolSelect from '../../components/dashboard/parent/SchoolSelect'
+import ChildrenEditor from '../../components/dashboard/parent/ChildrenEditor'
 import TripHistoryPage from './TripHistoryPage'
 import { distanceInMeters } from '../../utils/driverDashboard'
 import './ParentDashboard.scss'
@@ -52,6 +52,7 @@ const defaultSettings = {
   pickupZone: '',
   pickupLatitude: '',
   pickupLongitude: '',
+  students: [],
   emergencyContact: '',
   notes: '',
 }
@@ -125,20 +126,40 @@ export default function ParentDashboard({ token, user, onLogout }) {
 
   // ====== COMPUTED VALUES ======
 
-  const mapParentProfileToSettings = useCallback((profile = {}) => ({
-    ...defaultSettings,
-    parentDisplayName: profile.parentName || user.fullName || user.name || '',
-    contactNumber: profile.contactNumber || user.phone || '',
-    emergencyContact: profile.contactNumber || user.phone || '',
-    studentName: profile.studentName || '',
-    studentGradeSection: profile.gradeSection || '',
-    schoolName: profile.schoolName || '',
-    schoolLatitude: profile.schoolLatitude ?? '',
-    schoolLongitude: profile.schoolLongitude ?? '',
-    pickupZone: profile.pickupZone || user.homeAddress || '',
-    pickupLatitude: profile.pickupLatitude ?? '',
-    pickupLongitude: profile.pickupLongitude ?? '',
-  }), [user])
+  const mapParentProfileToSettings = useCallback((profile = {}) => {
+    const students = Array.isArray(profile.students) && profile.students.length
+      ? profile.students.map((student) => ({
+        fullName: student.fullName || '',
+        gradeLevel: student.gradeLevel || '',
+        schoolName: student.schoolName || '',
+        schoolLatitude: student.schoolLatitude ?? '',
+        schoolLongitude: student.schoolLongitude ?? '',
+      }))
+      : [{
+        fullName: profile.studentName || '',
+        gradeLevel: profile.gradeSection || '',
+        schoolName: profile.schoolName || '',
+        schoolLatitude: profile.schoolLatitude ?? '',
+        schoolLongitude: profile.schoolLongitude ?? '',
+      }]
+    const firstStudent = students[0]
+
+    return {
+      ...defaultSettings,
+      parentDisplayName: profile.parentName || user.fullName || user.name || '',
+      contactNumber: profile.contactNumber || user.phone || '',
+      emergencyContact: profile.contactNumber || user.phone || '',
+      studentName: firstStudent.fullName,
+      studentGradeSection: firstStudent.gradeLevel,
+      schoolName: firstStudent.schoolName,
+      schoolLatitude: firstStudent.schoolLatitude,
+      schoolLongitude: firstStudent.schoolLongitude,
+      pickupZone: profile.pickupZone || user.homeAddress || '',
+      pickupLatitude: profile.pickupLatitude ?? '',
+      pickupLongitude: profile.pickupLongitude ?? '',
+      students,
+    }
+  }, [user])
 
   const loadParentProfile = useCallback(async () => {
     setLoadingSettings(true)
@@ -217,20 +238,16 @@ export default function ParentDashboard({ token, user, onLogout }) {
       : `about ${minutes} min`
   }, [activeRideRequest])
 
-  const hasRequiredStudentDetails = [
-    settingsData.studentName,
-    settingsData.studentGradeSection,
-    settingsData.schoolName,
-    settingsData.pickupZone,
-  ].every((value) => typeof value === 'string' && value.trim())
-  const settingsIsDirty = JSON.stringify(settingsData) !== JSON.stringify(savedSettingsData)
+  const children = settingsData.students || []
   const missingStudentDetails = [
-    ['studentName', 'Student name'],
-    ['studentGradeSection', 'Grade/section'],
-    ['schoolName', 'School name'],
-    ['pickupZone', 'Pickup zone'],
-  ].filter(([field]) => !String(settingsData[field] || '').trim())
+    [children.length > 0 && children.every((student) => student.fullName.trim()), 'Student name'],
+    [children.length > 0 && children.every((student) => student.gradeLevel.trim()), 'Grade/section'],
+    [children.length > 0 && children.every((student) => student.schoolName.trim()), 'School name'],
+    [Boolean(settingsData.pickupZone.trim()), 'Pickup zone'],
+  ].filter(([isPresent]) => !isPresent)
     .map(([, label]) => label)
+  const hasRequiredStudentDetails = missingStudentDetails.length === 0
+  const settingsIsDirty = JSON.stringify(settingsData) !== JSON.stringify(savedSettingsData)
 
   const updateSettingsField = (field, value) => {
     setSettingsData((current) => ({ ...current, [field]: value }))
@@ -238,6 +255,31 @@ export default function ParentDashboard({ token, user, onLogout }) {
       if (!current[field]) return current
       const next = { ...current }
       delete next[field]
+      return next
+    })
+  }
+
+  const updateStudents = (students) => {
+    const firstStudent = students[0] || {
+      fullName: '',
+      gradeLevel: '',
+      schoolName: '',
+      schoolLatitude: '',
+      schoolLongitude: '',
+    }
+    setSettingsData((current) => ({
+      ...current,
+      students,
+      studentName: firstStudent.fullName,
+      studentGradeSection: firstStudent.gradeLevel,
+      schoolName: firstStudent.schoolName,
+      schoolLatitude: firstStudent.schoolLatitude,
+      schoolLongitude: firstStudent.schoolLongitude,
+    }))
+    setSettingsFieldErrors((current) => {
+      if (!current.students) return current
+      const next = { ...current }
+      delete next.students
       return next
     })
   }
@@ -453,6 +495,14 @@ export default function ParentDashboard({ token, user, onLogout }) {
       setSettingsStatus('Please enter a valid Philippine mobile number.')
       return
     }
+    if (!updatedData.students.length || updatedData.students.some((student) => (
+      !student.fullName.trim() || !student.gradeLevel.trim() || !student.schoolName.trim()
+    ))) {
+      const message = 'Enter a name, grade/section, and school for each child.'
+      setSettingsFieldErrors({ students: message })
+      setSettingsStatus(message)
+      return
+    }
 
     setSavingSettings(true)
     setSettingsStatus('')
@@ -472,6 +522,13 @@ export default function ParentDashboard({ token, user, onLogout }) {
           pickupLongitude: updatedData.pickupLongitude,
           schoolLatitude: updatedData.schoolLatitude,
           schoolLongitude: updatedData.schoolLongitude,
+          students: updatedData.students.map((student) => ({
+            fullName: student.fullName.trim(),
+            gradeLevel: student.gradeLevel.trim(),
+            schoolName: student.schoolName.trim(),
+            schoolLatitude: student.schoolLatitude,
+            schoolLongitude: student.schoolLongitude,
+          })),
         }),
       })
       const profileSettings = mapParentProfileToSettings(response.profile || {})
@@ -1071,43 +1128,14 @@ export default function ParentDashboard({ token, user, onLogout }) {
                     <p>These details are used to prepare your trip booking.</p>
                   </div>
                 </div>
-                <div className="parent-settings__grid">
-                  <div className="parent-settings__field">
-                    <label htmlFor="student-name">Student Name <span aria-hidden="true">*</span></label>
-                    <input
-                      id="student-name"
-                      type="text"
-                      placeholder="Enter student name"
-                      value={settingsData.studentName}
-                      onChange={(event) => updateSettingsField('studentName', event.target.value)}
-                      disabled={savingSettings}
-                    />
-                  </div>
-                  <div className="parent-settings__field">
-                    <label htmlFor="student-grade">Grade/Section <span aria-hidden="true">*</span></label>
-                    <input
-                      id="student-grade"
-                      type="text"
-                      placeholder="e.g. Grade 5 - Section A"
-                      value={settingsData.studentGradeSection}
-                      onChange={(event) => updateSettingsField('studentGradeSection', event.target.value)}
-                      disabled={savingSettings}
-                    />
-                  </div>
-                  <div className="parent-settings__field">
-                    <SchoolSelect
-                      value={settingsData.schoolName}
-                      latitude={settingsData.schoolLatitude}
-                      longitude={settingsData.schoolLongitude}
-                      token={token}
-                      onChange={(school) => {
-                        updateSettingsField('schoolName', school?.name || '')
-                        updateSettingsField('schoolLatitude', school?.latitude ?? '')
-                        updateSettingsField('schoolLongitude', school?.longitude ?? '')
-                      }}
-                      disabled={savingSettings}
-                    />
-                  </div>
+                <div className="space-y-4">
+                  <ChildrenEditor
+                    students={settingsData.students}
+                    onChange={updateStudents}
+                    token={token}
+                    disabled={savingSettings}
+                    error={settingsFieldErrors.students}
+                  />
                   <div className="parent-settings__field">
                     <label htmlFor="pickup-zone">Pickup Zone <span aria-hidden="true">*</span></label>
                     <input

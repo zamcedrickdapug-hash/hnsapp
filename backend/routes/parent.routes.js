@@ -122,18 +122,30 @@ router.post('/create-profile', async (req, res) => {
   }
 });
 
-const buildParentProfile = (user) => ({
-  parentName: user.fullName || '',
-  contactNumber: user.phone || '',
-  studentName: user.student?.fullName || '',
-  gradeSection: user.student?.gradeLevel || '',
-  schoolName: user.student?.schoolName || '',
-  pickupZone: user.student?.pickupZone || user.homeAddress || '',
-  pickupLatitude: user.student?.pickupLatitude ?? '',
-  pickupLongitude: user.student?.pickupLongitude ?? '',
-  schoolLatitude: user.student?.schoolLatitude ?? '',
-  schoolLongitude: user.student?.schoolLongitude ?? '',
-});
+const buildParentProfile = (user) => {
+  const students = (typeof user.getStudentList === 'function' ? user.getStudentList() : [])
+    .map((student) => ({
+      fullName: student.fullName || '',
+      gradeLevel: student.gradeLevel || '',
+      schoolName: student.schoolName || '',
+      schoolLatitude: student.schoolLatitude ?? '',
+      schoolLongitude: student.schoolLongitude ?? '',
+    }));
+
+  return {
+    parentName: user.fullName || '',
+    contactNumber: user.phone || '',
+    studentName: user.student?.fullName || '',
+    gradeSection: user.student?.gradeLevel || '',
+    schoolName: user.student?.schoolName || '',
+    students,
+    pickupZone: user.student?.pickupZone || user.homeAddress || '',
+    pickupLatitude: user.student?.pickupLatitude ?? '',
+    pickupLongitude: user.student?.pickupLongitude ?? '',
+    schoolLatitude: user.student?.schoolLatitude ?? '',
+    schoolLongitude: user.student?.schoolLongitude ?? '',
+  };
+};
 
 router.get('/profile', requireParent, (req, res) => {
   return res.status(200).json({ profile: buildParentProfile(req.user) });
@@ -143,9 +155,66 @@ router.put('/profile', requireParent, async (req, res) => {
   const body = req.body || {};
   const parentName = typeof body.parentName === 'string' ? body.parentName.trim() : '';
   const contactNumber = typeof body.contactNumber === 'string' ? body.contactNumber.trim() : '';
-  const studentName = typeof body.studentName === 'string' ? body.studentName.trim() : '';
-  const gradeSection = typeof body.gradeSection === 'string' ? body.gradeSection.trim() : '';
-  const schoolName = typeof body.schoolName === 'string' ? body.schoolName.trim() : '';
+  let studentName = typeof body.studentName === 'string' ? body.studentName.trim() : '';
+  let gradeSection = typeof body.gradeSection === 'string' ? body.gradeSection.trim() : '';
+  let schoolName = typeof body.schoolName === 'string' ? body.schoolName.trim() : '';
+  let students;
+  if (Object.hasOwn(body, 'students')) {
+    if (!Array.isArray(body.students) || body.students.length > 5) {
+      return res.status(400).json({ message: 'Students must be an array of up to 5 entries.' });
+    }
+
+    students = [];
+    const studentNames = new Set();
+    for (const [index, item] of body.students.entries()) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return res.status(400).json({ message: `Student ${index + 1} must be an object.` });
+      }
+
+      const student = {
+        fullName: typeof item.fullName === 'string' ? item.fullName.trim() : '',
+        gradeLevel: typeof item.gradeLevel === 'string' ? item.gradeLevel.trim() : '',
+        schoolName: typeof item.schoolName === 'string' ? item.schoolName.trim() : '',
+      };
+      if (!student.fullName || !student.gradeLevel) {
+        return res.status(400).json({ message: `Student ${index + 1} name and grade/section are required.` });
+      }
+
+      const normalizedName = student.fullName.toLowerCase();
+      if (studentNames.has(normalizedName)) {
+        return res.status(400).json({ message: 'Student names must be unique.' });
+      }
+      studentNames.add(normalizedName);
+
+      const hasLatitude = item.schoolLatitude !== undefined && item.schoolLatitude !== null &&
+        !(typeof item.schoolLatitude === 'string' && !item.schoolLatitude.trim());
+      const hasLongitude = item.schoolLongitude !== undefined && item.schoolLongitude !== null &&
+        !(typeof item.schoolLongitude === 'string' && !item.schoolLongitude.trim());
+      if (hasLatitude !== hasLongitude) {
+        return res.status(400).json({ message: `Student ${index + 1} must have both school coordinates or neither.` });
+      }
+      if (hasLatitude) {
+        if (!['number', 'string'].includes(typeof item.schoolLatitude) ||
+            !['number', 'string'].includes(typeof item.schoolLongitude)) {
+          return res.status(400).json({ message: `Student ${index + 1} has invalid school coordinates.` });
+        }
+        const latitude = Number(item.schoolLatitude);
+        const longitude = Number(item.schoolLongitude);
+        if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+            !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+          return res.status(400).json({ message: `Student ${index + 1} has invalid school coordinates.` });
+        }
+        student.schoolLatitude = latitude;
+        student.schoolLongitude = longitude;
+      }
+      students.push(student);
+    }
+
+    const firstStudent = students[0];
+    studentName = firstStudent?.fullName || '';
+    gradeSection = firstStudent?.gradeLevel || '';
+    schoolName = firstStudent?.schoolName || '';
+  }
   const pickupZone = typeof body.pickupZone === 'string' ? body.pickupZone.trim() : '';
   const hasPickupCoordinateFields =
     body.pickupLatitude !== undefined || body.pickupLongitude !== undefined;
@@ -203,18 +272,27 @@ router.put('/profile', requireParent, async (req, res) => {
   try {
     req.user.fullName = parentName;
     req.user.phone = normalizePhoneNumber(contactNumber);
-    req.user.homeAddress = pickupZone;
     if (!req.user.student) req.user.student = {};
     req.user.student.fullName = studentName;
     req.user.student.gradeLevel = gradeSection;
     req.user.student.schoolName = schoolName;
-    req.user.student.pickupZone = pickupZone;
+    if (students === undefined || typeof body.pickupZone === 'string') {
+      req.user.homeAddress = pickupZone;
+      req.user.student.pickupZone = pickupZone;
+    }
     if (hasPickupCoordinateFields) {
       req.user.student.pickupLatitude = hasPickupLatitude ? pickupLatitude : undefined;
       req.user.student.pickupLongitude = hasPickupLongitude ? pickupLongitude : undefined;
     }
-    req.user.student.schoolLatitude = hasLatitude ? schoolLatitude : undefined;
-    req.user.student.schoolLongitude = hasLongitude ? schoolLongitude : undefined;
+    if (students !== undefined) {
+      const firstStudent = students[0];
+      req.user.students = students;
+      req.user.student.schoolLatitude = firstStudent?.schoolLatitude;
+      req.user.student.schoolLongitude = firstStudent?.schoolLongitude;
+    } else {
+      req.user.student.schoolLatitude = hasLatitude ? schoolLatitude : undefined;
+      req.user.student.schoolLongitude = hasLongitude ? schoolLongitude : undefined;
+    }
     await req.user.save();
 
     return res.status(200).json({

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { apiFetch } from '../../../api'
 
 export default function SchoolSelect({
@@ -9,6 +9,7 @@ export default function SchoolSelect({
   token,
   disabled = false,
 }) {
+  const id = useId()
   const [schools, setSchools] = useState([])
   const [searchResults, setSearchResults] = useState([])
   const [search, setSearch] = useState('')
@@ -83,11 +84,11 @@ export default function SchoolSelect({
 
   return (
     <div className="space-y-2">
-      <label htmlFor="school-search" className="block text-sm font-medium text-gray-700">
+      <label htmlFor={`${id}-school-search`} className="block text-sm font-medium text-gray-700">
         Search schools
       </label>
       <input
-        id="school-search"
+        id={`${id}-school-search`}
         type="search"
         value={search}
         onChange={(event) => setSearch(event.target.value)}
@@ -96,11 +97,11 @@ export default function SchoolSelect({
         disabled={disabled}
       />
       {error && <p className="text-sm text-red-700" role="status">{error}</p>}
-      <label htmlFor="school-select" className="block text-sm font-medium text-gray-700">
+      <label htmlFor={`${id}-school-select`} className="block text-sm font-medium text-gray-700">
         School Name <span aria-hidden="true">*</span>
       </label>
       <select
-        id="school-select"
+        id={`${id}-school-select`}
         value={value}
         onChange={handleChange}
         className="w-full rounded-md border border-gray-300 px-3 py-2"
