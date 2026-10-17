@@ -29,7 +29,7 @@ export default function TripsFilterBar({
 	const [showAdvanced, setShowAdvanced] = useState(false)
 
 	return (
-		<motion.div className="filters-bar" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+		<motion.div className="filters-bar" initial={{ y: 8 }} animate={{ y: 0 }}>
 			{/* Status Filter */}
 			<div className="filter-group">
 				<label className="filter-label">Status</label>
@@ -42,6 +42,7 @@ export default function TripsFilterBar({
 							<motion.button
 								key={option.value}
 								className={`filter-button ${selectedFilter === option.value ? 'active' : ''}`}
+								aria-pressed={selectedFilter === option.value}
 								onClick={() => {
 									onFilterChange(option.value)
 									// DEBUG: Log filter click
@@ -82,6 +83,7 @@ export default function TripsFilterBar({
 			<motion.button
 				className="advanced-filter-btn"
 				onClick={() => setShowAdvanced(!showAdvanced)}
+				aria-expanded={showAdvanced}
 				whileHover={{ scale: 1.05 }}
 				whileTap={{ scale: 0.95 }}
 			>
@@ -93,7 +95,7 @@ export default function TripsFilterBar({
 			<motion.div
 				className="advanced-filters"
 				initial={false}
-				animate={{ height: showAdvanced ? 'auto' : 0, opacity: showAdvanced ? 1 : 0 }}
+				animate={{ height: showAdvanced ? 'auto' : 0 }}
 				transition={{ type: 'spring', stiffness: 200, damping: 25 }}
 				style={{ overflow: 'hidden' }}
 			>

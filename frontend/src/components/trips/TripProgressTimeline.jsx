@@ -42,9 +42,8 @@ export default function TripProgressTimeline({ trip }) {
 	const completedSteps = getCompletedSteps()
 
 	const containerVariants = {
-		hidden: { opacity: 0 },
+		hidden: {},
 		visible: {
-			opacity: 1,
 			transition: {
 				staggerChildren: 0.08,
 				delayChildren: 0.1,
@@ -53,9 +52,8 @@ export default function TripProgressTimeline({ trip }) {
 	}
 
 	const itemVariants = {
-		hidden: { opacity: 0, y: 10 },
+		hidden: { y: 6 },
 		visible: {
-			opacity: 1,
 			y: 0,
 			transition: { type: 'spring', stiffness: 100, damping: 12 },
 		},

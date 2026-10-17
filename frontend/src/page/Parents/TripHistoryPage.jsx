@@ -1,19 +1,6 @@
 import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import {
-	Search,
-	Filter,
-	Calendar,
-	SortAsc,
-	TrendingUp,
-	Clock,
-	MapPin,
-	Navigation,
-	CheckCircle2,
-	AlertTriangle,
-	Zap,
-	Users,
-} from 'lucide-react'
+import { Search, MapPin } from 'lucide-react'
 import TripStatistics from '../../components/trips/TripStatistics'
 import TripsFilterBar from '../../components/trips/TripsFilterBar'
 import TripsTable from '../../components/trips/TripsTable'
@@ -182,34 +169,25 @@ export default function TripHistoryPage({
 	return (
 		<motion.div
 			className="trip-history-page"
-			initial={{ opacity: 0 }}
-			animate={{ opacity: 1 }}
-			transition={{ duration: 0.5 }}
 		>
 			{/* Header */}
-			<motion.div className="history-header" initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
+			<motion.div className="history-header" initial={{ y: -12 }} animate={{ y: 0 }}>
 				<div className="header-content">
 					<div>
 						<h1>Trip History</h1>
 						<p>View and manage all your school transport trips</p>
-					</div>
-					<div className="header-icon">
-						<Navigation size={32} />
 					</div>
 				</div>
 			</motion.div>
 
 			{/* Statistics */}
 			<TripStatistics data={statistics} />
-			{isLoading && <p role="status" className="text-sm text-on-dark-label">Loading trips...</p>}
+			{isLoading && <p role="status" className="trip-history-loading">Loading trips...</p>}
 			{error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
 
 			{/* Search and Filters */}
 			<motion.div
 				className="search-filter-section"
-				initial={{ y: 20, opacity: 0 }}
-				animate={{ y: 0, opacity: 1 }}
-				transition={{ delay: 0.1 }}
 			>
 				<div className="search-bar-wrapper">
 					<Search size={18} className="search-icon" />
@@ -238,9 +216,6 @@ export default function TripHistoryPage({
 				{filteredTrips.length > 0 ? (
 					<motion.div
 						key="trips-list"
-						initial={{ opacity: 0 }}
-						animate={{ opacity: 1 }}
-						exit={{ opacity: 0 }}
 						className="trips-list"
 					>
 						<TripsTable
@@ -254,9 +229,9 @@ export default function TripHistoryPage({
 				) : !isLoading ? (
 					<motion.div
 						key="empty-state"
-						initial={{ opacity: 0, scale: 0.9 }}
-						animate={{ opacity: 1, scale: 1 }}
-						exit={{ opacity: 0, scale: 0.9 }}
+						initial={{ scale: 0.96 }}
+						animate={{ scale: 1 }}
+						exit={{ scale: 0.96 }}
 						className="empty-state"
 					>
 						<div className="empty-icon">

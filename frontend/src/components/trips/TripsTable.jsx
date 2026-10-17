@@ -20,26 +20,22 @@ import './TripsTable.scss'
 // Display shows: Proper case with colors and icons
 const STATUS_CONFIG = {
 	completed: {
-		color: '#86efac',
-		bgColor: 'rgba(16, 185, 129, 0.15)',
+		className: 'status-completed',
 		icon: CheckCircle2,
 		display: 'Completed',
 	},
 	'on the way': {
-		color: '#93c5fd',
-		bgColor: 'rgba(59, 130, 246, 0.15)',
+		className: 'status-active',
 		icon: Navigation,
 		display: 'On The Way',
 	},
 	cancelled: {
-		color: '#fca5a5',
-		bgColor: 'rgba(239, 68, 68, 0.15)',
+		className: 'status-cancelled',
 		icon: AlertTriangle,
 		display: 'Cancelled',
 	},
 	searching: {
-		color: '#f59e0b',
-		bgColor: 'rgba(245, 158, 11, 0.15)',
+		className: 'status-searching',
 		icon: Clock,
 		display: 'Searching',
 	},
@@ -60,23 +56,24 @@ function TripCard({ trip, isExpanded, onToggleExpand, onViewReceipt, onReportIss
 		<motion.div
 			className={`trip-card-wrapper ${isExpanded ? 'expanded' : ''}`}
 			layout
-			initial={{ opacity: 0, y: 10 }}
-			animate={{ opacity: 1, y: 0 }}
-			exit={{ opacity: 0, y: -10 }}
+			initial={{ y: 8 }}
+			animate={{ y: 0 }}
+			exit={{ y: -8 }}
 			transition={{ type: 'spring', stiffness: 300, damping: 25 }}
 		>
 			{/* Collapsed Header */}
 			<motion.button
 				className="trip-card-header"
 				onClick={() => onToggleExpand(isExpanded ? null : trip.id)}
-				whileHover={{ background: 'rgba(255, 255, 255, 0.05)' }}
 				whileTap={{ scale: 0.98 }}
+				aria-label={`${isExpanded ? 'Collapse' : 'Expand'} trip details for ${trip.studentName}`}
+				aria-expanded={isExpanded}
 			>
 				<div className="trip-header-left">
-					<div className="trip-status-badge" style={{ backgroundColor: statusConfig.bgColor }}>
-						<StatusIcon size={18} color={statusConfig.color} />
-					<span style={{ color: statusConfig.color }}>{statusConfig.display}</span>
-				</div>
+					<div className={`trip-status-badge ${statusConfig.className}`}>
+						<StatusIcon size={18} aria-hidden="true" />
+						<span>{statusConfig.display}</span>
+					</div>
 					<div className="trip-header-info">
 						<div className="trip-main-info">
 							<span className="trip-student">{trip.studentName}</span>
@@ -113,9 +110,9 @@ function TripCard({ trip, isExpanded, onToggleExpand, onViewReceipt, onReportIss
 				{isExpanded && (
 					<motion.div
 						className="trip-card-expanded"
-						initial={{ opacity: 0, height: 0 }}
-						animate={{ opacity: 1, height: 'auto' }}
-						exit={{ opacity: 0, height: 0 }}
+						initial={{ height: 0 }}
+						animate={{ height: 'auto' }}
+						exit={{ height: 0 }}
 						transition={{ type: 'spring', stiffness: 300, damping: 30 }}
 					>
 						<div className="expanded-content">
