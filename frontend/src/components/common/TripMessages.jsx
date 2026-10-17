@@ -402,11 +402,11 @@ export default function TripMessages({
                     <span className="block min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">
                       {thread.otherParty?.name || (role === 'parent' ? 'Driver' : 'Parent')}
                     </span>
-                    <span className="shrink-0 whitespace-nowrap text-xs text-gray-500">
+                    <span className="shrink-0 whitespace-nowrap text-sm text-gray-600">
                       {thread.lastMessage?.createdAt ? formatThreadTime(thread.lastMessage.createdAt) : ''}
                     </span>
                   </div>
-                  <p className="block w-full min-w-0 truncate text-xs text-gray-600">
+                  <p className="block w-full min-w-0 truncate text-sm text-gray-600">
                     {thread.studentName || 'Student'} · {thread.schoolName || 'School'}
                   </p>
                   <div className="flex w-full min-w-0 items-center gap-2">
@@ -417,7 +417,7 @@ export default function TripMessages({
                     </p>
                     <div className="flex min-w-0 shrink-0 items-center gap-1">
                       {statusLabel && (
-                        <span className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        <span className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-sm font-semibold ${
                         statusLabel === 'Active'
                           ? 'bg-green-100 text-green-700'
                           : statusLabel === 'Completed'
@@ -427,12 +427,12 @@ export default function TripMessages({
                         {statusLabel}
                         </span>
                       )}
-                      <span className="whitespace-nowrap text-[10px] text-gray-500">
+                      <span className="whitespace-nowrap text-sm text-gray-600">
                         {thread.lastMessage?.createdAt ? formatMessageDate(thread.lastMessage.createdAt) : ''}
                       </span>
                     </div>
                     {thread.unreadCount > 0 && (
-                      <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 px-1.5 text-xs font-semibold text-white">
+                      <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-700 px-1.5 text-sm font-semibold text-white">
                         {thread.unreadCount > 99 ? '99+' : thread.unreadCount}
                       </span>
                     )}
@@ -455,7 +455,7 @@ export default function TripMessages({
           <>
             <header className="border-b border-gray-200 px-4 py-3">
               <h3 className="font-semibold text-gray-900">{selectedThread.otherParty?.name || (role === 'parent' ? 'Driver' : 'Parent')}</h3>
-              <p className="mt-0.5 text-xs text-gray-600">
+              <p className="mt-0.5 text-sm text-gray-600">
                 {[selectedThread.studentName, selectedThread.schoolName].filter(Boolean).join(' · ')}
               </p>
             </header>
@@ -467,7 +467,7 @@ export default function TripMessages({
                     type="button"
                     onClick={loadOlderMessages}
                     disabled={loadingOlder}
-                    className="rounded-md px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                    className="rounded-md px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-600"
                   >
                     {loadingOlder ? 'Loading...' : 'Load older'}
                   </button>
@@ -481,10 +481,10 @@ export default function TripMessages({
                   return (
                     <div key={message._id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[85%] rounded-2xl px-3 py-2 shadow-sm ${
-                        mine ? 'rounded-br-md bg-blue-600 text-white' : 'rounded-bl-md border border-gray-200 bg-white text-gray-900'
+                        mine ? 'rounded-br-md bg-blue-700 text-white' : 'rounded-bl-md border border-gray-200 bg-white text-gray-900'
                       }`}>
                         <p className="whitespace-pre-wrap break-words text-sm">{message.text}</p>
-                        <time className={`mt-1 block text-right text-[11px] ${mine ? 'text-blue-100' : 'text-gray-500'}`}>
+                        <time className={`mt-1 block text-right text-sm ${mine ? 'text-blue-100' : 'text-gray-600'}`}>
                           {formatMessageTime(message.createdAt)}
                         </time>
                       </div>
@@ -519,9 +519,9 @@ export default function TripMessages({
                     className="min-h-12 w-full min-w-0 flex-1 resize-none overflow-y-auto rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   />
                   <div className="box-border flex w-full min-w-0 items-center justify-between gap-2">
-                    <span className="shrink-0 text-xs text-gray-500">{draft.length}/500</span>
+                    <span className="shrink-0 text-sm text-gray-600">{draft.length}/500</span>
                     <p
-                      className="min-w-0 flex-1 truncate text-xs text-gray-500"
+                      className="min-w-0 flex-1 truncate text-sm text-gray-600"
                       title="Enter to send, Shift+Enter for a new line"
                     >
                       Enter to send, Shift+Enter for a new line
@@ -529,7 +529,7 @@ export default function TripMessages({
                     <button
                       type="submit"
                       disabled={!draft.trim() || sending}
-                      className="inline-flex h-10 max-w-full shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-blue-600 px-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3"
+                      className="inline-flex h-10 max-w-full shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-blue-700 px-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-50 sm:px-3"
                     >
                       <Send size={16} aria-hidden="true" />
                       <span>{sending ? 'Sending...' : 'Send'}</span>

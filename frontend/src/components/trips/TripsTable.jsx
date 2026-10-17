@@ -20,19 +20,19 @@ import './TripsTable.scss'
 // Display shows: Proper case with colors and icons
 const STATUS_CONFIG = {
 	completed: {
-		color: '#10b981',
+		color: '#86efac',
 		bgColor: 'rgba(16, 185, 129, 0.15)',
 		icon: CheckCircle2,
 		display: 'Completed',
 	},
 	'on the way': {
-		color: '#3b82f6',
+		color: '#93c5fd',
 		bgColor: 'rgba(59, 130, 246, 0.15)',
 		icon: Navigation,
 		display: 'On The Way',
 	},
 	cancelled: {
-		color: '#ef4444',
+		color: '#fca5a5',
 		bgColor: 'rgba(239, 68, 68, 0.15)',
 		icon: AlertTriangle,
 		display: 'Cancelled',

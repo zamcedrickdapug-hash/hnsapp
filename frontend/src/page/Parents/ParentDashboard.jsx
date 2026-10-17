@@ -893,7 +893,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
               <p className="text-sm text-gray-600">{currentTripStatus}</p>
             </div>
             <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold ${
-              socketConnected ? 'bg-green-50 text-green-600' : 'bg-gray-50 text-gray-600'
+              socketConnected ? 'bg-green-50 text-green-800' : 'bg-gray-50 text-gray-700'
             }`}>
               {socketConnected ? (
                 <>
@@ -1113,7 +1113,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
             </p>
           )}
           {notificationsLoading ? (
-            <p role="status" className="text-sm text-gray-700">Loading notifications...</p>
+            <p role="status" className="text-sm text-on-dark-label">Loading notifications...</p>
           ) : (
             <NotificationHistory
               notifications={parentNotifications}
@@ -1141,14 +1141,14 @@ export default function ParentDashboard({ token, user, onLogout }) {
       </div>
 
       {activeSection === 'payments' && (
-        <Card aria-disabled="true" className="opacity-75">
+        <Card aria-disabled="true">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-            <CreditCard size={40} aria-hidden="true" className="text-slate-500" />
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+            <CreditCard size={40} aria-hidden="true" className="text-slate-300" />
+            <span className="rounded-full bg-slate-700 px-3 py-1 text-sm font-semibold text-slate-50">
               Coming soon
             </span>
-            <h2 className="text-lg font-semibold text-gray-900">Payments</h2>
-            <p className="max-w-md text-sm text-gray-600">
+            <h2 className="text-lg font-semibold text-on-dark-primary">Payments</h2>
+            <p className="max-w-md text-sm text-on-dark-label">
               Online payment is coming soon. Pay your driver directly for now.
             </p>
           </CardContent>

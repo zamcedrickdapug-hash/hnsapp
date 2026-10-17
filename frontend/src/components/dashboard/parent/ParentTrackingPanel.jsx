@@ -72,13 +72,13 @@ export function ParentTrackingPanel({
     Number.isFinite(locationUpdatedAt) && locationAge >= 0 && locationAge <= 30000
 
   const statusConfig = {
-    searching: { label: 'Finding Driver', color: 'text-yellow-600', bg: 'bg-yellow-50' },
-    accepted: { label: 'Driver Assigned', color: 'text-blue-600', bg: 'bg-blue-50' },
-    arrived: { label: 'Driver Arrived', color: 'text-green-600', bg: 'bg-green-50' },
-    picked_up: { label: 'On The Way', color: 'text-blue-600', bg: 'bg-blue-50' },
-    arrived_at_school: { label: 'Arrived at School', color: 'text-green-600', bg: 'bg-green-50' },
-    completed: { label: 'Trip Complete', color: 'text-green-600', bg: 'bg-green-50' },
-    cancelled: { label: 'Cancelled', color: 'text-red-600', bg: 'bg-red-50' },
+    searching: { label: 'Finding Driver', color: 'text-yellow-800', bg: 'bg-yellow-50' },
+    accepted: { label: 'Driver Assigned', color: 'text-blue-800', bg: 'bg-blue-50' },
+    arrived: { label: 'Driver Arrived', color: 'text-green-800', bg: 'bg-green-50' },
+    picked_up: { label: 'On The Way', color: 'text-blue-800', bg: 'bg-blue-50' },
+    arrived_at_school: { label: 'Arrived at School', color: 'text-green-800', bg: 'bg-green-50' },
+    completed: { label: 'Trip Complete', color: 'text-green-800', bg: 'bg-green-50' },
+    cancelled: { label: 'Cancelled', color: 'text-red-800', bg: 'bg-red-50' },
   }
 
   const statusInfo = statusConfig[tripStatus] || statusConfig.searching
@@ -128,7 +128,7 @@ export function ParentTrackingPanel({
               <CardTitle className="text-lg">Live Tracking</CardTitle>
               <CardDescription>Real-time trip updates</CardDescription>
             </div>
-            <div className={`px-3 py-1 rounded-full text-xs font-semibold ${statusInfo.bg} ${statusInfo.color}`}>
+            <div className={`px-3 py-1 rounded-full text-sm font-semibold ${statusInfo.bg} ${statusInfo.color}`}>
               {statusInfo.label}
             </div>
           </div>
@@ -137,7 +137,7 @@ export function ParentTrackingPanel({
           {/* Driver Info */}
           {driverName && (
             <div className="pb-4 border-b border-slate-700">
-              <p className="text-xs font-medium text-slate-300">Driver</p>
+              <p className="text-sm font-medium text-slate-300">Driver</p>
               <div className="flex items-center justify-between mt-2 gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <div
@@ -157,7 +157,7 @@ export function ParentTrackingPanel({
                 <div className="min-w-0">
                   <p className="font-semibold text-slate-50">{publicDriverName}</p>
                   <p className="text-sm text-slate-200">{driverProfile?.vehicleType || vehicleType}</p>
-                  <p className="text-xs text-slate-300 font-mono">{driverProfile?.plateNumber || vehiclePlate}</p>
+                  <p className="text-sm text-slate-300 font-mono">{driverProfile?.plateNumber || vehiclePlate}</p>
                   {driverPhone && (
                     <a className="mt-1 inline-flex items-center gap-1 text-sm text-blue-700 underline" href={`tel:${driverPhone}`}>
                       <Phone size={14} aria-hidden="true" />
@@ -165,24 +165,24 @@ export function ParentTrackingPanel({
                     </a>
                   )}
                   {driverProfile?.verified && (
-                    <p className="mt-1 text-xs font-semibold text-green-700">Verified by admin</p>
+                    <p className="mt-1 text-sm font-semibold text-green-300">Verified by admin</p>
                   )}
                   {driverProfile?.licenseExpired ? (
-                    <p className="mt-1 text-xs text-red-700">License expired</p>
+                    <p className="mt-1 text-sm text-red-300">License expired</p>
                   ) : licenseValidUntil ? (
-                    <p className="mt-1 text-xs text-slate-300">License valid until {licenseValidUntil}</p>
+                    <p className="mt-1 text-sm text-slate-300">License valid until {licenseValidUntil}</p>
                   ) : null}
                 </div>
               </div>
                 <div className="text-right">
-                  <div className={`inline-block px-2 py-1 rounded text-xs font-semibold ${socketConnected ? 'bg-green-50 text-green-600' : 'bg-gray-50 text-gray-600'}`}>
+                  <div className={`inline-block px-2 py-1 rounded text-sm font-semibold ${socketConnected ? 'bg-green-50 text-green-800' : 'bg-gray-50 text-gray-700'}`}>
                     {socketConnected ? '🟢 Live' : '⚪ Offline'}
                   </div>
                   {onMessageDriver && (
                     <button
                       type="button"
                       onClick={onMessageDriver}
-                      className="mt-2 inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                      className="mt-2 inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-50"
                     >
                       <MessageCircle size={14} aria-hidden="true" />
                       Message driver
@@ -197,7 +197,7 @@ export function ParentTrackingPanel({
           <div className="space-y-3">
             {currentLocation && (
               <div>
-                <p className="text-xs font-medium text-slate-300">Current Location</p>
+                <p className="text-sm font-medium text-slate-300">Current Location</p>
                 <div className="flex items-start gap-2 mt-1">
                   <MapPin size={16} className="text-blue-600 mt-0.5 flex-shrink-0" />
                   <p className="text-sm text-slate-50">{currentLocation}</p>
@@ -207,7 +207,7 @@ export function ParentTrackingPanel({
 
             {destination && (
               <div>
-                <p className="text-xs font-medium text-slate-300">Destination</p>
+                <p className="text-sm font-medium text-slate-300">Destination</p>
                 <div className="flex items-start gap-2 mt-1">
                   <MapPin size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
                   <p className="text-sm text-slate-50">{destination}</p>
@@ -217,7 +217,7 @@ export function ParentTrackingPanel({
 
             {estimatedArrival && (
               <div>
-                <p className="text-xs font-medium text-slate-300">Estimated Arrival</p>
+                <p className="text-sm font-medium text-slate-300">Estimated Arrival</p>
                 <div className="flex items-start gap-2 mt-1">
                   <Clock size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
                   <p className="text-sm text-slate-50">{estimatedArrival}</p>

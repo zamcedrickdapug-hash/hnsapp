@@ -154,7 +154,7 @@ export default function HelpSupport({ role }) {
         </p>
       </section>
 
-      <p className={`text-right text-xs ${theme.muted}`}>App version {supportConfig.appVersion}</p>
+      <p className={`text-right text-sm ${theme.muted}`}>App version {supportConfig.appVersion}</p>
     </section>
   )
 }

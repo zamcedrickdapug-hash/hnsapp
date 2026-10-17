@@ -49,7 +49,7 @@ function PlaceSearch({ onPlaceSelected, disabled }) {
         disabled={disabled}
       />
       {!places && (
-        <p className="mt-1 text-xs text-gray-600">
+        <p className="mt-1 text-sm text-gray-600">
           Place search is unavailable; tap the map or use your current location.
         </p>
       )}
@@ -147,7 +147,7 @@ export default function PickupLocationPicker({
         type="button"
         onClick={useCurrentLocation}
         disabled={disabled}
-        className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-md border border-gray-400 px-3 py-2 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:border-slate-400 disabled:bg-slate-100 disabled:text-slate-600"
       >
         Use my current location
       </button>

@@ -23,11 +23,11 @@ export function ParentChildrenCard({
   isLoading = false,
 }) {
   const statusConfig = {
-    waiting: { color: 'text-gray-600', bg: 'bg-gray-50', label: 'Waiting' },
-    accepted: { color: 'text-blue-600', bg: 'bg-blue-50', label: 'Driver Assigned' },
-    active: { color: 'text-blue-600', bg: 'bg-blue-50', label: 'In Transit' },
-    arrived: { color: 'text-green-600', bg: 'bg-green-50', label: 'Arrived' },
-    completed: { color: 'text-green-600', bg: 'bg-green-50', label: 'Completed' },
+    waiting: { color: 'text-gray-700', bg: 'bg-gray-50', label: 'Waiting' },
+    accepted: { color: 'text-blue-800', bg: 'bg-blue-50', label: 'Driver Assigned' },
+    active: { color: 'text-blue-800', bg: 'bg-blue-50', label: 'In Transit' },
+    arrived: { color: 'text-green-800', bg: 'bg-green-50', label: 'Arrived' },
+    completed: { color: 'text-green-800', bg: 'bg-green-50', label: 'Completed' },
   }
 
   const statusInfo = statusConfig[status] || statusConfig.waiting
@@ -59,14 +59,14 @@ export function ParentChildrenCard({
               <CardTitle className="text-lg">{studentName}</CardTitle>
               <CardDescription>{studentGradeSection}</CardDescription>
             </div>
-            <div className={`px-3 py-1 rounded-full text-xs font-semibold ${statusInfo.bg} ${statusInfo.color}`}>
+            <div className={`px-3 py-1 rounded-full text-sm font-semibold ${statusInfo.bg} ${statusInfo.color}`}>
               {statusInfo.label}
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <p className="text-xs font-medium text-slate-300">School</p>
+            <p className="text-sm font-medium text-slate-300">School</p>
             <div className="flex items-center gap-2 mt-1">
               <BookOpen size={16} className="text-slate-400" />
               <p className="font-medium text-slate-50">{schoolName}</p>
@@ -74,7 +74,7 @@ export function ParentChildrenCard({
           </div>
 
           <div>
-            <p className="text-xs font-medium text-slate-300">Pickup Zone</p>
+            <p className="text-sm font-medium text-slate-300">Pickup Zone</p>
             <div className="flex items-center gap-2 mt-1">
               <MapPin size={16} className="text-slate-400" />
               <p className="font-medium text-slate-50">{pickupZone}</p>

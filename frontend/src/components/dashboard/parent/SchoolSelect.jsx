@@ -118,7 +118,7 @@ export default function SchoolSelect({
         ))}
       </select>
       {value && (
-        <div className="text-xs text-gray-600" aria-live="polite">
+        <div className="text-sm text-gray-600" aria-live="polite">
           <p>
             {hasPreviouslySavedLocation
               ? `Previously saved location: ${value}`

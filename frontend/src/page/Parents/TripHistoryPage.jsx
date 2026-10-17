@@ -201,7 +201,7 @@ export default function TripHistoryPage({
 
 			{/* Statistics */}
 			<TripStatistics data={statistics} />
-			{isLoading && <p role="status" className="text-sm text-slate-600">Loading trips...</p>}
+			{isLoading && <p role="status" className="text-sm text-on-dark-label">Loading trips...</p>}
 			{error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
 
 			{/* Search and Filters */}
