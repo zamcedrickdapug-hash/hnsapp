@@ -1,5 +1,6 @@
 const express = require('express');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 const VanRequest = require('../models/VanRequest');
 const { releaseVanRequestAssignment } = require('../services/releaseVanRequestAssignment');
 const { requireApplicant, requireParent } = require('../middleware/auth');
@@ -244,23 +245,56 @@ router.post('/pickup-zone-check', requireParent, (req, res) => {
 });
 
 router.get('/notifications', requireApplicant, async (req, res) => {
-  const notifications = [...(req.user.notifications || [])].sort(
-    (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-  );
+  const collectionNotifications = await Notification.find({ userId: req.user._id });
+  const embeddedNotifications = [...(req.user.notifications || [])].filter((notification) => {
+    const matchingType = {
+      'Searching for driver': 'searching',
+      'Driver accepted request': 'accepted',
+    }[notification.title];
+    if (!matchingType) return true;
+
+    return !collectionNotifications.some((collectionNotification) => {
+      const createdAt = new Date(notification.createdAt).getTime();
+      const collectionCreatedAt = new Date(collectionNotification.createdAt).getTime();
+      return collectionNotification.type === matchingType &&
+        Math.abs(createdAt - collectionCreatedAt) <= 5000;
+    });
+  });
+  const seenIds = new Set();
+  const notifications = [...embeddedNotifications, ...collectionNotifications]
+    .filter((notification) => {
+      if (!notification?._id) return true;
+      const id = String(notification._id);
+      if (seenIds.has(id)) return false;
+      seenIds.add(id);
+      return true;
+    })
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
   return res.status(200).json({ notifications });
 });
 
 router.patch('/notifications/:notificationId/read', requireApplicant, async (req, res) => {
-  const targetNotification = req.user.notifications.id(req.params.notificationId);
+  const targetNotification = req.user.notifications?.id?.(req.params.notificationId) ||
+    req.user.notifications?.find((notification) => String(notification._id) === req.params.notificationId);
 
-  if (!targetNotification) {
+  if (targetNotification) {
+    targetNotification.read = true;
+    await req.user.save();
+    return res.status(200).json({ message: 'Notification marked as read.' });
+  }
+
+  const collectionNotification = await Notification.findOne({
+    _id: req.params.notificationId,
+    userId: req.user._id,
+  });
+  if (!collectionNotification) {
     return res.status(404).json({ message: 'Notification not found.' });
   }
 
-  targetNotification.read = true;
-  await req.user.save();
-
+  collectionNotification.read = true;
+  collectionNotification.readAt = new Date();
+  await collectionNotification.save();
   return res.status(200).json({ message: 'Notification marked as read.' });
 });
 

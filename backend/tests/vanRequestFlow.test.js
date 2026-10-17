@@ -65,6 +65,7 @@ const createFixture = async (t) => {
   const vehicles = new Map();
   const emitted = [];
   const notifications = [];
+  const collectionNotifications = [];
   const pickupArrivalNotifications = [];
   const schoolArrivalNotifications = [];
   const plainUser = (user) => {
@@ -151,6 +152,15 @@ const createFixture = async (t) => {
       const user = [...users.values()].find((candidate) => matches(candidate, query));
       if (user) applyUpdate(user, update);
       return { matchedCount: user ? 1 : 0 };
+    }
+  }
+
+  class Notification {
+    static find(query) {
+      return new FakeQuery(collectionNotifications.filter((notification) => matches(notification, query)));
+    }
+    static findOne(query) {
+      return new FakeQuery(collectionNotifications.find((notification) => matches(notification, query)) || null);
     }
   }
 
@@ -263,8 +273,22 @@ const createFixture = async (t) => {
   });
   const identity = { verifyRegistrationIdentity: async () => { throw new Error('Registration is not part of this test.'); } };
   const noOpNotification = async (...args) => { notifications.push(args); };
+  const saveArrivalNotification = (parentId, requestId, type, title, message) => {
+    collectionNotifications.push({
+      _id: randomBytes(12).toString('hex'),
+      userId: String(parentId),
+      requestId: String(requestId),
+      type,
+      title,
+      message,
+      read: false,
+      createdAt: new Date(),
+      async save() { return this; },
+    });
+  };
   const routeDependencies = {
     '../models/User': User,
+    '../models/Notification': Notification,
     '../models/VanRequest': VanRequest,
     '../models/Vehicle': Vehicle,
     '../models/DriverStatus': DriverStatus,
@@ -282,10 +306,16 @@ const createFixture = async (t) => {
       notifyParentSearching: noOpNotification,
       notifyParentDriverAccepted: noOpNotification,
       notifyParentOnTheWay: noOpNotification,
-      notifyParentArrivalAtPickup: async (...args) => { pickupArrivalNotifications.push(args); },
+      notifyParentArrivalAtPickup: async (...args) => {
+        pickupArrivalNotifications.push(args);
+        saveArrivalNotification(args[0], args[1], 'arrived_pickup', '📍 Driver Has Arrived', `${args[2]} is now at your pickup location.`);
+      },
       notifyParentStudentPickedUp: noOpNotification,
       notifyParentHeadingToSchool: noOpNotification,
-      notifyParentArrivedAtSchool: async (...args) => { schoolArrivalNotifications.push(args); },
+      notifyParentArrivedAtSchool: async (...args) => {
+        schoolArrivalNotifications.push(args);
+        saveArrivalNotification(args[0], args[1], 'arrived_school', '✅ Arrived At School', `Your child has safely arrived at ${args[4]}.`);
+      },
       clearNotificationsForRequest: noOpNotification,
     },
     '../services/driverService': driverService,
@@ -352,7 +382,7 @@ const createFixture = async (t) => {
     };
   };
 
-  return { parent, driverOne, driverTwo, users, requests, statuses, vehicles, emitted, notifications, pickupArrivalNotifications, schoolArrivalNotifications, addVehicle, request };
+  return { parent, driverOne, driverTwo, users, requests, statuses, vehicles, emitted, notifications, collectionNotifications, pickupArrivalNotifications, schoolArrivalNotifications, addVehicle, request };
 };
 
 const createRequest = (fixture, data = {}) => fixture.request('/api/parents/van-requests', fixture.parent, {
@@ -471,6 +501,36 @@ test('Parent request creation, live updates, vehicle assignment, and completion 
   });
   assert.equal(repeatedSchoolArrival.status, 409);
   assert.equal(f.schoolArrivalNotifications.length, 1);
+
+  const parentNotifications = await f.request('/api/parents/notifications', f.parent);
+  assert.equal(parentNotifications.status, 200);
+  assert.equal(
+    parentNotifications.body.notifications.filter((notification) => notification.type === 'arrived_pickup').length,
+    1
+  );
+  assert.equal(
+    parentNotifications.body.notifications.filter((notification) => notification.type === 'arrived_school').length,
+    1
+  );
+  const pickupNotification = parentNotifications.body.notifications.find(
+    (notification) => notification.type === 'arrived_pickup'
+  );
+  const schoolNotification = parentNotifications.body.notifications.find(
+    (notification) => notification.type === 'arrived_school'
+  );
+  assert.equal((await f.request(`/api/parents/notifications/${pickupNotification._id}/read`, f.parent, {
+    method: 'PATCH',
+  })).status, 200);
+  assert.equal((await f.request(`/api/parents/notifications/${schoolNotification._id}/read`, f.parent, {
+    method: 'PATCH',
+  })).status, 200);
+  const notificationsAfterRead = await f.request('/api/parents/notifications', f.parent);
+  assert.equal(
+    notificationsAfterRead.body.notifications.filter(
+      (notification) => ['arrived_pickup', 'arrived_school'].includes(notification.type) && !notification.read
+    ).length,
+    0
+  );
 
   const completed = await f.request('/api/drivers/requests/complete-school-run', assignedDriver, {
     method: 'PATCH',
