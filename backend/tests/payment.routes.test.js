@@ -158,6 +158,7 @@ const createFixture = async (t, seeded = {}) => {
       if (
         data.externalRef
         && payments.some((payment) => idOf(payment.driver) === idOf(data.driver)
+          && ['pending', 'verified'].includes(payment.status)
           && payment.externalRef === data.externalRef)
       ) {
         const duplicate = new Error('duplicate');
@@ -303,10 +304,32 @@ test('amount, precision, max amount, method, and GCash reference are validated',
   assert.equal(f.payments[0].amount, 1.15);
 });
 
-test('same GCash external reference is rejected for the same driver only', async (t) => {
+test('GCash reference can be reused after rejection but conflicts while pending or verified', async (t) => {
+  const f = await createFixture(t, {
+    payments: [{
+      parent: ids.parent,
+      driver: ids.driver,
+      amount: 100,
+      currency: 'PHP',
+      method: 'gcash',
+      externalRef: 'GC-REUSE',
+      status: 'rejected',
+    }],
+  });
+  const payload = { driverId: ids.driver, amount: 100, method: 'gcash', externalRef: 'GC-REUSE' };
+  assert.equal((await f.request('POST', '/', ids.parent, payload)).status, 201);
+  assert.equal(f.payments.at(-1).status, 'pending');
+  assert.equal((await f.request('POST', '/', ids.parent, payload)).status, 409);
+  f.payments.at(-1).status = 'verified';
+  assert.equal((await f.request('POST', '/', ids.parent, payload)).status, 409);
+});
+
+test('same GCash external reference remains exclusive for pending and verified payments', async (t) => {
   const f = await createFixture(t);
   const payload = { driverId: ids.driver, amount: 100, method: 'gcash', externalRef: 'GC-123' };
   assert.equal((await f.request('POST', '/', ids.parent, payload)).status, 201);
+  assert.equal((await f.request('POST', '/', ids.parent, payload)).status, 409);
+  f.payments[0].status = 'verified';
   assert.equal((await f.request('POST', '/', ids.parent, payload)).status, 409);
 });
 
@@ -498,6 +521,7 @@ test('payment schemas define the required immutable audit data and duplicate-ref
     && index.externalRef === 1
     && options.unique
     && options.partialFilterExpression.externalRef.$type === 'string'
+    && options.partialFilterExpression.status.$in.join(',') === 'pending,verified'
   )));
   assert.deepEqual(paymentConfig.methods, ['cash', 'gcash']);
   assert.equal(paymentConfig.currency, 'PHP');

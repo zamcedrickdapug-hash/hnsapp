@@ -96,7 +96,10 @@ paymentSchema.index(
   { driver: 1, externalRef: 1 },
   {
     unique: true,
-    partialFilterExpression: { externalRef: { $type: 'string' } },
+    partialFilterExpression: {
+      externalRef: { $type: 'string' },
+      status: { $in: ['pending', 'verified'] },
+    },
   }
 );
 
