@@ -179,9 +179,10 @@ export const NotificationHistory = ({
                     <button
                       className="notification-history__item-action notification-history__item-action--delete"
                       onClick={(e) => handleDelete(notification._id, e)}
-                      title="Delete"
+                      title="Delete notification"
+                      aria-label="Delete notification"
                     >
-                      ✕
+                      🗑️
                     </button>
                   )}
                 </div>
@@ -215,7 +216,7 @@ export const NotificationHistory = ({
             className="notification-history__clear-btn"
             onClick={onDeleteAll}
           >
-            Clear all notifications
+            Clear all
           </button>
         </div>
       )}

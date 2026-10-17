@@ -40,6 +40,12 @@ const matches = (record, query) => {
       if ('$ne' in expected) {
         return Array.isArray(actual) ? !actual.includes(expected.$ne) : actual !== expected.$ne;
       }
+      if ('$gte' in expected || '$lte' in expected) {
+        const actualValue = actual instanceof Date ? actual.getTime() : new Date(actual).getTime();
+        if ('$gte' in expected && actualValue < new Date(expected.$gte).getTime()) return false;
+        if ('$lte' in expected && actualValue > new Date(expected.$lte).getTime()) return false;
+        return true;
+      }
     }
     if (expected === null) return actual == null;
     return String(actual) === String(expected);
@@ -102,16 +108,29 @@ const createFixture = async (t) => {
       this.resolveValue = resolve;
       this.transform = transform;
       this.populateFields = [];
+      this.sortFields = null;
+      this.limitCount = null;
     }
     populate(field) { this.populateFields.push(field); return this; }
     select() { return this; }
-    sort() { return this; }
-    limit() { return this; }
+    sort(fields) { this.sortFields = fields; return this; }
+    limit(count) { this.limitCount = count; return this; }
     skip() { return this; }
     then(resolve, reject) {
       return Promise.resolve(this.resolveValue).then((value) => {
         if (Array.isArray(value)) {
-          return value.map((item) => this.transform(item, this.populateFields));
+          let items = value;
+          if (this.sortFields) {
+            items = [...items].sort((left, right) => {
+              for (const [field, direction] of Object.entries(this.sortFields)) {
+                const comparison = new Date(left[field]).getTime() - new Date(right[field]).getTime();
+                if (comparison !== 0) return comparison * direction;
+              }
+              return 0;
+            });
+          }
+          if (this.limitCount !== null) items = items.slice(0, this.limitCount);
+          return items.map((item) => this.transform(item, this.populateFields));
         }
         return this.transform(value, this.populateFields);
       }).then(resolve, reject);
@@ -170,6 +189,22 @@ const createFixture = async (t) => {
     }
     static findOne(query) {
       return new FakeQuery(collectionNotifications.find((notification) => matches(notification, query)) || null);
+    }
+    static async countDocuments(query) {
+      return collectionNotifications.filter((notification) => matches(notification, query)).length;
+    }
+    static async deleteOne(query) {
+      const index = collectionNotifications.findIndex((notification) => matches(notification, query));
+      if (index === -1) return { deletedCount: 0 };
+      collectionNotifications.splice(index, 1);
+      return { deletedCount: 1 };
+    }
+    static async deleteMany(query) {
+      const initialLength = collectionNotifications.length;
+      for (let index = collectionNotifications.length - 1; index >= 0; index -= 1) {
+        if (matches(collectionNotifications[index], query)) collectionNotifications.splice(index, 1);
+      }
+      return { deletedCount: initialLength - collectionNotifications.length };
     }
   }
 
@@ -463,6 +498,17 @@ const createRequest = (fixture, data = {}) => fixture.request('/api/parents/van-
     destinationLocation: { latitude: 14.6, longitude: 121.0 },
     ...data,
   },
+});
+
+const createNotification = (user, overrides = {}) => ({
+  _id: randomBytes(12).toString('hex'),
+  userId: user._id,
+  type: 'on_the_way',
+  title: 'Trip update',
+  message: 'A trip update is available.',
+  read: false,
+  createdAt: new Date(),
+  ...overrides,
 });
 
 const setOnline = async (fixture, driver) => fixture.request('/api/drivers/status/toggle', driver, {
@@ -987,6 +1033,104 @@ test('parent must select a non-empty unique list of saved children', async (t) =
   const duplicateSelection = await createRequest(f, { studentNames: ['First Child', ' first child '] });
   assert.equal(duplicateSelection.status, 400);
   assert.equal(duplicateSelection.body.message, 'Selected children must be unique.');
+});
+
+test('parent can delete an embedded notification', async (t) => {
+  const f = await createFixture(t);
+  const notification = createNotification(f.parent);
+  f.parent.notifications.push(notification);
+  await f.parent.save();
+
+  const deleted = await f.request(`/api/parents/notifications/${notification._id}`, f.parent, {
+    method: 'DELETE',
+  });
+  assert.equal(deleted.status, 200);
+  assert.equal(f.parent.notifications.some((item) => item._id === notification._id), false);
+});
+
+test('parent can delete a collection notification', async (t) => {
+  const f = await createFixture(t);
+  const notification = createNotification(f.parent);
+  f.collectionNotifications.push(notification);
+
+  const deleted = await f.request(`/api/parents/notifications/${notification._id}`, f.parent, {
+    method: 'DELETE',
+  });
+  assert.equal(deleted.status, 200);
+  assert.equal(f.collectionNotifications.some((item) => item._id === notification._id), false);
+});
+
+test('parent cannot delete another parent notification', async (t) => {
+  const f = await createFixture(t);
+  const otherParent = await new f.User({
+    role: 'parent',
+    status: 'approved',
+    fullName: 'Parent Two',
+    notifications: [],
+  }).save();
+  const notification = createNotification(otherParent);
+  f.collectionNotifications.push(notification);
+
+  const response = await f.request(`/api/parents/notifications/${notification._id}`, f.parent, {
+    method: 'DELETE',
+  });
+  assert.equal(response.status, 404);
+  assert.equal(f.collectionNotifications.some((item) => item._id === notification._id), true);
+});
+
+test('clearing notifications removes both stores for only the current parent', async (t) => {
+  const f = await createFixture(t);
+  const otherParent = await new f.User({
+    role: 'parent',
+    status: 'approved',
+    fullName: 'Parent Two',
+    notifications: [createNotification(f.parent)],
+  }).save();
+  const embeddedNotification = createNotification(f.parent);
+  f.parent.notifications.push(embeddedNotification);
+  const collectionNotification = createNotification(f.parent);
+  const otherCollectionNotification = createNotification(otherParent);
+  f.collectionNotifications.push(collectionNotification, otherCollectionNotification);
+  await f.parent.save();
+
+  const response = await f.request('/api/parents/notifications', f.parent, { method: 'DELETE' });
+  assert.equal(response.status, 200);
+  assert.deepEqual(f.parent.notifications, []);
+  assert.equal(f.collectionNotifications.some((item) => item.userId === f.parent._id), false);
+  assert.equal(
+    f.collectionNotifications.some((item) => item._id === otherCollectionNotification._id),
+    true
+  );
+  assert.equal(otherParent.notifications.length, 1);
+});
+
+test('notification list limit does not limit the full unread count', async (t) => {
+  const f = await createFixture(t);
+  const now = Date.now();
+  f.parent.notifications.push(createNotification(f.parent));
+  for (let index = 0; index < 60; index += 1) {
+    f.collectionNotifications.push(createNotification(f.parent, {
+      createdAt: new Date(now + index * 1000),
+    }));
+  }
+  const response = await f.request('/api/parents/notifications?limit=10', f.parent);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.notifications.length, 10);
+  assert.equal(response.body.unreadCount, 61);
+  assert.ok(
+    new Date(response.body.notifications[0].createdAt) >
+      new Date(response.body.notifications[response.body.notifications.length - 1].createdAt)
+  );
+});
+
+test('invalid notification ids return 404', async (t) => {
+  const f = await createFixture(t);
+  const response = await f.request('/api/parents/notifications/not-an-id', f.parent, {
+    method: 'DELETE',
+  });
+
+  assert.equal(response.status, 404);
 });
 
 test('selected booking ignores client destination coordinates if the saved school has none', async (t) => {

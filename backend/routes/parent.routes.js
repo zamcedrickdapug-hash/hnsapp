@@ -329,20 +329,42 @@ router.post('/pickup-zone-check', requireParent, (req, res) => {
 });
 
 router.get('/notifications', requireApplicant, async (req, res) => {
-  const collectionNotifications = await Notification.find({ userId: req.user._id });
-  const embeddedNotifications = [...(req.user.notifications || [])].filter((notification) => {
+  const requestedLimit = Number.parseInt(req.query.limit, 10);
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(100, Math.max(1, requestedLimit))
+    : 50;
+  const userId = req.user._id;
+  const collectionNotifications = await Notification.find({ userId })
+    .sort({ createdAt: -1 })
+    .limit(limit);
+  const embeddedCandidates = [...(req.user.notifications || [])];
+  const embeddedDuplicates = await Promise.all(embeddedCandidates.map(async (notification) => {
     const matchingType = {
       'Searching for driver': 'searching',
       'Driver accepted request': 'accepted',
     }[notification.title];
-    if (!matchingType) return true;
+    if (!matchingType) return false;
 
-    return !collectionNotifications.some((collectionNotification) => {
-      const createdAt = new Date(notification.createdAt).getTime();
+    const createdAt = new Date(notification.createdAt).getTime();
+    if (!Number.isFinite(createdAt)) return false;
+    if (collectionNotifications.some((collectionNotification) => {
       const collectionCreatedAt = new Date(collectionNotification.createdAt).getTime();
       return collectionNotification.type === matchingType &&
         Math.abs(createdAt - collectionCreatedAt) <= 5000;
-    });
+    })) {
+      return true;
+    }
+    return (await Notification.countDocuments({
+      userId,
+      type: matchingType,
+      createdAt: {
+        $gte: new Date(createdAt - 5000),
+        $lte: new Date(createdAt + 5000),
+      },
+    })) > 0;
+  }));
+  const embeddedNotifications = embeddedCandidates.filter((notification, index) => {
+    return !embeddedDuplicates[index];
   });
   const seenIds = new Set();
   const notifications = [...embeddedNotifications, ...collectionNotifications]
@@ -353,9 +375,14 @@ router.get('/notifications', requireApplicant, async (req, res) => {
       seenIds.add(id);
       return true;
     })
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, limit);
 
-  return res.status(200).json({ notifications });
+  const collectionUnreadCount = await Notification.countDocuments({ userId, read: false });
+  const unreadCount = collectionUnreadCount +
+    embeddedNotifications.filter((notification) => !notification.read).length;
+
+  return res.status(200).json({ notifications, unreadCount });
 });
 
 router.patch('/notifications/:notificationId/read', requireApplicant, async (req, res) => {
@@ -380,6 +407,41 @@ router.patch('/notifications/:notificationId/read', requireApplicant, async (req
   collectionNotification.readAt = new Date();
   await collectionNotification.save();
   return res.status(200).json({ message: 'Notification marked as read.' });
+});
+
+router.delete('/notifications/:notificationId', requireParent, async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.notificationId)) {
+    return res.status(404).json({ message: 'Notification not found.' });
+  }
+
+  let deleted = false;
+  const embeddedNotifications = req.user.notifications || [];
+  const embeddedIndex = embeddedNotifications.findIndex(
+    (notification) => String(notification._id) === req.params.notificationId
+  );
+  if (embeddedIndex !== -1) {
+    embeddedNotifications.splice(embeddedIndex, 1);
+    await req.user.save();
+    deleted = true;
+  }
+
+  const collectionResult = await Notification.deleteOne({
+    _id: req.params.notificationId,
+    userId: req.user._id,
+  });
+  if (collectionResult.deletedCount > 0) deleted = true;
+
+  if (!deleted) {
+    return res.status(404).json({ message: 'Notification not found.' });
+  }
+  return res.status(200).json({ message: 'Notification deleted.' });
+});
+
+router.delete('/notifications', requireParent, async (req, res) => {
+  req.user.notifications = [];
+  await req.user.save();
+  await Notification.deleteMany({ userId: req.user._id });
+  return res.status(200).json({ message: 'Notifications cleared.' });
 });
 
 router.post('/van-requests', requireParent, async (req, res) => {

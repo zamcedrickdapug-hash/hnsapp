@@ -92,6 +92,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState('')
   const [parentNotifications, setParentNotifications] = useState([])
+  const [notificationsUnreadCount, setNotificationsUnreadCount] = useState(0)
   const [notificationsLoading, setNotificationsLoading] = useState(false)
   const [notificationsError, setNotificationsError] = useState('')
 
@@ -379,6 +380,11 @@ export default function ParentDashboard({ token, user, onLogout }) {
         headers: { Authorization: `Bearer ${token}` },
       })
       setParentNotifications(response.notifications || [])
+      setNotificationsUnreadCount(
+        Number.isFinite(response.unreadCount)
+          ? response.unreadCount
+          : (response.notifications || []).filter((notification) => !notification.read).length
+      )
     } catch (error) {
       setNotificationsError(error.message || 'Unable to load notifications.')
     } finally {
@@ -392,15 +398,19 @@ export default function ParentDashboard({ token, user, onLogout }) {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${token}` },
       })
+      const notification = parentNotifications.find((item) => item._id === notificationId)
       setParentNotifications((current) =>
         current.map((notification) =>
           notification._id === notificationId ? { ...notification, read: true } : notification
         )
       )
+      if (notification && !notification.read) {
+        setNotificationsUnreadCount((current) => Math.max(0, current - 1))
+      }
     } catch (error) {
       setNotificationsError(error.message || 'Unable to update notification.')
     }
-  }, [token])
+  }, [parentNotifications, token])
 
   const markAllNotificationsAsRead = useCallback(async () => {
     const unreadNotifications = parentNotifications.filter((notification) => !notification.read)
@@ -415,11 +425,42 @@ export default function ParentDashboard({ token, user, onLogout }) {
             item._id === notification._id ? { ...item, read: true } : item
           )
         )
+        setNotificationsUnreadCount((current) => Math.max(0, current - 1))
       }
     } catch (error) {
       setNotificationsError(error.message || 'Unable to update notifications.')
     }
   }, [parentNotifications, token])
+
+  const deleteNotification = useCallback(async (notificationId) => {
+    try {
+      await apiFetch(`/api/parents/notifications/${notificationId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const notification = parentNotifications.find((item) => item._id === notificationId)
+      setParentNotifications((current) => current.filter((item) => item._id !== notificationId))
+      if (notification && !notification.read) {
+        setNotificationsUnreadCount((current) => Math.max(0, current - 1))
+      }
+    } catch (error) {
+      setNotificationsError(error.message || 'Unable to delete notification.')
+    }
+  }, [parentNotifications, token])
+
+  const deleteAllNotifications = useCallback(async () => {
+    if (!window.confirm('Delete all notifications?')) return
+    try {
+      await apiFetch('/api/parents/notifications', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      setParentNotifications([])
+      setNotificationsUnreadCount(0)
+    } catch (error) {
+      setNotificationsError(error.message || 'Unable to clear notifications.')
+    }
+  }, [token])
 
   const bookTrip = useCallback(async () => {
     setBookingError('')
@@ -1073,9 +1114,11 @@ export default function ParentDashboard({ token, user, onLogout }) {
           ) : (
             <NotificationHistory
               notifications={parentNotifications}
-              unreadCount={parentNotifications.filter((notification) => !notification.read).length}
+              unreadCount={notificationsUnreadCount}
               onMarkAsRead={markNotificationAsRead}
               onMarkAllAsRead={markAllNotificationsAsRead}
+              onDelete={deleteNotification}
+              onDeleteAll={deleteAllNotifications}
             />
           )}
         </div>
