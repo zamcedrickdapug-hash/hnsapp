@@ -871,7 +871,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
         trips: 'View your ride requests and past trips.',
         notifications: 'Review updates about your account and trips.',
         messages: 'Chat with the driver assigned to your trip.',
-        payments: 'Submit payments and track your outstanding balance.',
+        payments: 'Review trip charges, payment status, and receipts.',
         help: 'Frequently asked questions, contact details, and safety information.',
         settings: 'Manage your profile and preferences.',
       }[activeSection] || ''}

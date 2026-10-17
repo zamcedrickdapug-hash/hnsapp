@@ -56,7 +56,6 @@ export default function PaymentLedgerPanel({ role, token }) {
   const [confirming, setConfirming] = useState(false)
   const [rejectingPayment, setRejectingPayment] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
-  const [singleCashTripId, setSingleCashTripId] = useState(null)
   const [receiptPaymentId, setReceiptPaymentId] = useState(null)
   const [availableReceiptPaymentId, setAvailableReceiptPaymentId] = useState(null)
   const receiptTriggerRef = useRef(null)
@@ -127,7 +126,9 @@ export default function PaymentLedgerPanel({ role, token }) {
   }
 
   const selectAll = () => {
-    setSelectedTripIds(selectableTrips.slice(0, MAX_TRIPS_PER_PAYMENT).map((trip) => trip.requestId))
+    const tripIds = selectableTrips.slice(0, MAX_TRIPS_PER_PAYMENT).map((trip) => trip.requestId)
+    const allSelected = tripIds.length > 0 && tripIds.every((id) => selectedTripIds.includes(id))
+    setSelectedTripIds(allSelected ? [] : tripIds)
     setConfirming(false)
   }
 
@@ -185,6 +186,7 @@ export default function PaymentLedgerPanel({ role, token }) {
   }
 
   const recordSingleCash = async (trip) => {
+    if (!window.confirm(`Record ${formatMoney(trip.fare)} cash received for this trip?`)) return
     setActionLoading(`cash-${trip.requestId}`)
     setError('')
     setMessage('')
@@ -197,7 +199,6 @@ export default function PaymentLedgerPanel({ role, token }) {
       })
       setAvailableReceiptPaymentId(response.payment?._id || null)
       setMessage('Cash recorded successfully.')
-      setSingleCashTripId(null)
       setConfirming(false)
       setSelectedTripIds((current) => current.filter((id) => id !== trip.requestId))
     } catch (actionError) {
@@ -299,8 +300,6 @@ export default function PaymentLedgerPanel({ role, token }) {
           setRejectingPayment={setRejectingPayment}
           rejectReason={rejectReason}
           setRejectReason={setRejectReason}
-          singleCashTripId={singleCashTripId}
-          setSingleCashTripId={setSingleCashTripId}
           recordSingleCash={recordSingleCash}
           openReceipt={(payment, event) => {
             receiptTriggerRef.current = event.currentTarget
@@ -338,8 +337,7 @@ function ParentLedger({
   return (
     <>
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-slate-800">
-        <p className="font-semibold text-slate-900">Pay in cash.</p>
-        <p>Hand the fare to your driver when they pick up or drop off your child. Your driver will record it here and you will get a receipt.</p>
+        <p>Pay in cash. Hand the fare to your driver. Your driver will record it here and you will get a receipt.</p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -368,15 +366,16 @@ function ParentLedger({
             {trips.map((trip) => (
               <li key={trip.requestId} className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <StatusChip status={trip.paymentStatus === 'unpaid' ? 'unpaid' : 'verified'} />
-                    <p className="text-base font-semibold text-slate-900">{formatMoney(trip.fare)}</p>
-                  </div>
+                  <p className="text-sm text-slate-600">{dateTimeInManila(trip.date)}</p>
                   <p className="mt-2 text-sm font-medium text-slate-900">{trip.schoolName || 'School not listed'}</p>
                   {!!trip.studentNames?.length && <p className="mt-1 break-words text-sm text-slate-700">{trip.studentNames.join(', ')}</p>}
-                  <p className="mt-2 text-sm text-slate-600">
-                    {dateTimeInManila(trip.date)} · {trip.distanceKm == null ? 'Distance unavailable' : `${Number(trip.distanceKm).toFixed(2)} km`}
+                  <p className="mt-1 text-sm text-slate-600">
+                    {trip.distanceKm == null ? 'Distance unavailable' : `${Number(trip.distanceKm).toFixed(2)} km`}
                   </p>
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-base font-semibold text-slate-900">{formatMoney(trip.fare)}</p>
+                    <StatusChip status={trip.paymentStatus === 'unpaid' ? 'unpaid' : 'verified'} />
+                  </div>
                 </div>
               </li>
             ))}
@@ -422,33 +421,27 @@ function DriverLedger({
   setRejectingPayment,
   rejectReason,
   setRejectReason,
-  singleCashTripId,
-  setSingleCashTripId,
   recordSingleCash,
   openReceipt,
 }) {
+  const allVisibleTripsSelected = trips.length > 0
+    && trips.slice(0, MAX_TRIPS_PER_PAYMENT).every((trip) => selectedTripIds.includes(trip.requestId))
+
   return (
     <>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard
-          label="Collected today"
-          value={`${summary.verifiedToday ?? 0} ${summary.verifiedToday === 1 ? 'payment' : 'payments'}`}
-        />
-        <SummaryCard label="Collected total" value={formatMoney(summary.verifiedTotal)} />
-        <SummaryCard label="Not yet collected" value={formatMoney(summary.uncollectedAmount)} />
-        {Number(summary.pendingCount) > 0 && (
-          <SummaryCard label="Awaiting verification" value={summary.pendingCount} />
-        )}
-      </div>
-
       <section className="space-y-4" aria-labelledby="trips-to-collect-title">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 id="trips-to-collect-title" className="text-lg font-semibold text-slate-900">Trips to collect</h3>
             <p className="text-sm text-slate-600">Record cash received for completed trips.</p>
           </div>
-          <button type="button" onClick={selectAll} disabled={!trips.length || Boolean(actionLoading)} className={secondaryButtonClasses}>
-            Select all unpaid
+          <button
+            type="button"
+            onClick={selectAll}
+            disabled={!trips.length || Boolean(actionLoading)}
+            className={secondaryButtonClasses}
+          >
+            {allVisibleTripsSelected ? 'Clear selection' : 'Select all'}
           </button>
         </div>
         {loading && !trips.length ? (
@@ -464,38 +457,17 @@ function DriverLedger({
                   checked={selectedTripIds.includes(trip.requestId)}
                   onChange={() => toggleTrip(trip.requestId)}
                 />
-                {singleCashTripId === trip.requestId ? (
-                  <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
-                    <p className="text-sm font-semibold leading-6 text-slate-900">
-                      Record {formatMoney(trip.fare)} cash received for this trip?
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={Boolean(actionLoading)}
-                        onClick={() => recordSingleCash(trip)}
-                        className={primaryButtonClasses}
-                      >
-                        {actionLoading === `cash-${trip.requestId}` ? 'Recording…' : 'Confirm cash received'}
-                      </button>
-                      <button type="button" onClick={() => setSingleCashTripId(null)} className={secondaryButtonClasses}>
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={Boolean(actionLoading)}
-                    onClick={() => {
-                      setConfirming(false)
-                      setSingleCashTripId(trip.requestId)
-                    }}
-                    className={secondaryButtonClasses}
-                  >
-                    Cash received
-                  </button>
-                )}
+                <button
+                  type="button"
+                  disabled={Boolean(actionLoading)}
+                  onClick={() => {
+                    setConfirming(false)
+                    recordSingleCash(trip)
+                  }}
+                  className={secondaryButtonClasses}
+                >
+                  {actionLoading === `cash-${trip.requestId}` ? 'Recording…' : 'Cash received'}
+                </button>
               </li>
             ))}
           </ul>
@@ -524,6 +496,18 @@ function DriverLedger({
           )}
         </form>}
       </section>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <SummaryCard
+          label="Collected today"
+          value={`${summary.verifiedToday ?? 0} ${summary.verifiedToday === 1 ? 'payment' : 'payments'}`}
+        />
+        <SummaryCard label="Collected total" value={formatMoney(summary.verifiedTotal)} />
+        <SummaryCard label="Not yet collected" value={formatMoney(summary.uncollectedAmount)} />
+        {Number(summary.pendingAmount) > 0 && (
+          <SummaryCard label="Awaiting verification" value={formatMoney(summary.pendingAmount)} />
+        )}
+      </div>
 
       <section className="space-y-3" aria-labelledby="pending-payments-title">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -588,7 +572,7 @@ function PaymentHistory({
         <PanelMessage>Loading payments…</PanelMessage>
       ) : payments.length === 0 ? (
         <PanelMessage>
-          {role === 'driver' ? 'No payments yet. Parents pay completed trips here.' : 'No payment history yet.'}
+          {role === 'driver' ? 'No payments have been recorded yet.' : 'No payment history yet.'}
         </PanelMessage>
       ) : (
         <ul className="space-y-3">
