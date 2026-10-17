@@ -65,14 +65,7 @@ export const DRIVER_NAVIGATION = [
     description: 'Completed and past trips',
     color: 'from-green-500 to-green-600',
   },
-  {
-    id: 'earnings',
-    label: 'Earnings',
-    icon: CreditCard,
-    path: '/driver/earnings',
-    description: 'Payment and revenue tracking',
-    color: 'from-yellow-500 to-yellow-600',
-  },
+  // Earnings hidden until PayMongo is integrated
   {
     id: 'settings',
     label: 'Settings',

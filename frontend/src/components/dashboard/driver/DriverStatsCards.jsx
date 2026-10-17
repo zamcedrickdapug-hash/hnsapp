@@ -8,11 +8,10 @@
  * - Incoming requests
  * - Active trips
  * - Completed trips today
- * - Earnings summary
  */
 
 import { motion } from 'framer-motion'
-import { Clock, Navigation, CheckCircle2, DollarSign } from 'lucide-react'
+import { Clock, Navigation, CheckCircle2 } from 'lucide-react'
 import StatsCard from '../../ui/dashboard/StatsCard'
 
 /**
@@ -21,19 +20,14 @@ import StatsCard from '../../ui/dashboard/StatsCard'
  * @param {number} props.incomingCount - Number of incoming requests
  * @param {number} props.activeTripsCount - Number of active trips
  * @param {number} props.completedTripsCount - Trips completed today
- * @param {number} props.earningsAmount - Total earnings (in cents)
  * @param {boolean} props.isLoading - Loading state
  */
 function DriverStatsCards({
   incomingCount = 0,
   activeTripsCount = 0,
   completedTripsCount = 0,
-  earningsAmount = 0,
   isLoading = false,
 }) {
-  // Format earnings
-  const earningsFormatted = (earningsAmount / 100).toFixed(2)
-
   const stats = [
     {
       id: 'incoming',
@@ -58,14 +52,6 @@ function DriverStatsCards({
       value: completedTripsCount,
       color: 'green',
     },
-    {
-      id: 'earnings',
-      icon: DollarSign,
-      label: 'Earnings',
-      value: earningsFormatted,
-      unit: 'USD',
-      color: 'green',
-    },
   ]
 
   return (
@@ -73,7 +59,7 @@ function DriverStatsCards({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
-      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
+      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8"
     >
       {stats.map((stat, index) => (
         <motion.div

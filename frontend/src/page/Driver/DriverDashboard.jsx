@@ -204,7 +204,6 @@ export default function DriverDashboard({ token, user, onLogout }) {
 			incoming: searchingRequests.length,
 			active: gpsStatus === 'Active' && selectedTrip ? 1 : acceptedRequests.length,
 			completed,
-			total: requests.length,
 		}
 	}, [searchingRequests.length, gpsStatus, selectedTrip, acceptedRequests.length, requests])
 
@@ -1078,7 +1077,6 @@ export default function DriverDashboard({ token, user, onLogout }) {
 						incomingCount={summary.incoming}
 						activeTripsCount={summary.active}
 						completedTripsCount={summary.completed}
-						earningsAmount={summary.total}
 						isLoading={loading}
 					/>
 

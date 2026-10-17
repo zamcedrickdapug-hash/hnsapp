@@ -1141,12 +1141,15 @@ export default function ParentDashboard({ token, user, onLogout }) {
       </div>
 
       {activeSection === 'payments' && (
-        <Card>
+        <Card aria-disabled="true" className="opacity-75">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <CreditCard size={40} aria-hidden="true" className="text-slate-500" />
-            <h2 className="text-lg font-semibold text-gray-900">Payments are coming soon</h2>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+              Coming soon
+            </span>
+            <h2 className="text-lg font-semibold text-gray-900">Payments</h2>
             <p className="max-w-md text-sm text-gray-600">
-              Payment history and invoices will appear here when billing is available.
+              Online payment is coming soon. Pay your driver directly for now.
             </p>
           </CardContent>
         </Card>

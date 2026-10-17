@@ -278,6 +278,8 @@ function App() {
             <Route path={PROTECTED_ROUTES.ADMIN} element={protectedPage('admin', <AdminPanel token={token} user={user} onLogout={handleLogout} />)} />
             <Route path={PROTECTED_ROUTES.PARENT} element={protectedPage('parent', <ParentDashboard token={token} user={user} onLogout={handleLogout} />)} />
             <Route path={PROTECTED_ROUTES.DRIVER} element={protectedPage('driver', <ErrorBoundary><DriverDashboard token={token} user={user} onLogout={handleLogout} /></ErrorBoundary>)} />
+            <Route path="/driver/earnings/*" element={<Navigate to={PROTECTED_ROUTES.DRIVER} replace />} />
+            <Route path="/dashboard/driver/earnings/*" element={<Navigate to={PROTECTED_ROUTES.DRIVER} replace />} />
             <Route path="/login" element={<Navigate to={AUTH_ROUTES.LOGIN} replace />} />
             <Route path="/signup" element={<Navigate to={AUTH_ROUTES.SIGNUP} replace />} />
             <Route path="/register" element={<Navigate to={AUTH_ROUTES.SIGNUP} replace />} />
