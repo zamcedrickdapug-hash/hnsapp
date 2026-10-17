@@ -85,6 +85,12 @@ const createFixture = async (t) => {
       if (document) validIdDocuments.delete(String(document._id));
       return { deletedCount: document ? 1 : 0 };
     }
+    static async exists(query) {
+      return [...validIdDocuments.values()].some((item) => (
+        String(item._id) === String(query._id) &&
+        String(item.ownerId) === String(query.ownerId)
+      ));
+    }
   }
 
   const queryResult = (value) => ({
@@ -93,6 +99,24 @@ const createFixture = async (t) => {
     limit() { return this; },
     then(resolve, reject) { return Promise.resolve(value).then(resolve, reject); },
   });
+  class Notification {
+    static find() { return queryResult([]); }
+    static async countDocuments() { return 0; }
+    static async findOne() { return null; }
+    static async deleteOne() { return { deletedCount: 0 }; }
+    static async deleteMany() { return { deletedCount: 0 }; }
+  }
+  const mongoose = {
+    isValidObjectId: (value) => /^[a-f\d]{24}$/i.test(String(value)),
+    startSession: async () => ({
+      withTransaction: async (callback) => callback(),
+      endSession: async () => {},
+    }),
+  };
+  const Vehicle = {
+    findOne: () => ({ session: async () => null }),
+    findOneAndUpdate: async () => null,
+  };
   class Issue {
     constructor(data) {
       Object.assign(this, { _id: randomBytes(12).toString('hex') }, data);
@@ -122,7 +146,10 @@ const createFixture = async (t) => {
   const dependencies = {
     '../models/User': User,
     '../models/ValidIdDocument': ValidIdDocument,
+    '../models/Notification': Notification,
+    '../models/Vehicle': Vehicle,
     '../models/Issue': { Issue },
+    mongoose,
     '../models/VanRequest': {},
     '../models/DriverStatus': {},
     '../models/DriverStats': {},
@@ -188,7 +215,8 @@ const createFixture = async (t) => {
     const fields = {
       fullName: 'Test Driver', phone: '+639171234567', homeAddress: '123 Test Road',
       licenseNumber: 'N01-123456', licenseExpiry: expiry.toISOString().slice(0, 10),
-      vehicleType: 'School van', plateNumber: 'ABC-123', yearsOfExperience: '0',
+      vehicleType: 'School van', vehicleColor: 'White', seatCapacity: '12',
+      plateNumber: 'ABC-123', yearsOfExperience: '0',
       ...identityFields, ...data,
     };
     for (const [key, value] of Object.entries(fields)) form.append(key, value);
@@ -808,7 +836,11 @@ test('only Admins can approve or reject Parent applications through valid transi
   const admin = await f.addUser({ role: 'admin' });
   const parentActor = await f.addUser({ role: 'parent' });
   const driverActor = await f.addUser({ role: 'driver' });
-  const parent = await f.addUser({ role: 'parent', status: 'pending' });
+  const parent = await f.addUser({
+    role: 'parent',
+    status: 'pending',
+    student: { fullName: 'Test Student', schoolName: 'Test School' },
+  });
   const parentPath = `/api/admin/registrations/${parent._id}/status`;
 
   for (const actor of [parentActor, driverActor]) {
