@@ -61,6 +61,18 @@ h4 {
   min-height: 100vh;
 }
 
+@media (min-width: 768px) {
+  .dashboard-mobile-header {
+    display: none !important;
+  }
+}
+
+@media (max-width: 767px) {
+  header.dashboard-header:not(.dashboard-mobile-header) {
+    display: none !important;
+  }
+}
+
 @layer utilities {
   .text-on-dark-primary {
     color: var(--text-on-dark-primary);
