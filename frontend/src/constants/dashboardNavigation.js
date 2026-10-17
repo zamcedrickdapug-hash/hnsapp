@@ -17,11 +17,11 @@ import {
   Clock,
   Settings,
   Bell,
+  CreditCard,
   Users,
   FileCheck,
   BarChart3,
   AlertTriangle,
-  CreditCard,
   MessageSquare,
   HelpCircle,
 } from 'lucide-react'
@@ -65,7 +65,14 @@ export const DRIVER_NAVIGATION = [
     description: 'Completed and past trips',
     color: 'from-green-500 to-green-600',
   },
-  // Earnings hidden until PayMongo is integrated
+  {
+    id: 'payments',
+    label: 'Payments',
+    icon: CreditCard,
+    path: '/driver/payments',
+    description: 'Verify submitted payments and record cash',
+    color: 'from-yellow-500 to-yellow-600',
+  },
   {
     id: 'settings',
     label: 'Settings',

@@ -18,6 +18,7 @@ import { Button } from '../../components/ui/button'
 import { DashboardLayout } from '../../components/dashboard'
 import { DriverStatsCards } from '../../components/dashboard/driver'
 import DriverTripHistory from '../../components/dashboard/driver/DriverTripHistory'
+import PaymentLedgerPanel from '../../components/dashboard/PaymentLedgerPanel'
 import TripMessages from '../../components/common/TripMessages'
 import HelpSupport from '../../components/common/HelpSupport'
 import LiveTripMap from '../../components/tracking/LiveTripGoogleMap'
@@ -1046,9 +1047,11 @@ export default function DriverDashboard({ token, user, onLogout }) {
 							? 'Messages'
 							: activeSection === 'trips'
 								? 'Trip History'
-								: activeSection === 'help'
-									? 'Help & Support'
-									: 'Settings'
+								: activeSection === 'payments'
+									? 'Payments'
+									: activeSection === 'help'
+										? 'Help & Support'
+										: 'Settings'
 			}
 			notificationCount={newRequestCount}
 			badgeValues={{ newRequestCount, unreadMessageCount }}
@@ -1552,6 +1555,10 @@ export default function DriverDashboard({ token, user, onLogout }) {
 						setActiveSection('messages')
 					}}
 				/>
+			) : null}
+
+			{activeSection === 'payments' ? (
+				<PaymentLedgerPanel role="driver" token={token} user={user} />
 			) : null}
 
 			{activeSection === 'settings' ? (

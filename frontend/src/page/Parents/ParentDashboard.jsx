@@ -21,7 +21,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Wifi, WifiOff, AlertCircle, CreditCard, UserRound, CheckCircle2, AlertTriangle, Save, RotateCcw } from 'lucide-react'
+import { Wifi, WifiOff, AlertCircle, UserRound, CheckCircle2, AlertTriangle, Save, RotateCcw } from 'lucide-react'
 import { isValidPhoneNumber, normalizePhoneNumber } from '../../constants/authConstants'
 import { apiFetch } from '../../api'
 import { useSocket, useSocketEvent } from '../../hooks/useSocket'
@@ -32,6 +32,7 @@ import { ParentChildrenCard, ParentTrackingPanel } from '../../components/dashbo
 import NotificationHistory from '../../components/ui/NotificationHistory'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
+import PaymentLedgerPanel from '../../components/dashboard/PaymentLedgerPanel'
 import LiveTripMap from '../../components/tracking/LiveTripGoogleMap'
 import { NotificationsContainer } from '../../components/notifications/NotificationToast'
 import { ReceiptModal } from '../../components/modals/ReceiptModal'
@@ -870,7 +871,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
         trips: 'View your ride requests and past trips.',
         notifications: 'Review updates about your account and trips.',
         messages: 'Chat with the driver assigned to your trip.',
-        payments: 'Payment information will be available here.',
+        payments: 'Submit payments and track your outstanding balance.',
         help: 'Frequently asked questions, contact details, and safety information.',
         settings: 'Manage your profile and preferences.',
       }[activeSection] || ''}
@@ -1144,18 +1145,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
       </div>
 
       {activeSection === 'payments' && (
-        <Card aria-disabled="true">
-          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-            <CreditCard size={40} aria-hidden="true" className="text-slate-300" />
-            <span className="rounded-full bg-slate-700 px-3 py-1 text-sm font-semibold text-slate-50">
-              Coming soon
-            </span>
-            <h2 className="text-lg font-semibold text-on-dark-primary">Payments</h2>
-            <p className="max-w-md text-sm text-on-dark-label">
-              Online payment is coming soon. Pay your driver directly for now.
-            </p>
-          </CardContent>
-        </Card>
+        <PaymentLedgerPanel role="parent" token={token} user={user} />
       )}
 
       {activeSection === 'help' && <HelpSupport role="parent" />}
