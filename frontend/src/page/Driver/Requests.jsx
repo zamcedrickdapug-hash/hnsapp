@@ -50,7 +50,7 @@ export default function Requests({
 				<CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6">
 					<div>
 						<p className="font-semibold">{driverBusy ? 'Handling an active request' : driverOnline ? 'Available for requests' : 'You are offline'}</p>
-						<p className="text-sm text-gray-600">Only approved, active drivers who are online can accept a request.</p>
+						<p className="text-sm text-on-dark-label">Only approved, active drivers who are online can accept a request.</p>
 					</div>
 					<Button
 						onClick={onToggleAvailability}
