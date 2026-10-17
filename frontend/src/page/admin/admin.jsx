@@ -20,7 +20,6 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BarChart3, Clock3, Settings } from 'lucide-react'
 import { apiFetch, resolveApiUrl } from '../../api'
 import { useSocket, useSocketEvent } from '../../hooks/useSocket'
 import { DashboardLayout } from '../../components/dashboard'
@@ -29,6 +28,8 @@ import HelpSupport from '../../components/common/HelpSupport'
 import AdminApplySection from './AdminApplySection'
 import AdminDashboardSection from './AdminDashboardSection'
 import AdminUsersSection from './AdminUsersSection'
+import AdminAnalyticsSection from './AdminAnalyticsSection'
+import AdminSystemSettingsSection from './AdminSystemSettingsSection'
 import { StatusBadge } from './AdminUI'
 import AdminPaymentsPanel from '../../components/payments/AdminPaymentsPanel'
 import './admin.scss'
@@ -558,19 +559,11 @@ export default function AdminPanel({ token, user, onLogout }) {
       )}
 
       {activeSection === 'analytics' && (
-        <ComingSoonSection
-          Icon={BarChart3}
-          title="Analytics"
-          description="Not available yet"
-        />
+        <AdminAnalyticsSection token={token} />
       )}
 
       {activeSection === 'settings' && (
-        <ComingSoonSection
-          Icon={Settings}
-          title="System Settings"
-          description="Not available yet"
-        />
+        <AdminSystemSettingsSection token={token} />
       )}
 
       {activeSection === 'help' && <HelpSupport role="admin" />}
@@ -667,17 +660,6 @@ function AdminIssuesSection({ issues, loading, error, actioningId, onRefresh, on
           })}
         </div>
       ) : null}
-    </section>
-  )
-}
-
-function ComingSoonSection({ Icon, title, description }) {
-  return (
-    <section className="admin-coming-soon" aria-labelledby="coming-soon-heading">
-      <Icon size={32} aria-hidden="true" />
-      <h2 id="coming-soon-heading">{title}</h2>
-      <p>{description}</p>
-      <span><Clock3 size={16} aria-hidden="true" /> Coming soon</span>
     </section>
   )
 }
