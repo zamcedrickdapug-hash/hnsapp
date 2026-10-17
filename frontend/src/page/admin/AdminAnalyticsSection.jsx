@@ -127,6 +127,7 @@ export default function AdminAnalyticsSection({ token }) {
               ['Cancelled', formatNumber(summary.cancelledTrips), `${formatNumber((summary.cancelledRate || 0) * 100, 1)}% of trips`],
               ['Active drivers', formatNumber(summary.activeDrivers), 'Approved, active accounts'],
               ['Approvals pending', formatNumber(approvals.pending), 'Current applications'],
+              ['Applications reviewing', formatNumber(approvals.reviewing), 'Currently under review'],
               ['New registrations', formatNumber(totalRegistrations), `Parents and drivers - ${range}`],
             ].map(([label, value, detail]) => (
               <article className="admin-analytics-kpi" key={label}>
@@ -201,19 +202,24 @@ export default function AdminAnalyticsSection({ token }) {
           </section>
 
           <section className="admin-analytics-card" aria-labelledby="collections-title">
-            <header><div><h3 id="collections-title">Collections summary</h3><p>Billable fare and verified payment aggregates for {range}.</p></div></header>
+            <header><div><h3 id="collections-title">Collections summary</h3><p>Billable trip fares by recorded collection status for {range}.</p></div></header>
             <div className="admin-collections-grid">
-              <Metric label="Completed billable fares" value={formatMoney(collections.totalCompletedBillableFares, collections.currency)} />
+              <Metric label="Total billable fares" value={formatMoney(collections.total, collections.currency)} />
               <Metric label="Average fare" value={formatMoney(collections.averageFare, collections.currency)} />
               <Metric label="Collected" value={formatMoney(collections.collected, collections.currency)} />
               <Metric label="Outstanding" value={formatMoney(collections.outstanding, collections.currency)} />
               <Metric
                 label="Average booking-to-completion"
                 value={summary.averageMinutesToCompletion == null
-                  ? 'Not available'
+                  ? 'Not tracked yet'
                   : `${formatNumber(summary.averageMinutesToCompletion, 1)} minutes`}
               />
             </div>
+            {collections.truncated && (
+              <p className="admin-analytics-note" role="status">
+                Only the most recent 5,000 billable trips are included; these totals are partial.
+              </p>
+            )}
           </section>
         </>
       ) : (

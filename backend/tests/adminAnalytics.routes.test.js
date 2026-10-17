@@ -24,6 +24,8 @@ const evaluate = (expression, record) => {
   if (typeof expression === 'string' && expression.startsWith('$')) return getPath(record, expression.slice(1));
   if (Array.isArray(expression)) return expression.map((item) => evaluate(item, record));
   if (!expression || typeof expression !== 'object' || expression instanceof Date) return expression;
+  if (expression.$trim) return String(evaluate(expression.$trim.input, record) || '').trim();
+  if (expression.$toLower) return String(evaluate(expression.$toLower, record) || '').toLowerCase();
   if (expression.$dateToString) {
     const date = evaluate(expression.$dateToString.date, record);
     const parts = new Intl.DateTimeFormat('en-CA', {
@@ -68,6 +70,7 @@ const matches = (record, query) => Object.entries(query).every(([field, expected
     if (operator === '$gt') return compareValues(actual, operand) > 0;
     if (operator === '$lt') return compareValues(actual, operand) < 0;
     if (operator === '$ne') return actual !== operand;
+    if (operator === '$exists') return operand ? actual !== undefined : actual === undefined;
     if (operator === '$type') return operand === 'number' ? typeof actual === 'number' : typeof actual === operand;
     return false;
   });
@@ -91,6 +94,8 @@ const runPipeline = (source, pipeline) => pipeline.reduce((rows, stage) => {
           total.count += 1;
           group.__averages[field] = total;
           group[field] = total.sum / total.count;
+        } else if (Object.hasOwn(accumulator, '$first') && !Object.hasOwn(group, field)) {
+          group[field] = evaluate(accumulator.$first, record);
         }
       }
       groups.set(key, group);
@@ -138,20 +143,39 @@ const createServer = async (t) => {
   const completedAt = new Date(createdAt.getTime() + 30 * 60 * 1000);
   const currentDate = dateAtManilaDay(0);
   const trips = [
-    { status: 'completed', createdAt, completedAt, updatedAt: new Date(completedAt.getTime() + 5 * 60 * 60 * 1000), fareAmount: 80, paymentStatus: 'paid', schoolName: 'North School' },
-    { status: 'completed', createdAt: currentDate, completedAt: new Date(currentDate.getTime() + 30 * 60 * 1000), updatedAt: new Date(currentDate.getTime() + 60 * 60 * 1000), fareAmount: 120, paymentStatus: 'unpaid', schoolName: 'North School' },
+    { status: 'completed', createdAt, completedAt, updatedAt: new Date(completedAt.getTime() + 5 * 60 * 60 * 1000), fareAmount: 80, paymentStatus: 'paid', schoolName: 'la concepcion college' },
+    { status: 'completed', createdAt: currentDate, completedAt: new Date(currentDate.getTime() + 90 * 60 * 1000), updatedAt: new Date(currentDate.getTime() + 3 * 60 * 60 * 1000), fareAmount: 120, paymentStatus: 'unpaid', schoolName: 'la concepcion college' },
     { status: 'cancelled', createdAt: currentDate, updatedAt: currentDate, fareAmount: null, paymentStatus: 'unpaid', schoolName: 'West School' },
+    {
+      status: 'completed',
+      createdAt: currentDate,
+      updatedAt: new Date(currentDate.getTime() + 2 * 60 * 60 * 1000),
+      fareAmount: null,
+      schoolName: 'La Concepcion College',
+      requesterLocation: { latitude: 14.6, longitude: 121 },
+      destinationLocation: { latitude: 14.627, longitude: 121 },
+    },
   ];
   const users = [
     { role: 'parent', status: 'approved', accountState: 'active', createdAt },
     { role: 'driver', status: 'approved', accountState: 'active', createdAt },
     { role: 'driver', status: 'pending', accountState: 'active', createdAt: currentDate },
-  ];
-  const payments = [
-    { status: 'verified', amount: 40, createdAt: currentDate },
+    { role: 'parent', status: 'reviewing', accountState: 'active', createdAt: currentDate },
   ];
 
   const aggregateModel = (records) => ({ aggregate: async (pipeline) => runPipeline(records, pipeline) });
+  const vanRequestModel = aggregateModel(trips);
+  vanRequestModel.find = (query) => {
+    let limit = Infinity;
+    return {
+      select() { return this; },
+      sort() { return this; },
+      limit(value) { limit = value; return this; },
+      lean() {
+        return Promise.resolve(trips.filter((trip) => matches(trip, query)).slice(0, limit));
+      },
+    };
+  };
   const fakeAuth = {
     requireAdmin: (req, res, next) => {
       const token = req.get('authorization');
@@ -166,13 +190,12 @@ const createServer = async (t) => {
   const realRequire = createRequire(filename);
   const dependencies = {
     '../models/User': aggregateModel(users),
-    '../models/VanRequest': aggregateModel(trips),
-    '../models/Payment': aggregateModel(payments),
+    '../models/VanRequest': vanRequestModel,
     '../config/paymentConfig': mockPaymentConfig,
     '../middleware/auth': fakeAuth,
     '../socket': { getIo: () => ({ engine: {} }) },
     mongoose: { connection: { readyState: 1 } },
-    'firebase-admin': { apps: [] },
+    'firebase-admin': { apps: [], credential: { cert: () => ({}) } },
   };
   loaded.require = (name) => Object.hasOwn(dependencies, name) ? dependencies[name] : realRequire(name);
   loaded._compile(fs.readFileSync(filename, 'utf8'), filename);
@@ -189,7 +212,7 @@ const createServer = async (t) => {
     });
     return { status: response.status, body: await response.json() };
   };
-  return { request };
+  return { request, trips };
 };
 
 test('analytics endpoints require authentication and admin access', async (t) => {
@@ -204,38 +227,51 @@ test('summary rejects unsupported ranges', async (t) => {
 });
 
 test('summary returns correct aggregate totals grouped by Manila calendar day without private fields', async (t) => {
-  const { request } = await createServer(t);
+  const { request, trips } = await createServer(t);
   const { status, body } = await request('/summary?range=7d');
+  const computedFare = require('../services/fareService').computeFare({
+    pickup: trips[3].requesterLocation,
+    destination: trips[3].destinationLocation,
+  }).fare;
 
   assert.equal(status, 200);
   assert.deepEqual(body.tripsByStatus, [
     { status: 'cancelled', count: 1 },
-    { status: 'completed', count: 2 },
+    { status: 'completed', count: 3 },
   ]);
-  assert.equal(body.summary.totalTrips, 3);
-  assert.equal(body.summary.completedTrips, 2);
+  assert.equal(body.summary.totalTrips, 4);
+  assert.equal(body.summary.completedTrips, 3);
   assert.equal(body.summary.cancelledTrips, 1);
   assert.equal(body.summary.activeDrivers, 1);
-  assert.equal(body.summary.averageMinutesToCompletion, 30);
-  assert.deepEqual(body.approvals, { pending: 1, approved: 2, declined: 0 });
+  assert.equal(body.summary.averageMinutesToCompletion, 60);
+  assert.deepEqual(body.approvals, { pending: 1, reviewing: 1, approved: 2, declined: 0 });
+  assert.equal(body.collections.collected, 80);
+  assert.equal(body.collections.outstanding, 120 + computedFare);
+  assert.equal(body.collections.total, body.collections.collected + body.collections.outstanding);
+  assert.equal(body.collections.averageFare, body.collections.total / 3);
+  assert.equal(body.collections.truncated, false);
+  assert.equal(trips[3].fareAmount, null);
+  assert.equal(trips[3].paymentStatus, undefined);
   assert.deepEqual(body.collections, {
     currency: 'PHP',
-    totalCompletedBillableFares: 200,
-    averageFare: 100,
-    collected: 40,
-    outstanding: 120,
+    total: 200 + computedFare,
+    averageFare: (200 + computedFare) / 3,
+    collected: 80,
+    outstanding: 120 + computedFare,
+    truncated: false,
   });
   assert.deepEqual(body.tripsPerDay, [
     { date: manilaDay(-2), count: 1 },
-    { date: manilaDay(0), count: 2 },
+    { date: manilaDay(0), count: 3 },
   ]);
   assert.deepEqual(body.registrationsPerDay, [
     { date: manilaDay(-2), role: 'driver', count: 1 },
     { date: manilaDay(-2), role: 'parent', count: 1 },
     { date: manilaDay(0), role: 'driver', count: 1 },
+    { date: manilaDay(0), role: 'parent', count: 1 },
   ]);
   assert.deepEqual(body.topSchools, [
-    { school: 'North School', count: 2 },
+    { school: 'la concepcion college', count: 3 },
     { school: 'West School', count: 1 },
   ]);
 
@@ -251,6 +287,34 @@ test('summary returns correct aggregate totals grouped by Manila calendar day wi
   inspect(body);
 });
 
+test('completion time is null when no completedAt timestamps are tracked', async (t) => {
+  const { request, trips } = await createServer(t);
+  trips.forEach((trip) => { delete trip.completedAt; });
+  const { status, body } = await request('/summary?range=7d');
+  assert.equal(status, 200);
+  assert.equal(body.summary.averageMinutesToCompletion, null);
+});
+
+test('collections are capped at 5000 billable trips and report truncation', async (t) => {
+  const { request, trips } = await createServer(t);
+  const createdAt = dateAtManilaDay(0);
+  trips.splice(0, trips.length);
+  for (let index = 0; index < 5001; index += 1) {
+    trips.push({
+      status: 'completed',
+      createdAt,
+      updatedAt: createdAt,
+      fareAmount: 10,
+      paymentStatus: 'unpaid',
+    });
+  }
+  const { status, body } = await request('/summary?range=7d');
+  assert.equal(status, 200);
+  assert.equal(body.collections.truncated, true);
+  assert.equal(body.collections.outstanding, 50000);
+  assert.equal(body.collections.total, body.collections.collected + body.collections.outstanding);
+});
+
 test('health and config expose only service booleans and the business-rule allowlist', async (t) => {
   const { request } = await createServer(t);
   const health = await request('/health');
@@ -259,6 +323,8 @@ test('health and config expose only service booleans and the business-rule allow
   assert.equal(health.status, 200);
   assert.equal(typeof health.body.databaseConnected, 'boolean');
   assert.equal(typeof health.body.socketServerRunning, 'boolean');
+  assert.deepEqual(Object.keys(health.body.features).sort(), ['emailServiceConfigured', 'firebaseConfigured']);
+  assert.equal(Object.hasOwn(health.body.features, 'googleMapsKeyPresent'), false);
   assert.deepEqual(Object.keys(config.body).sort(), [
     'baseFare', 'baseKm', 'billingStartDate', 'currency', 'maxFare',
     'minFare', 'perKm', 'roadFactor', 'roundTo',
@@ -267,5 +333,35 @@ test('health and config expose only service booleans and the business-rule allow
     for (const key of Object.keys(payload)) {
       assert.doesNotMatch(key, /phone|latitude|longitude|coordinates|secret|password|token|connectionString|url/i);
     }
+  }
+});
+
+test('health feature flags follow the configured Firebase and email settings', async (t) => {
+  const { request } = await createServer(t);
+  const environmentKeys = [
+    'FIREBASE_SERVICE_ACCOUNT',
+    'FIREBASE_ADMIN_SDK_PATH',
+    'EMAIL_USER',
+    'EMAIL_PASSWORD',
+  ];
+  const previousValues = Object.fromEntries(environmentKeys.map((key) => [key, process.env[key]]));
+  try {
+    environmentKeys.forEach((key) => { delete process.env[key]; });
+    process.env.FIREBASE_SERVICE_ACCOUNT = '{';
+    const unconfigured = await request('/health');
+    assert.equal(unconfigured.body.features.firebaseConfigured, false);
+    assert.equal(unconfigured.body.features.emailServiceConfigured, false);
+
+    process.env.FIREBASE_SERVICE_ACCOUNT = JSON.stringify({ project_id: 'test-project' });
+    process.env.EMAIL_USER = 'test-user';
+    process.env.EMAIL_PASSWORD = 'test-password';
+    const configured = await request('/health');
+    assert.equal(configured.body.features.firebaseConfigured, true);
+    assert.equal(configured.body.features.emailServiceConfigured, true);
+  } finally {
+    environmentKeys.forEach((key) => {
+      if (previousValues[key] === undefined) delete process.env[key];
+      else process.env[key] = previousValues[key];
+    });
   }
 });

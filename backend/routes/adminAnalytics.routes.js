@@ -1,17 +1,18 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const path = require('node:path');
 const firebaseAdmin = require('firebase-admin');
 const User = require('../models/User');
 const VanRequest = require('../models/VanRequest');
-const Payment = require('../models/Payment');
 const paymentConfig = require('../config/paymentConfig');
+const { computeFare } = require('../services/fareService');
 const { requireAdmin } = require('../middleware/auth');
 const { getIo } = require('../socket');
 
 const router = express.Router();
 const ALLOWED_RANGES = new Set(['7d', '30d', '90d']);
 const RANGE_DAYS = { '7d': 7, '30d': 30, '90d': 90 };
-const BILLABLE_TRIP_STATUSES = ['completed'];
+const BILLABLE_TRIPS_LIMIT = 5000;
 
 const getManilaStartOfDay = (date) => {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -52,11 +53,10 @@ router.get('/summary', requireAdmin, async (req, res) => {
   const end = now;
   const start = new Date(getManilaStartOfDay(now).getTime() - ((RANGE_DAYS[range] - 1) * 24 * 60 * 60 * 1000));
   const tripMatch = tripRangeMatch(start, end);
+  const billableStart = new Date(Math.max(start.getTime(), new Date(paymentConfig.billingStartDate).getTime()));
   const billableMatch = {
-    ...tripMatch,
-    status: { $in: BILLABLE_TRIP_STATUSES },
-    updatedAt: { $gte: new Date(paymentConfig.billingStartDate) },
-    fareAmount: { $type: 'number', $gt: 0 },
+    status: 'completed',
+    updatedAt: { $gte: billableStart, $lt: end },
   };
 
   try {
@@ -67,9 +67,9 @@ router.get('/summary', requireAdmin, async (req, res) => {
       approvalStatuses,
       activeDriverResult,
       topSchools,
-      fareTotals,
-      collectedTotals,
-      outstandingTotals,
+      billableCountResult,
+      completionTimeResult,
+      billableTrips,
     ] = await Promise.all([
       VanRequest.aggregate([
         { $match: tripMatch },
@@ -124,23 +124,40 @@ router.get('/summary', requireAdmin, async (req, res) => {
       ]),
       VanRequest.aggregate([
         { $match: { ...tripMatch, schoolName: { $type: 'string', $ne: '' } } },
-        { $group: { _id: '$schoolName', count: { $sum: 1 } } },
-        { $sort: { count: -1, _id: 1 } },
+        { $project: { trimmedSchool: { $trim: { input: '$schoolName' } } } },
+        { $match: { trimmedSchool: { $ne: '' } } },
+        { $project: { schoolKey: { $toLower: '$trimmedSchool' }, school: '$trimmedSchool' } },
+        {
+          $group: {
+            _id: { key: '$schoolKey', school: '$school' },
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { '_id.key': 1, count: -1, '_id.school': 1 } },
+        {
+          $group: {
+            _id: '$_id.key',
+            school: { $first: '$_id.school' },
+            count: { $sum: '$count' },
+          },
+        },
+        { $sort: { count: -1, school: 1 } },
         { $limit: 10 },
-        { $project: { _id: 0, school: '$_id', count: 1 } },
+        { $project: { _id: 0, school: 1, count: 1 } },
       ]),
       VanRequest.aggregate([
         { $match: billableMatch },
+        { $count: 'count' },
+      ]),
+      VanRequest.aggregate([
+        { $match: { status: 'completed', completedAt: { $exists: true, $ne: null, $gte: start, $lt: end } } },
         {
           $group: {
             _id: null,
-            count: { $sum: 1 },
-            total: { $sum: '$fareAmount' },
-            average: { $avg: '$fareAmount' },
-            averageMinutesToCompletion: {
+            averageMinutes: {
               $avg: {
                 $divide: [
-                  { $subtract: [{ $ifNull: ['$completedAt', '$updatedAt'] }, '$createdAt'] },
+                  { $subtract: ['$completedAt', '$createdAt'] },
                   60000,
                 ],
               },
@@ -148,19 +165,11 @@ router.get('/summary', requireAdmin, async (req, res) => {
           },
         },
       ]),
-      Payment.aggregate([
-        { $match: { status: 'verified', createdAt: { $gte: start, $lt: end } } },
-        { $group: { _id: null, amount: { $sum: '$amount' } } },
-      ]),
-      VanRequest.aggregate([
-        {
-          $match: {
-            ...billableMatch,
-            paymentStatus: { $in: ['unpaid', 'pending'] },
-          },
-        },
-        { $group: { _id: null, amount: { $sum: '$fareAmount' } } },
-      ]),
+      VanRequest.find(billableMatch)
+        .select('fareAmount paymentStatus requesterLocation destinationLocation')
+        .sort({ updatedAt: -1, _id: -1 })
+        .limit(BILLABLE_TRIPS_LIMIT)
+        .lean(),
     ]);
 
     const statusCounts = Object.fromEntries(tripStatuses.map(({ _id, count }) => [_id, count]));
@@ -168,7 +177,23 @@ router.get('/summary', requireAdmin, async (req, res) => {
     const totalTrips = Object.values(statusCounts).reduce((total, count) => total + count, 0);
     const completedTrips = statusCounts.completed || 0;
     const cancelledTrips = statusCounts.cancelled || 0;
-    const fareSummary = fareTotals[0] || {};
+    const billableFares = billableTrips.map((trip) => (
+      trip.fareAmount === null || trip.fareAmount === undefined
+        ? computeFare({
+          pickup: trip.requesterLocation,
+          destination: trip.destinationLocation,
+        }).fare
+        : trip.fareAmount
+    ));
+    let collected = 0;
+    let outstanding = 0;
+    billableTrips.forEach((trip, index) => {
+      if (trip.paymentStatus === 'paid') collected += billableFares[index];
+      else outstanding += billableFares[index];
+    });
+    const total = collected + outstanding;
+    const averageFare = billableFares.length ? total / billableFares.length : 0;
+    const billableCount = billableCountResult[0]?.count || 0;
 
     return res.status(200).json({
       range,
@@ -182,16 +207,18 @@ router.get('/summary', requireAdmin, async (req, res) => {
       })),
       approvals: {
         pending: approvalCounts.pending || 0,
+        reviewing: approvalCounts.reviewing || 0,
         approved: approvalCounts.approved || 0,
         declined: approvalCounts.declined || 0,
       },
       topSchools: topSchools.map(({ school, count }) => ({ school, count })),
       collections: {
         currency: paymentConfig.currency,
-        totalCompletedBillableFares: fareSummary.total || 0,
-        averageFare: fareSummary.average || 0,
-        collected: collectedTotals[0]?.amount || 0,
-        outstanding: outstandingTotals[0]?.amount || 0,
+        total,
+        averageFare,
+        collected,
+        outstanding,
+        truncated: billableCount > billableTrips.length,
       },
       summary: {
         totalTrips,
@@ -200,7 +227,7 @@ router.get('/summary', requireAdmin, async (req, res) => {
         completedRate: totalTrips ? completedTrips / totalTrips : 0,
         cancelledRate: totalTrips ? cancelledTrips / totalTrips : 0,
         activeDrivers: activeDriverResult[0]?.count || 0,
-        averageMinutesToCompletion: fareSummary.averageMinutesToCompletion ?? null,
+        averageMinutesToCompletion: completionTimeResult[0]?.averageMinutes ?? null,
       },
     });
   } catch (error) {
@@ -208,10 +235,23 @@ router.get('/summary', requireAdmin, async (req, res) => {
   }
 });
 
+const isFirebaseConfigured = () => {
+  if (firebaseAdmin.apps.length > 0) return true;
+  try {
+    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT
+      ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+      : require(path.resolve(
+        process.env.FIREBASE_ADMIN_SDK_PATH || path.resolve(__dirname, '../serviceAccountKey.json'),
+      ));
+    firebaseAdmin.credential.cert(serviceAccount);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 router.get('/health', requireAdmin, async (req, res) => {
   const now = new Date();
-  const firebaseConfigured = firebaseAdmin.apps.length > 0
-    || Boolean(process.env.FIREBASE_SERVICE_ACCOUNT || process.env.FIREBASE_ADMIN_SDK_PATH);
   const socketServer = getIo();
 
   return res.status(200).json({
@@ -226,12 +266,8 @@ router.get('/health', requireAdmin, async (req, res) => {
     databaseConnected: mongoose.connection.readyState === 1,
     socketServerRunning: Boolean(socketServer?.engine),
     features: {
-      googleMapsKeyPresent: Boolean(process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY),
-      firebaseConfigured,
-      emailServiceConfigured: Boolean(
-        (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD)
-        || (process.env.SMTP_USERNAME && process.env.SMTP_PASSWORD),
-      ),
+      firebaseConfigured: isFirebaseConfigured(),
+      emailServiceConfigured: Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASSWORD),
     },
   });
 });

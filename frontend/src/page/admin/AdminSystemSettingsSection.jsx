@@ -4,7 +4,6 @@ import { apiFetch } from '../../api'
 import { EmptyState, StatusBadge } from './AdminUI'
 
 const featureLabels = [
-  ['googleMapsKeyPresent', 'Google Maps'],
   ['firebaseConfigured', 'Firebase'],
   ['emailServiceConfigured', 'Email service'],
 ]
