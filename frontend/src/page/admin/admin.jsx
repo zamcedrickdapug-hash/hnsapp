@@ -30,6 +30,7 @@ import HelpSupport from '../../components/common/HelpSupport'
 import AdminApplySection from './AdminApplySection'
 import AdminDashboardSection from './AdminDashboardSection'
 import AdminUsersSection from './AdminUsersSection'
+import AdminPaymentsPanel from '../../components/payments/AdminPaymentsPanel'
 import './admin.scss'
 
 // Default filters configuration
@@ -446,6 +447,7 @@ export default function AdminPanel({ token, user, onLogout }) {
         users: 'User Management',
         applications: 'Applications',
         issues: 'Issues',
+        payments: 'Payments',
         analytics: 'Analytics',
         settings: 'System Settings',
         help: 'Help & Support',
@@ -455,6 +457,7 @@ export default function AdminPanel({ token, user, onLogout }) {
         users: 'Moderate and manage all user accounts.',
         applications: 'Review and approve or decline account applications.',
         issues: 'Review reports submitted by users.',
+        payments: 'Read-only payment totals, recent payments, and audit records.',
         analytics: 'System analytics and reports.',
         settings: 'System configuration and policies.',
         help: 'Frequently asked questions, contact details, and safety information.',
@@ -572,6 +575,10 @@ export default function AdminPanel({ token, user, onLogout }) {
           onRefresh={() => loadIssues()}
           onUpdateStatus={handleUpdateIssueStatus}
         />
+      )}
+
+      {activeSection === 'payments' && (
+        <AdminPaymentsPanel token={token} />
       )}
 
       {activeSection === 'analytics' && (

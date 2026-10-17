@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { CircleCheck, CircleX, Clock3, RefreshCw } from 'lucide-react'
 import { apiFetch } from '../../api'
+import PaymentReceipt from '../payments/PaymentReceipt'
+import PaymentReferenceVerifier from '../payments/PaymentReferenceVerifier'
 
 const ACTIVE_REQUEST_STATUSES = ['accepted', 'arrived', 'picked_up', 'arrived_at_school', 'completed']
 
@@ -27,6 +29,8 @@ export default function PaymentLedgerPanel({ role, token, user }) {
   const [actionLoading, setActionLoading] = useState('')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [receiptPaymentId, setReceiptPaymentId] = useState(null)
+  const receiptTriggerRef = useRef(null)
 
   const loadPayments = useCallback(async (before, append = false) => {
     if (append) setLoadingMore(true)
@@ -143,6 +147,11 @@ export default function PaymentLedgerPanel({ role, token, user }) {
     action === 'verify' ? 'Payment verified.' : 'Payment rejected.'
   )
 
+  const closeReceipt = useCallback(() => {
+    setReceiptPaymentId(null)
+    window.requestAnimationFrame(() => receiptTriggerRef.current?.focus())
+  }, [])
+
   return (
     <section className="space-y-6" aria-labelledby="payments-heading">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -154,7 +163,7 @@ export default function PaymentLedgerPanel({ role, token, user }) {
           type="button"
           onClick={() => refresh()}
           disabled={loading || loadingMore || Boolean(actionLoading)}
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-500 px-4 py-2 text-sm font-medium text-on-dark-primary hover:bg-white/10 disabled:opacity-60"
+          className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-500 px-4 text-sm font-medium text-on-dark-primary outline-none hover:bg-white/10 focus-visible:ring-4 focus-visible:ring-blue-400 disabled:opacity-60"
         >
           <RefreshCw size={16} aria-hidden="true" className={loading ? 'animate-spin' : ''} />
           Refresh
@@ -163,6 +172,8 @@ export default function PaymentLedgerPanel({ role, token, user }) {
 
       {error && <p role="alert" className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>}
       {message && <p role="status" className="rounded-lg border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800">{message}</p>}
+
+      <PaymentReferenceVerifier token={token} />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {role === 'parent' ? (
@@ -191,7 +202,7 @@ export default function PaymentLedgerPanel({ role, token, user }) {
               required
               value={selectedRequestId}
               onChange={(event) => setSelectedRequestId(event.target.value)}
-              className="w-full rounded-lg border border-slate-500 bg-slate-950 px-3 py-2 text-on-dark-primary"
+              className="min-h-11 w-full rounded-lg border border-slate-500 bg-slate-950 px-3 text-base text-on-dark-primary outline-none focus-visible:ring-4 focus-visible:ring-blue-400"
             >
               <option value="">Select a trip</option>
               {requests.map((request) => (
@@ -219,7 +230,7 @@ export default function PaymentLedgerPanel({ role, token, user }) {
               required
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
-              className="w-full rounded-lg border border-slate-500 bg-slate-950 px-3 py-2 text-on-dark-primary"
+              className="min-h-11 w-full rounded-lg border border-slate-500 bg-slate-950 px-3 text-base text-on-dark-primary outline-none focus-visible:ring-4 focus-visible:ring-blue-400"
             />
           </label>
           {role === 'parent' && (
@@ -229,7 +240,7 @@ export default function PaymentLedgerPanel({ role, token, user }) {
                 <select
                   value={method}
                   onChange={(event) => setMethod(event.target.value)}
-                  className="w-full rounded-lg border border-slate-500 bg-slate-950 px-3 py-2 text-on-dark-primary"
+                  className="min-h-11 w-full rounded-lg border border-slate-500 bg-slate-950 px-3 text-base text-on-dark-primary outline-none focus-visible:ring-4 focus-visible:ring-blue-400"
                 >
                   <option value="cash">Cash</option>
                   <option value="gcash">GCash</option>
@@ -243,7 +254,7 @@ export default function PaymentLedgerPanel({ role, token, user }) {
                     maxLength="40"
                     value={externalRef}
                     onChange={(event) => setExternalRef(event.target.value)}
-                    className="w-full rounded-lg border border-slate-500 bg-slate-950 px-3 py-2 text-on-dark-primary"
+                    className="min-h-11 w-full rounded-lg border border-slate-500 bg-slate-950 px-3 text-base text-on-dark-primary outline-none focus-visible:ring-4 focus-visible:ring-blue-400"
                   />
                 </label>
               )}
@@ -255,14 +266,14 @@ export default function PaymentLedgerPanel({ role, token, user }) {
               maxLength="200"
               value={note}
               onChange={(event) => setNote(event.target.value)}
-              className="w-full rounded-lg border border-slate-500 bg-slate-950 px-3 py-2 text-on-dark-primary"
+              className="min-h-11 w-full rounded-lg border border-slate-500 bg-slate-950 px-3 text-base text-on-dark-primary outline-none focus-visible:ring-4 focus-visible:ring-blue-400"
             />
           </label>
         </div>
         <button
           type="submit"
           disabled={!selectedRequestId || !amount || Boolean(actionLoading)}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+          className="min-h-11 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white outline-none hover:bg-blue-700 focus-visible:ring-4 focus-visible:ring-blue-300 disabled:opacity-60"
         >
           {actionLoading === 'submit' ? 'Saving…' : role === 'parent' ? 'Submit payment' : 'Record and verify cash'}
         </button>
@@ -277,7 +288,7 @@ export default function PaymentLedgerPanel({ role, token, user }) {
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value)}
-                className="rounded-lg border border-slate-500 bg-slate-950 px-2 py-1 text-on-dark-primary"
+                className="min-h-11 rounded-lg border border-slate-500 bg-slate-950 px-2 text-base text-on-dark-primary outline-none focus-visible:ring-4 focus-visible:ring-blue-400"
               >
                 {['all', 'pending', 'verified', 'rejected'].map((status) => (
                   <option key={status} value={status}>{status[0].toUpperCase() + status.slice(1)}</option>
@@ -298,20 +309,33 @@ export default function PaymentLedgerPanel({ role, token, user }) {
                   <p className="font-medium text-on-dark-primary">
                     {formatMoney(payment.amount, payment.currency)} · {payment.method.toUpperCase()}
                   </p>
-                  <p className="mt-1 text-xs text-on-dark-label">
-                    {payment.status[0].toUpperCase() + payment.status.slice(1)}
+                  <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-300">
+                    <PaymentStatus status={payment.status} />
                     {payment.referenceNo ? ` · ${payment.referenceNo}` : ''}
                     {payment.createdAt ? ` · ${new Date(payment.createdAt).toLocaleString()}` : ''}
                   </p>
-                  {payment.rejectReason && <p className="mt-1 text-xs text-red-300">{payment.rejectReason}</p>}
+                  {payment.rejectReason && <p className="mt-1 text-sm text-red-300">{payment.rejectReason}</p>}
                 </div>
-                {role === 'driver' && payment.status === 'pending' && (
-                  <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {payment.status === 'verified' && (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        receiptTriggerRef.current = event.currentTarget
+                        setReceiptPaymentId(payment._id)
+                      }}
+                      className="min-h-11 rounded-lg border border-slate-300 px-3 text-sm font-semibold text-white outline-none focus-visible:ring-4 focus-visible:ring-blue-400"
+                    >
+                      View receipt
+                    </button>
+                  )}
+                  {role === 'driver' && payment.status === 'pending' && (
+                    <>
                     <button
                       type="button"
                       onClick={() => reviewPayment(payment, 'verify')}
                       disabled={Boolean(actionLoading)}
-                      className="rounded-lg bg-green-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+                      className="min-h-11 rounded-lg bg-green-700 px-3 text-sm font-medium text-white outline-none focus-visible:ring-4 focus-visible:ring-green-300 disabled:opacity-60"
                     >
                       {actionLoading === `verify-${payment._id}` ? 'Verifying…' : 'Verify'}
                     </button>
@@ -319,12 +343,13 @@ export default function PaymentLedgerPanel({ role, token, user }) {
                       type="button"
                       onClick={() => reviewPayment(payment, 'reject')}
                       disabled={Boolean(actionLoading)}
-                      className="rounded-lg border border-red-400 px-3 py-2 text-sm font-medium text-red-200 disabled:opacity-60"
+                      className="min-h-11 rounded-lg border border-red-400 px-3 text-sm font-medium text-red-200 outline-none focus-visible:ring-4 focus-visible:ring-red-300 disabled:opacity-60"
                     >
                       {actionLoading === `reject-${payment._id}` ? 'Rejecting…' : 'Reject'}
                     </button>
-                  </div>
-                )}
+                    </>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
@@ -335,14 +360,28 @@ export default function PaymentLedgerPanel({ role, token, user }) {
               type="button"
               onClick={() => loadPayments(nextCursor, true)}
               disabled={loadingMore}
-              className="rounded-lg border border-slate-500 px-4 py-2 text-sm font-medium text-on-dark-primary disabled:opacity-60"
+              className="min-h-11 rounded-lg border border-slate-500 px-4 text-sm font-medium text-on-dark-primary outline-none focus-visible:ring-4 focus-visible:ring-blue-400 disabled:opacity-60"
             >
               {loadingMore ? 'Loading…' : 'Load more'}
             </button>
           </div>
         )}
       </div>
+      {receiptPaymentId && (
+        <PaymentReceipt paymentId={receiptPaymentId} token={token} onClose={closeReceipt} />
+      )}
     </section>
+  )
+}
+
+function PaymentStatus({ status }) {
+  const Icon = status === 'verified' ? CircleCheck : status === 'rejected' ? CircleX : Clock3
+  const label = status ? status[0].toUpperCase() + status.slice(1) : 'Pending'
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-slate-500 bg-slate-900 px-2.5 py-1 text-sm font-medium text-white">
+      <Icon size={16} aria-hidden="true" />
+      {label}
+    </span>
   )
 }
 

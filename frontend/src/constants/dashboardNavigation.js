@@ -185,6 +185,14 @@ export const ADMIN_NAVIGATION = [
     color: 'from-red-500 to-red-600',
   },
   {
+    id: 'payments',
+    label: 'Payments',
+    icon: CreditCard,
+    path: '/admin/payments',
+    description: 'Review payment totals and audit records',
+    color: 'from-yellow-500 to-yellow-600',
+  },
+  {
     id: 'settings',
     label: 'System Settings',
     icon: Settings,
