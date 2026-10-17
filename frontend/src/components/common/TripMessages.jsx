@@ -208,7 +208,9 @@ export default function TripMessages({
     if (!composer) return
     composer.style.height = 'auto'
     const lineHeight = Number.parseFloat(window.getComputedStyle(composer).lineHeight) || 24
-    const maxHeight = lineHeight * 5 + 16
+    const maxHeight = window.matchMedia('(max-width: 767px)').matches
+      ? lineHeight * 5 + 16
+      : 120
     composer.style.height = `${Math.min(composer.scrollHeight, maxHeight)}px`
   }, [draft])
 
@@ -470,8 +472,8 @@ export default function TripMessages({
                 <ArrowLeft size={22} aria-hidden="true" />
               </button>
               <div className="min-w-0 flex-1">
-                <h3 className="truncate font-semibold text-gray-900">{selectedThread.otherParty?.name || (role === 'parent' ? 'Driver' : 'Parent')}</h3>
-                <p className="mt-0.5 truncate text-sm text-gray-600">
+                <h3 className="truncate font-semibold text-gray-900 md:overflow-visible md:text-clip md:whitespace-normal">{selectedThread.otherParty?.name || (role === 'parent' ? 'Driver' : 'Parent')}</h3>
+                <p className="mt-0.5 truncate text-sm text-gray-600 md:overflow-visible md:text-clip md:whitespace-normal">
                 {[selectedThread.studentName, selectedThread.schoolName].filter(Boolean).join(' · ')}
                 </p>
               </div>
@@ -533,10 +535,10 @@ export default function TripMessages({
                     rows={2}
                     maxLength={500}
                     placeholder="Write a message..."
-                    className="trip-messages-composer min-h-12 w-full min-w-0 resize-none overflow-y-auto rounded-lg border border-gray-300 px-3 py-2 text-base text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    className="trip-messages-composer min-h-12 w-full min-w-0 flex-1 resize-none overflow-y-auto rounded-lg border border-gray-300 px-3 py-2 text-base text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 md:text-sm"
                   />
-                  <div className="trip-messages-composer__footer box-border flex w-full min-w-0 items-center gap-3">
-                    <span className="min-w-0 flex-1 text-sm text-gray-600">{draft.length}/500</span>
+                  <div className="trip-messages-composer__footer box-border flex w-full min-w-0 items-center gap-3 md:justify-between md:gap-2">
+                    <span className="min-w-0 flex-1 text-sm text-gray-600 md:flex-none md:shrink-0">{draft.length}/500</span>
                     <p
                       className="hidden min-w-0 flex-1 truncate text-sm text-gray-600 sm:block"
                       title="Enter to send, Shift+Enter for a new line"
@@ -546,7 +548,7 @@ export default function TripMessages({
                     <button
                       type="submit"
                       disabled={!draft.trim() || sending}
-                      className="inline-flex h-11 min-w-[96px] max-w-full flex-[0_0_auto] items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-blue-700 px-3 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-50"
+                      className="inline-flex h-11 min-w-[96px] max-w-full flex-[0_0_auto] items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-blue-700 px-3 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-50 md:h-10 md:min-w-0 md:flex-initial md:shrink-0"
                     >
                       <Send size={16} aria-hidden="true" />
                       <span>{sending ? 'Sending...' : 'Send'}</span>

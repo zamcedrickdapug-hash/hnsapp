@@ -1064,7 +1064,9 @@ export default function ParentDashboard({ token, user, onLogout }) {
                       <CardDescription>Real-time driver position and route</CardDescription>
                     </CardHeader>
                     <CardContent>
+                      <div className="parent-live-map">
                       <LiveTripMap
+                        height="var(--parent-map-height, 360px)"
                         vanPosition={asLatLng(activeRideRequest.liveLocation)}
                         plannedRoute={plannedRoute}
                         pickupPosition={
@@ -1080,6 +1082,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
                         )}
                         routeMode="road"
                       />
+                      </div>
                     </CardContent>
                   </Card>
                 </>

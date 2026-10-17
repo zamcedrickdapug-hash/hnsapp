@@ -10,7 +10,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card'
-import { Phone, MapPin, Clock, AlertCircle, MessageCircle } from 'lucide-react'
+import { Phone, MapPin, Clock, AlertCircle, MessageCircle, CheckCircle2 } from 'lucide-react'
 import { apiFetch } from '../../../api'
 
 export function ParentTrackingPanel({
@@ -128,15 +128,23 @@ export function ParentTrackingPanel({
               <CardTitle className="text-lg">Live Tracking</CardTitle>
               <CardDescription>Real-time trip updates</CardDescription>
             </div>
-            <div className={`px-3 py-1 rounded-full text-sm font-semibold ${statusInfo.bg} ${statusInfo.color}`}>
-              {statusInfo.label}
+            <div className="flex flex-col items-end gap-1">
+              <div className={`px-3 py-1 rounded-full text-sm font-semibold ${statusInfo.bg} ${statusInfo.color}`}>
+                {statusInfo.label}
+              </div>
+              <div className={`inline-block rounded px-2 py-1 text-sm font-semibold md:hidden ${
+                socketConnected ? 'bg-green-50 text-green-800' : 'bg-gray-50 text-gray-700'
+              }`}>
+                {socketConnected ? '🟢 Live' : '⚪ Offline'}
+              </div>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Driver Info */}
           {driverName && (
-            <div className="pb-4 border-b border-slate-700">
+            <>
+            <div className="parent-driver-card hidden border-b border-slate-700 pb-4 md:block">
               <p className="text-sm font-medium text-slate-300">Driver</p>
               <div className="flex items-center justify-between mt-2 gap-3">
               <div className="flex items-center gap-3 min-w-0">
@@ -191,6 +199,67 @@ export function ParentTrackingPanel({
                 </div>
               </div>
             </div>
+            <div className="parent-driver-card-mobile space-y-4 border-b border-slate-700 pb-4 md:hidden">
+              <div className="flex min-w-0 items-start gap-3">
+                <div
+                  aria-hidden="true"
+                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-blue-100 text-base font-semibold text-blue-800"
+                >
+                  {driverPhotoUrl ? (
+                    <img src={driverPhotoUrl} alt="" className="h-14 w-14 rounded-full object-cover" />
+                  ) : (
+                    initials || 'D'
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="line-clamp-2 break-words text-lg font-bold leading-6 text-slate-50">
+                    {publicDriverName}
+                  </p>
+                  <p className="flex min-w-0 items-baseline gap-1 whitespace-nowrap text-sm text-slate-200">
+                    <span className="min-w-0 truncate">{driverProfile?.vehicleType || vehicleType}</span>
+                    <span aria-hidden="true">-</span>
+                    <span className="shrink-0 whitespace-nowrap font-mono text-slate-300">
+                      {driverProfile?.plateNumber || vehiclePlate}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              {driverProfile?.verified && (
+                <p className="inline-flex min-h-8 w-full items-center gap-2 rounded-full bg-green-900/60 px-3 text-sm font-semibold text-green-200">
+                  <CheckCircle2 size={18} aria-hidden="true" />
+                  Verified by admin
+                </p>
+              )}
+              {driverProfile?.licenseExpired ? (
+                <p className="text-sm text-red-300">License expired</p>
+              ) : licenseValidUntil ? (
+                <p className="text-sm text-slate-300">License valid until {licenseValidUntil}</p>
+              ) : null}
+
+              <div className="parent-driver-actions grid grid-cols-2 gap-3">
+                {driverPhone && (
+                  <a
+                    className="inline-flex min-h-12 min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-slate-500 bg-slate-700 px-2 text-base font-semibold text-slate-50"
+                    href={`tel:${driverPhone}`}
+                  >
+                    <Phone size={18} aria-hidden="true" />
+                    Call driver
+                  </a>
+                )}
+                {onMessageDriver && (
+                  <button
+                    type="button"
+                    onClick={onMessageDriver}
+                    className="inline-flex min-h-12 min-w-0 items-center justify-center gap-1 rounded-lg bg-blue-700 px-2 text-base font-semibold text-white"
+                  >
+                    <MessageCircle size={18} aria-hidden="true" />
+                    <span className="text-center leading-tight">Message driver</span>
+                  </button>
+                )}
+              </div>
+            </div>
+            </>
           )}
 
           {/* Location Info */}
