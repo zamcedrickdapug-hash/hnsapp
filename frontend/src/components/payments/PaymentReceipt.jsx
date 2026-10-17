@@ -132,7 +132,7 @@ export default function PaymentReceipt({ paymentId, token, onClose }) {
             </div>
 
             <dl className="grid grid-cols-1 gap-4 text-base sm:grid-cols-2">
-              <ReceiptField label="Payment method" value={receipt.method ? receipt.method.toUpperCase() : 'Not available'} />
+              <ReceiptField label="Payment method" value={receipt.method === 'cash' ? 'Cash' : 'Payment'} />
               <ReceiptField label="Date and time (Asia/Manila)" value={dateTimeInManila(receipt.verifiedAt)} />
               <ReceiptField label="Parent" value={receipt.parentName || 'Not available'} />
               <ReceiptField label="Driver" value={receipt.driverName || 'Not available'} />

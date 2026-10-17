@@ -60,7 +60,7 @@ export default function PaymentReferenceVerifier({ token }) {
         <h3 id="reference-verifier-title" className="text-lg font-semibold text-slate-900">Check a receipt</h3>
         <p className="mt-1 text-sm leading-6 text-slate-600">
           Check that a receipt from this app is genuine. Enter the reference number printed on the receipt
-          (HNS-YYYYMMDD-XXXXXX). This is not your GCash reference number.
+          (HNS-YYYYMMDD-XXXXXX).
         </p>
       </div>
       <form onSubmit={verify} className="flex flex-col gap-3 sm:flex-row sm:items-start">
