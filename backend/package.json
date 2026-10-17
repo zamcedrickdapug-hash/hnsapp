@@ -8,7 +8,8 @@
   },
   "scripts": {
     "dev": "nodemon index.js",
-    "start": "node index.js"
+    "start": "node index.js",
+    "seed:schools": "node scripts/seed-schools.js"
   },
   "keywords": [],
   "author": "",

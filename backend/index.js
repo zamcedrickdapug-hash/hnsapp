@@ -11,6 +11,7 @@ const bcrypt = require('bcryptjs');
 const User = require('./models/User');
 const authRoutes = require('./routes/auth.routes');
 const parentRoutes = require('./routes/parent.routes');
+const schoolRoutes = require('./routes/school.routes');
 const adminRoutes = require('./routes/admin.routes');
 const driverRoutes = require('./routes/driver.routes');
 const notificationRoutes = require('./routes/notification.routes');
@@ -200,6 +201,7 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/parents', parentRoutes);
+app.use('/api/schools', schoolRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/drivers', driverRoutes);
 app.use('/api/notifications', notificationRoutes);

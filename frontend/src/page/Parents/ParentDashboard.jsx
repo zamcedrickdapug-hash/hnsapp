@@ -35,6 +35,7 @@ import { NotificationsContainer } from '../../components/notifications/Notificat
 import { ReceiptModal } from '../../components/modals/ReceiptModal'
 import { ReportIssueModal } from '../../components/modals/ReportIssueModal'
 import PickupLocationPicker from '../../components/dashboard/parent/PickupLocationPicker'
+import SchoolSelect from '../../components/dashboard/parent/SchoolSelect'
 import TripHistoryPage from './TripHistoryPage'
 import { distanceInMeters } from '../../utils/driverDashboard'
 import './ParentDashboard.scss'
@@ -1094,13 +1095,16 @@ export default function ParentDashboard({ token, user, onLogout }) {
                     />
                   </div>
                   <div className="parent-settings__field">
-                    <label htmlFor="school-name">School Name <span aria-hidden="true">*</span></label>
-                    <input
-                      id="school-name"
-                      type="text"
-                      placeholder="Enter school name"
+                    <SchoolSelect
                       value={settingsData.schoolName}
-                      onChange={(event) => updateSettingsField('schoolName', event.target.value)}
+                      latitude={settingsData.schoolLatitude}
+                      longitude={settingsData.schoolLongitude}
+                      token={token}
+                      onChange={(school) => {
+                        updateSettingsField('schoolName', school?.name || '')
+                        updateSettingsField('schoolLatitude', school?.latitude ?? '')
+                        updateSettingsField('schoolLongitude', school?.longitude ?? '')
+                      }}
                       disabled={savingSettings}
                     />
                   </div>
@@ -1134,55 +1138,6 @@ export default function ParentDashboard({ token, user, onLogout }) {
                         {pickupZoneStatus}
                       </p>
                     )}
-                  </div>
-                  <div className="parent-settings__field">
-                    <label htmlFor="school-latitude">School Destination Latitude</label>
-                    <input
-                      id="school-latitude"
-                      type="number"
-                      placeholder="e.g. 14.5995"
-                      min="-90"
-                      max="90"
-                      step="any"
-                      value={settingsData.schoolLatitude ?? ''}
-                      onChange={(event) => updateSettingsField('schoolLatitude', event.target.value)}
-                      aria-invalid={Boolean(settingsFieldErrors.schoolLatitude)}
-                      aria-describedby={settingsFieldErrors.schoolLatitude
-                        ? 'school-coordinates-help school-latitude-error'
-                        : 'school-coordinates-help'}
-                      disabled={savingSettings}
-                    />
-                    {settingsFieldErrors.schoolLatitude && (
-                      <p className="parent-settings__field-error" id="school-latitude-error">
-                        {settingsFieldErrors.schoolLatitude}
-                      </p>
-                    )}
-                  </div>
-                  <div className="parent-settings__field">
-                    <label htmlFor="school-longitude">School Destination Longitude</label>
-                    <input
-                      id="school-longitude"
-                      type="number"
-                      placeholder="e.g. 120.9842"
-                      min="-180"
-                      max="180"
-                      step="any"
-                      value={settingsData.schoolLongitude ?? ''}
-                      onChange={(event) => updateSettingsField('schoolLongitude', event.target.value)}
-                      aria-invalid={Boolean(settingsFieldErrors.schoolLongitude)}
-                      aria-describedby={settingsFieldErrors.schoolLongitude
-                        ? 'school-coordinates-help school-longitude-error'
-                        : 'school-coordinates-help'}
-                      disabled={savingSettings}
-                    />
-                    {settingsFieldErrors.schoolLongitude && (
-                      <p className="parent-settings__field-error" id="school-longitude-error">
-                        {settingsFieldErrors.schoolLongitude}
-                      </p>
-                    )}
-                    <p className="parent-settings__helper" id="school-coordinates-help">
-                      Optional. Enter both coordinates to enable destination routing and arrival detection.
-                    </p>
                   </div>
                 </div>
               </section>
