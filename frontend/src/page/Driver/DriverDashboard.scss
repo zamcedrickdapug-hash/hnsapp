@@ -450,6 +450,311 @@
 	}
 }
 
+.driver-settings-section {
+	color: #0f172a;
+}
+
+.driver-settings-section .driver-profile-card {
+	background: #fff;
+	border: 1px solid #cbd5e1;
+	backdrop-filter: none;
+	box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+}
+
+.driver-settings-section .ui-card__title {
+	color: #0f172a;
+}
+
+.driver-settings-section .ui-card__description {
+	color: #475569;
+}
+
+.driver-settings-section .driver-profile-grid {
+	grid-template-columns: minmax(240px, 0.72fr) minmax(0, 1.7fr);
+	gap: 1.5rem;
+}
+
+.driver-settings-section .driver-error-text {
+	grid-column: 1 / -1;
+	margin: 0;
+	padding: 0.75rem 1rem;
+	color: #b91c1c;
+	background: #fef2f2;
+	border-color: #fecaca;
+}
+
+.driver-settings-section .driver-profile-uploads {
+	grid-template-columns: minmax(0, 1fr);
+	align-content: start;
+	gap: 1rem;
+}
+
+.driver-settings-section .upload-box {
+	gap: 0.75rem;
+	padding: 1rem;
+	background: #f8fafc;
+	border: 1px solid #cbd5e1;
+	backdrop-filter: none;
+	border-radius: 12px;
+}
+
+.driver-settings-section .upload-box > p {
+	color: #334155;
+	font-size: 0.8rem;
+	font-weight: 700;
+}
+
+.driver-settings-section .driver-upload-note {
+	color: #475569;
+	font-size: 0.8rem;
+	line-height: 1.4;
+}
+
+.driver-settings-section .upload-placeholder {
+	height: 132px;
+	color: #475569;
+	background: #fff;
+	border: 1px dashed #94a3b8;
+	border-radius: 10px;
+	box-shadow: none;
+}
+
+.driver-settings-section .upload-placeholder:hover {
+	background: #f8fafc;
+	border-color: #64748b;
+	transform: none;
+	box-shadow: none;
+}
+
+.driver-settings-fields {
+	display: grid;
+	gap: 1.25rem;
+	min-width: 0;
+}
+
+.driver-settings-group {
+	padding: 1.25rem;
+	border: 1px solid #e2e8f0;
+	border-radius: 12px;
+	background: #fff;
+}
+
+.driver-settings-group__header {
+	margin-bottom: 1rem;
+}
+
+.driver-settings-group__header h2 {
+	margin: 0;
+	color: #0f172a;
+	font-size: 1rem;
+	font-weight: 700;
+}
+
+.driver-settings-group__header p {
+	margin: 0.25rem 0 0;
+	color: #475569;
+	font-size: 0.875rem;
+	line-height: 1.45;
+}
+
+.driver-settings-section .driver-profile-fields {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1rem;
+}
+
+.driver-settings-section .driver-profile-fields label {
+	min-width: 0;
+	gap: 0.4rem;
+}
+
+.driver-settings-section .driver-profile-fields label > span {
+	color: #334155;
+	font-size: 0.8rem;
+	font-weight: 600;
+	letter-spacing: 0;
+	text-transform: none;
+	white-space: normal;
+}
+
+.driver-settings-section .driver-profile-fields .ui-input {
+	height: 44px;
+	padding: 0.625rem 0.75rem;
+	border: 1px solid #cbd5e1;
+	border-radius: 8px;
+	background: #fff;
+	color: #0f172a;
+	box-shadow: none;
+}
+
+.driver-settings-section .driver-profile-fields .ui-input::placeholder {
+	color: #64748b;
+	opacity: 1;
+}
+
+.driver-settings-section .driver-profile-fields .ui-input:focus {
+	border-color: #2563eb;
+	outline: 3px solid rgba(37, 99, 235, 0.28);
+	outline-offset: 1px;
+	background: #fff;
+	box-shadow: none;
+}
+
+.driver-settings-section .driver-profile-fields .ui-input:read-only {
+	background: #f1f5f9;
+	color: #334155;
+}
+
+.driver-settings-section .driver-upload-field {
+	gap: 0.4rem;
+}
+
+.driver-settings-section .driver-upload-field > span {
+	color: #334155;
+	font-size: 0.8rem;
+	font-weight: 600;
+	letter-spacing: 0;
+	text-transform: none;
+}
+
+.driver-settings-section .driver-upload-field input {
+	padding: 0.55rem;
+	border: 1px solid #cbd5e1;
+	border-radius: 8px;
+	background: #fff;
+	color: #334155;
+}
+
+.driver-settings-section .driver-upload-field input:focus {
+	border-color: #2563eb;
+	outline: 3px solid rgba(37, 99, 235, 0.28);
+	outline-offset: 1px;
+	background: #fff;
+	box-shadow: none;
+}
+
+.driver-settings-section .driver-upload-field small {
+	color: #475569;
+}
+
+.driver-settings-section .driver-profile-actions {
+	grid-column: 1 / -1;
+}
+
+.driver-settings-section .driver-profile-actions .driver-settings-save {
+	min-width: 0;
+	padding: 0.75rem 1.5rem;
+	background: #1d4ed8;
+	color: #fff;
+	box-shadow: none;
+}
+
+.driver-settings-section .driver-profile-actions .driver-settings-save:hover:not(:disabled) {
+	background: #1e40af;
+}
+
+.driver-settings-section .driver-profile-actions .driver-settings-save:disabled {
+	background: #94a3b8;
+	color: #fff;
+	opacity: 1;
+}
+
+.driver-settings-section .driver-success-text {
+	grid-column: 1 / -1;
+	padding: 0.75rem 1rem;
+	background: #f0fdf4;
+	border-color: #bbf7d0;
+	color: #166534;
+}
+
+@media (prefers-color-scheme: dark) {
+	.driver-settings-section {
+		color: #f8fafc;
+	}
+
+	.driver-settings-section .driver-profile-card,
+	.driver-settings-group {
+		background: #0f172a;
+		border-color: #334155;
+	}
+
+	.driver-settings-section .ui-card__title,
+	.driver-settings-group__header h2 {
+		color: #f8fafc;
+	}
+
+	.driver-settings-section .ui-card__description,
+	.driver-settings-group__header p,
+	.driver-settings-section .driver-upload-note,
+	.driver-settings-section .driver-upload-field small {
+		color: #cbd5e1;
+	}
+
+	.driver-settings-section .upload-box {
+		background: #1e293b;
+		border-color: #475569;
+	}
+
+	.driver-settings-section .upload-box > p,
+	.driver-settings-section .driver-profile-fields label > span,
+	.driver-settings-section .driver-upload-field > span {
+		color: #e2e8f0;
+	}
+
+	.driver-settings-section .upload-placeholder,
+	.driver-settings-section .driver-profile-fields .ui-input,
+	.driver-settings-section .driver-upload-field input {
+		background: #0b1220;
+		border-color: #475569;
+		color: #f8fafc;
+	}
+
+	.driver-settings-section .upload-placeholder,
+	.driver-settings-section .driver-profile-fields .ui-input::placeholder {
+		color: #cbd5e1;
+	}
+
+	.driver-settings-section .driver-profile-fields .ui-input:read-only {
+		background: #1e293b;
+		color: #e2e8f0;
+	}
+
+	.driver-settings-section .driver-profile-fields .ui-input:focus,
+	.driver-settings-section .driver-upload-field input:focus {
+		border-color: #60a5fa;
+		outline-color: rgba(96, 165, 250, 0.4);
+		background: #0b1220;
+	}
+
+	.driver-settings-section .driver-error-text {
+		background: #450a0a;
+		border-color: #991b1b;
+		color: #fecaca;
+	}
+
+	.driver-settings-section .driver-success-text {
+		background: #052e16;
+		border-color: #166534;
+		color: #bbf7d0;
+	}
+}
+
+@media (max-width: 767px) {
+	.driver-settings-section .driver-profile-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.driver-settings-section .driver-profile-uploads {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 560px) {
+	.driver-settings-section .driver-profile-uploads,
+	.driver-settings-section .driver-profile-fields {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
 .driver-error-text {
 	padding: 1rem;
 	border-radius: 10px;

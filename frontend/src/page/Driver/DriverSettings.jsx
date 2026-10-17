@@ -37,7 +37,6 @@ export default function DriverSettings({
 							Update only operational details required for trip assignment and tracking.
 						</CardDescription>
 					</div>
-					<span className="driver-pill">Settings</span>
 				</CardHeader>
 
 				<CardContent>
@@ -51,6 +50,7 @@ export default function DriverSettings({
 						<section className="driver-profile-uploads">
 							<div className="upload-box">
 								<p>Profile Photo</p>
+								<small className="driver-upload-note">Your profile photo is set by the administrator</small>
 								{photoPreview ? (
 									<div className="upload-placeholder upload-placeholder--with-image">
 										<img src={photoPreview} alt="Profile preview" />
@@ -58,6 +58,11 @@ export default function DriverSettings({
 								) : (
 									<div className="upload-placeholder">{photoName || 'No photo selected'}</div>
 								)}
+								<label className="driver-upload-field">
+									<span>Profile Photo</span>
+									<input type="file" accept="image/*" onChange={onPhotoChange} />
+									<small>{photoName}</small>
+								</label>
 							</div>
 
 							<div className="upload-box">
@@ -73,121 +78,129 @@ export default function DriverSettings({
 								) : (
 									<div className="upload-placeholder">{driverIdName || 'No file selected'}</div>
 								)}
+								<label className="driver-upload-field">
+									<span>Driver ID</span>
+									<input type="file" accept="image/*,.pdf" onChange={onDriverIdChange} />
+									<small>{driverIdName}</small>
+								</label>
 							</div>
 						</section>
 
-						<section className="driver-profile-fields">
-							<label>
-								<span>Driver Full Name</span>
-								<Input value={user.fullName} readOnly />
-							</label>
+						<section className="driver-settings-fields">
+							<div className="driver-settings-group">
+								<header className="driver-settings-group__header">
+									<h2>Personal information</h2>
+									<p>Your contact details and address for trip coordination.</p>
+								</header>
+								<div className="driver-profile-fields">
+									<label>
+										<span>Driver Full Name</span>
+										<Input value={user.fullName} readOnly />
+									</label>
+									<label>
+										<span>Driver Phone</span>
+										<Input
+											value={profileData.driverPhone}
+											onChange={(event) => onFieldChange('driverPhone', event.target.value)}
+											placeholder="09XXXXXXXXX"
+											required
+										/>
+									</label>
+									<label>
+										<span>Emergency Contact</span>
+										<Input
+											value={profileData.emergencyContact}
+											onChange={(event) => onFieldChange('emergencyContact', event.target.value)}
+											placeholder="09XXXXXXXXX"
+										/>
+									</label>
+									<label>
+										<span>Driver Address</span>
+										<Input
+											value={profileData.driverAddress}
+											onChange={(event) => onFieldChange('driverAddress', event.target.value)}
+											placeholder="Enter home address"
+										/>
+									</label>
+								</div>
+							</div>
 
-							<label>
-								<span>Driver Phone</span>
-								<Input
-									value={profileData.driverPhone}
-									onChange={(event) => onFieldChange('driverPhone', event.target.value)}
-									placeholder="09XXXXXXXXX"
-									required
-								/>
-							</label>
+							<div className="driver-settings-group">
+								<header className="driver-settings-group__header">
+									<h2>Vehicle</h2>
+									<p>Keep vehicle details current for dispatch and matching.</p>
+								</header>
+								<div className="driver-profile-fields">
+									<label>
+										<span>Vehicle Type</span>
+										<Input
+											value={profileData.vehicleType}
+											onChange={(event) => onFieldChange('vehicleType', event.target.value)}
+											placeholder="School Service Van"
+											required
+										/>
+									</label>
+									<label>
+										<span>Vehicle Color</span>
+										<Input
+											value={profileData.vehicleColor}
+											onChange={(event) => onFieldChange('vehicleColor', event.target.value)}
+											maxLength={30}
+										/>
+									</label>
+									<label>
+										<span>Seat Capacity</span>
+										<Input
+											type="number"
+											value={profileData.seatCapacity}
+											onChange={(event) => onFieldChange('seatCapacity', event.target.value)}
+											min="3"
+											max="20"
+											step="1"
+										/>
+									</label>
+									<label>
+										<span>Plate Number</span>
+										<Input
+											value={profileData.plateNumber}
+											onChange={(event) => onFieldChange('plateNumber', event.target.value)}
+											placeholder="NAB 1234"
+											required
+										/>
+									</label>
+								</div>
+							</div>
 
-							<label>
-								<span>Vehicle Type</span>
-								<Input
-									value={profileData.vehicleType}
-									onChange={(event) => onFieldChange('vehicleType', event.target.value)}
-									placeholder="School Service Van"
-									required
-								/>
-							</label>
-
-							<label>
-								<span>Vehicle Color</span>
-								<Input
-									value={profileData.vehicleColor}
-									onChange={(event) => onFieldChange('vehicleColor', event.target.value)}
-									maxLength={30}
-								/>
-							</label>
-
-							<label>
-								<span>Seat Capacity</span>
-								<Input
-									type="number"
-									value={profileData.seatCapacity}
-									onChange={(event) => onFieldChange('seatCapacity', event.target.value)}
-									min="3"
-									max="20"
-									step="1"
-								/>
-							</label>
-
-							<label>
-								<span>Plate Number</span>
-								<Input
-									value={profileData.plateNumber}
-									onChange={(event) => onFieldChange('plateNumber', event.target.value)}
-									placeholder="NAB 1234"
-									required
-								/>
-							</label>
-
-							<label>
-								<span>License Number</span>
-								<Input
-									value={profileData.licenseNumber}
-									onChange={(event) => onFieldChange('licenseNumber', event.target.value)}
-									placeholder="D12-34-567890"
-									required
-								/>
-							</label>
-
-							<label>
-								<span>License Expiry</span>
-								<Input
-									type="date"
-									value={profileData.licenseExpiry}
-									onChange={(event) => onFieldChange('licenseExpiry', event.target.value)}
-									min={todayString()}
-								/>
-							</label>
-
-							<label>
-								<span>Emergency Contact</span>
-								<Input
-									value={profileData.emergencyContact}
-									onChange={(event) => onFieldChange('emergencyContact', event.target.value)}
-									placeholder="09XXXXXXXXX"
-								/>
-							</label>
-
-							<label>
-								<span>Driver Address</span>
-								<Input
-									value={profileData.driverAddress}
-									onChange={(event) => onFieldChange('driverAddress', event.target.value)}
-									placeholder="Enter home address"
-								/>
-							</label>
-						</section>
-
-						<section className="driver-profile-uploads-form">
-							<label className="driver-upload-field driver-upload-field--full">
-								<span>Profile Photo</span>
-								<input type="file" accept="image/*" onChange={onPhotoChange} />
-								<small>{photoName}</small>
-							</label>
-
-							<label className="driver-upload-field driver-upload-field--full">
-								<span>Driver ID</span>
-								<input type="file" accept="image/*,.pdf" onChange={onDriverIdChange} />
-								<small>{driverIdName}</small>
-							</label>
+							<div className="driver-settings-group">
+								<header className="driver-settings-group__header">
+									<h2>License</h2>
+									<p>Provide valid license details for account verification.</p>
+								</header>
+								<div className="driver-profile-fields">
+									<label>
+										<span>License Number</span>
+										<Input
+											value={profileData.licenseNumber}
+											onChange={(event) => onFieldChange('licenseNumber', event.target.value)}
+											placeholder="D12-34-567890"
+											required
+										/>
+									</label>
+									<label>
+										<span>License Expiry</span>
+										<Input
+											type="date"
+											value={profileData.licenseExpiry}
+											onChange={(event) => onFieldChange('licenseExpiry', event.target.value)}
+											min={todayString()}
+										/>
+									</label>
+								</div>
+							</div>
 						</section>
 
 						<div className="driver-profile-actions driver-upload-field--full">
-							<Button type="submit" disabled={savingProfile}>
+							<Button type="submit" disabled={savingProfile} className="driver-settings-save">
 								{savingProfile ? 'Saving...' : 'Save Driver Settings'}
 							</Button>
 						</div>

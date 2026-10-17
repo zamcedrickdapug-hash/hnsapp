@@ -24,6 +24,7 @@ export function ParentChildrenCard({
 }) {
   const statusConfig = {
     waiting: { color: 'text-gray-600', bg: 'bg-gray-50', label: 'Waiting' },
+    accepted: { color: 'text-blue-600', bg: 'bg-blue-50', label: 'Driver Assigned' },
     active: { color: 'text-blue-600', bg: 'bg-blue-50', label: 'In Transit' },
     arrived: { color: 'text-green-600', bg: 'bg-green-50', label: 'Arrived' },
     completed: { color: 'text-green-600', bg: 'bg-green-50', label: 'Completed' },
@@ -65,18 +66,18 @@ export function ParentChildrenCard({
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <p className="text-xs font-medium text-gray-600">School</p>
+            <p className="text-xs font-medium text-slate-300">School</p>
             <div className="flex items-center gap-2 mt-1">
-              <BookOpen size={16} className="text-gray-400" />
-              <p className="font-medium text-gray-900">{schoolName}</p>
+              <BookOpen size={16} className="text-slate-400" />
+              <p className="font-medium text-slate-50">{schoolName}</p>
             </div>
           </div>
 
           <div>
-            <p className="text-xs font-medium text-gray-600">Pickup Zone</p>
+            <p className="text-xs font-medium text-slate-300">Pickup Zone</p>
             <div className="flex items-center gap-2 mt-1">
-              <MapPin size={16} className="text-gray-400" />
-              <p className="font-medium text-gray-900">{pickupZone}</p>
+              <MapPin size={16} className="text-slate-400" />
+              <p className="font-medium text-slate-50">{pickupZone}</p>
             </div>
           </div>
 

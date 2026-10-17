@@ -1041,12 +1041,12 @@ export default function ParentDashboard({ token, user, onLogout }) {
                     <CardContent>
                       <ul className="space-y-1">
                         {activeRideRequest.students?.length ? activeRideRequest.students.map((student, index) => (
-                          <li key={`${student.studentName}-${index}`} className="text-sm font-medium text-gray-900">
+                          <li key={`${student.studentName}-${index}`} className="text-sm font-medium text-slate-50">
                             {student.studentName || 'Student'}
                             {student.gradeLevel ? ` - ${student.gradeLevel}` : ''}
                           </li>
                         )) : (
-                          <li className="text-sm font-medium text-gray-900">
+                          <li className="text-sm font-medium text-slate-50">
                             {activeRideRequest.studentName || 'Student'}
                             {activeRideRequest.gradeSection ? ` - ${activeRideRequest.gradeSection}` : ''}
                           </li>

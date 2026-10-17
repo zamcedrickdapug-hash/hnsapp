@@ -121,7 +121,7 @@ export function ParentTrackingPanel({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      <Card className="border-2 border-blue-200 bg-blue-50/30">
+      <Card className="border-2 border-slate-700 bg-slate-900">
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between">
             <div>
@@ -136,8 +136,8 @@ export function ParentTrackingPanel({
         <CardContent className="space-y-4">
           {/* Driver Info */}
           {driverName && (
-            <div className="pb-4 border-b border-blue-100">
-              <p className="text-xs font-medium text-gray-600">Driver</p>
+            <div className="pb-4 border-b border-slate-700">
+              <p className="text-xs font-medium text-slate-300">Driver</p>
               <div className="flex items-center justify-between mt-2 gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <div
@@ -155,9 +155,9 @@ export function ParentTrackingPanel({
                   )}
                 </div>
                 <div className="min-w-0">
-                  <p className="font-semibold text-gray-900">{publicDriverName}</p>
-                  <p className="text-sm text-gray-600">{driverProfile?.vehicleType || vehicleType}</p>
-                  <p className="text-xs text-gray-500 font-mono">{driverProfile?.plateNumber || vehiclePlate}</p>
+                  <p className="font-semibold text-slate-50">{publicDriverName}</p>
+                  <p className="text-sm text-slate-200">{driverProfile?.vehicleType || vehicleType}</p>
+                  <p className="text-xs text-slate-300 font-mono">{driverProfile?.plateNumber || vehiclePlate}</p>
                   {driverPhone && (
                     <a className="mt-1 inline-flex items-center gap-1 text-sm text-blue-700 underline" href={`tel:${driverPhone}`}>
                       <Phone size={14} aria-hidden="true" />
@@ -170,7 +170,7 @@ export function ParentTrackingPanel({
                   {driverProfile?.licenseExpired ? (
                     <p className="mt-1 text-xs text-red-700">License expired</p>
                   ) : licenseValidUntil ? (
-                    <p className="mt-1 text-xs text-gray-600">License valid until {licenseValidUntil}</p>
+                    <p className="mt-1 text-xs text-slate-300">License valid until {licenseValidUntil}</p>
                   ) : null}
                 </div>
               </div>
@@ -197,30 +197,30 @@ export function ParentTrackingPanel({
           <div className="space-y-3">
             {currentLocation && (
               <div>
-                <p className="text-xs font-medium text-gray-600">Current Location</p>
+                <p className="text-xs font-medium text-slate-300">Current Location</p>
                 <div className="flex items-start gap-2 mt-1">
                   <MapPin size={16} className="text-blue-600 mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-gray-900">{currentLocation}</p>
+                  <p className="text-sm text-slate-50">{currentLocation}</p>
                 </div>
               </div>
             )}
 
             {destination && (
               <div>
-                <p className="text-xs font-medium text-gray-600">Destination</p>
+                <p className="text-xs font-medium text-slate-300">Destination</p>
                 <div className="flex items-start gap-2 mt-1">
                   <MapPin size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-gray-900">{destination}</p>
+                  <p className="text-sm text-slate-50">{destination}</p>
                 </div>
               </div>
             )}
 
             {estimatedArrival && (
               <div>
-                <p className="text-xs font-medium text-gray-600">Estimated Arrival</p>
+                <p className="text-xs font-medium text-slate-300">Estimated Arrival</p>
                 <div className="flex items-start gap-2 mt-1">
                   <Clock size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-gray-900">{estimatedArrival}</p>
+                  <p className="text-sm text-slate-50">{estimatedArrival}</p>
                 </div>
               </div>
             )}
