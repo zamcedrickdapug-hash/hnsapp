@@ -14,6 +14,7 @@ export default function TripHistoryPage({
 	studentName = '',
 	schoolName = '',
 	onViewReceipt,
+	onHideTrips,
 	onReportIssue,
 }) {
 	const [searchQuery, setSearchQuery] = useState('')
@@ -21,6 +22,10 @@ export default function TripHistoryPage({
 	const [dateRange, setDateRange] = useState({ start: '', end: '' })
 	const [sortBy, setSortBy] = useState('date-desc')
 	const [expandedTripId, setExpandedTripId] = useState(null)
+	const [hiddenTripIds, setHiddenTripIds] = useState([])
+	const [hideError, setHideError] = useState('')
+	const [retryHideIds, setRetryHideIds] = useState(null)
+	const [hidingTrips, setHidingTrips] = useState(false)
 
 	const historyTrips = useMemo(() => trips.map((trip) => {
 		const createdAt = new Date(trip.createdAt)
@@ -79,10 +84,14 @@ export default function TripHistoryPage({
 			createdAt,
 		}
 	}), [trips, parentName, studentName, schoolName])
+	const visibleHistoryTrips = useMemo(
+		() => historyTrips.filter((trip) => !hiddenTripIds.includes(trip.id)),
+		[historyTrips, hiddenTripIds]
+	)
 
 	// Filter trips - REAL FUNCTIONAL FILTERING
 	const filteredTrips = useMemo(() => {
-		let result = [...historyTrips]
+		let result = [...visibleHistoryTrips]
 
 		// STATUS FILTER - Most important filter
 		if (selectedFilter !== 'all') {
@@ -132,7 +141,34 @@ export default function TripHistoryPage({
 		})
 
 		return result
-	}, [selectedFilter, searchQuery, dateRange, sortBy, historyTrips])
+	}, [selectedFilter, searchQuery, dateRange, sortBy, visibleHistoryTrips])
+
+	const hideTrips = async (requestIds, shouldConfirm = true) => {
+		const ids = [...new Set(requestIds.map(String))]
+		if (!ids.length || hidingTrips) return
+		if (shouldConfirm && !window.confirm(
+			ids.length === 1
+				? 'Hide this trip from your history? Payment records are kept.'
+				: `Hide all ${ids.length} shown trips from your history? Payment records are kept.`
+		)) return
+
+		setHidingTrips(true)
+		setHideError('')
+		setRetryHideIds(ids)
+		setHiddenTripIds((current) => [...new Set([...current, ...ids])])
+		try {
+			await onHideTrips(ids)
+			setRetryHideIds(null)
+			setExpandedTripId(null)
+		} catch (requestError) {
+			const hiddenIds = requestError.hiddenRequestIds || []
+			setHiddenTripIds((current) => current.filter((id) => !ids.includes(id) || hiddenIds.includes(id)))
+			setRetryHideIds(ids.filter((id) => !hiddenIds.includes(id)))
+			setHideError(requestError.message || 'Unable to hide trips from your history.')
+		} finally {
+			setHidingTrips(false)
+		}
+	}
 
 	// Calculate statistics and filter counts
 	const statistics = useMemo(() => {
@@ -158,13 +194,13 @@ export default function TripHistoryPage({
 	// FILTER COUNTS - For displaying on filter buttons
 	const filterCounts = useMemo(() => {
 		return {
-			all: historyTrips.length,
-			completed: historyTrips.filter((t) => t.status.toLowerCase() === 'completed').length,
-			cancelled: historyTrips.filter((t) => t.status.toLowerCase() === 'cancelled').length,
-			'on the way': historyTrips.filter((t) => t.status.toLowerCase() === 'on the way').length,
-			searching: historyTrips.filter((t) => t.status.toLowerCase() === 'searching').length,
+			all: visibleHistoryTrips.length,
+			completed: visibleHistoryTrips.filter((t) => t.status.toLowerCase() === 'completed').length,
+			cancelled: visibleHistoryTrips.filter((t) => t.status.toLowerCase() === 'cancelled').length,
+			'on the way': visibleHistoryTrips.filter((t) => t.status.toLowerCase() === 'on the way').length,
+			searching: visibleHistoryTrips.filter((t) => t.status.toLowerCase() === 'searching').length,
 		}
-	}, [historyTrips])
+	}, [visibleHistoryTrips])
 
 	return (
 		<motion.div
@@ -184,6 +220,14 @@ export default function TripHistoryPage({
 			<TripStatistics data={statistics} />
 			{isLoading && <p role="status" className="trip-history-loading">Loading trips...</p>}
 			{error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+			{hideError && (
+				<div role="alert" className="trip-history-hide-error">
+					<p>{hideError}</p>
+					<button type="button" disabled={hidingTrips} onClick={() => hideTrips(retryHideIds, false)}>
+						{hidingTrips ? 'Retrying…' : 'Retry'}
+					</button>
+				</div>
+			)}
 
 			{/* Search and Filters */}
 			<motion.div
@@ -209,6 +253,16 @@ export default function TripHistoryPage({
 					onSortChange={setSortBy}
 					filterCounts={filterCounts}
 				/>
+				{filteredTrips.length > 0 && (
+					<button
+						type="button"
+						className="trip-history-hide-all"
+						disabled={hidingTrips}
+						onClick={() => hideTrips(filteredTrips.map((trip) => trip.id))}
+					>
+						Hide all shown
+					</button>
+				)}
 			</motion.div>
 
 			{/* Trips List */}
@@ -223,6 +277,7 @@ export default function TripHistoryPage({
 							expandedTripId={expandedTripId}
 							onToggleExpand={setExpandedTripId}
 							onViewReceipt={onViewReceipt}
+							onHideTrip={(trip) => hideTrips([trip.id])}
 							onReportIssue={onReportIssue}
 						/>
 					</motion.div>

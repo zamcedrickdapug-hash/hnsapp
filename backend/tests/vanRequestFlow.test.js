@@ -294,6 +294,11 @@ const createFixture = async (t) => {
       if (record) applyUpdate(record, update);
       return new FakeQuery(record, populateRequest);
     }
+    static async updateMany(query, update) {
+      const matched = [...requests.values()].filter((record) => matches(record, query));
+      matched.forEach((record) => applyUpdate(record, update));
+      return { matchedCount: matched.length, modifiedCount: matched.length, nModified: matched.length };
+    }
     static async exists(query) {
       return [...requests.values()].some((record) => matches(record, query)) ? { _id: true } : null;
     }
@@ -611,6 +616,92 @@ test('driver trip history rejects parents and unauthenticated callers', async (t
 
   assert.equal((await f.request('/api/drivers/trips/history', f.parent)).status, 403);
   assert.equal((await f.request('/api/drivers/trips/history', null)).status, 401);
+});
+
+test('parent and driver can hide only their own finished trips without affecting the other history', async (t) => {
+  const f = await createFixture(t);
+  const otherParent = await new f.User({
+    role: 'parent',
+    status: 'approved',
+    fullName: 'Parent Two',
+    email: 'parent2@example.test',
+  }).save();
+  const sharedTrip = f.addFinishedTrip(f.driverOne);
+  const parentForeignTrip = f.addFinishedTrip(f.driverTwo, { parent: otherParent._id });
+  const driverForeignTrip = f.addFinishedTrip(f.driverTwo, { parent: f.parent._id });
+  const activeTrip = f.addFinishedTrip(f.driverOne, { status: 'accepted' });
+
+  const parentHide = await f.request('/api/parents/trips/hide', f.parent, {
+    method: 'POST',
+    body: { requestIds: [sharedTrip._id, parentForeignTrip._id, activeTrip._id] },
+  });
+  assert.equal(parentHide.status, 200);
+  assert.equal(parentHide.body.hidden, 1);
+  assert.equal(sharedTrip.hiddenByParent, true);
+  assert.equal(parentForeignTrip.hiddenByParent, undefined);
+  assert.equal(activeTrip.hiddenByParent, undefined);
+
+  const parentHistory = await f.request('/api/parents/van-requests', f.parent);
+  assert.equal(parentHistory.body.requests.some((trip) => trip._id === sharedTrip._id), false);
+  assert.equal(parentHistory.body.requests.some((trip) => trip._id === driverForeignTrip._id), true);
+  const otherParentHistory = await f.request('/api/parents/van-requests', otherParent);
+  assert.equal(otherParentHistory.body.requests.some((trip) => trip._id === parentForeignTrip._id), true);
+
+  const driverHide = await f.request('/api/drivers/trips/hide', f.driverOne, {
+    method: 'POST',
+    body: { requestIds: [sharedTrip._id, driverForeignTrip._id, activeTrip._id] },
+  });
+  assert.equal(driverHide.status, 200);
+  assert.equal(driverHide.body.hidden, 1);
+  assert.equal(sharedTrip.hiddenByDriver, true);
+  assert.equal(driverForeignTrip.hiddenByDriver, undefined);
+  assert.equal(activeTrip.hiddenByDriver, undefined);
+
+  const driverHistory = await f.request('/api/drivers/trips/history', f.driverOne);
+  assert.equal(driverHistory.body.trips.some((trip) => trip.requestId === sharedTrip._id), false);
+  assert.equal(driverHistory.body.summary.completed, 1);
+  assert.equal(driverHistory.body.summary.studentsTransported, 1);
+  const otherDriverHistory = await f.request('/api/drivers/trips/history', f.driverTwo);
+  assert.equal(otherDriverHistory.body.trips.some((trip) => trip.requestId === driverForeignTrip._id), true);
+  const parentAfterDriverHide = await f.request('/api/parents/van-requests', f.parent);
+  assert.equal(parentAfterDriverHide.body.requests.some((trip) => trip._id === driverForeignTrip._id), true);
+});
+
+test('trip hide routes validate IDs, enforce role and authentication, and support all finished trips only', async (t) => {
+  const f = await createFixture(t);
+  const completed = f.addFinishedTrip(f.driverOne);
+  const cancelled = f.addFinishedTrip(f.driverOne, { status: 'cancelled' });
+  const active = f.addFinishedTrip(f.driverOne, { status: 'picked_up' });
+
+  for (const [path, user, wrongRole] of [
+    ['/api/parents/trips/hide', f.parent, f.driverOne],
+    ['/api/drivers/trips/hide', f.driverOne, f.parent],
+  ]) {
+    assert.equal((await f.request(path, null, { method: 'POST', body: { all: true } })).status, 401);
+    assert.equal((await f.request(path, wrongRole, { method: 'POST', body: { all: true } })).status, 403);
+    assert.equal((await f.request(path, user, { method: 'POST', body: { requestIds: ['invalid'] } })).status, 400);
+    assert.equal((await f.request(path, user, { method: 'POST', body: { requestIds: [] } })).status, 400);
+  }
+
+  const parentHidden = await f.request('/api/parents/trips/hide', f.parent, {
+    method: 'POST',
+    body: { all: true },
+  });
+  assert.equal(parentHidden.status, 200);
+  assert.equal(parentHidden.body.hidden, 2);
+  assert.equal(completed.hiddenByParent, true);
+  assert.equal(cancelled.hiddenByParent, true);
+  assert.equal(active.hiddenByParent, undefined);
+
+  const hidden = await f.request('/api/drivers/trips/hide', f.driverOne, {
+    method: 'POST',
+    body: { all: true },
+  });
+  assert.equal(hidden.status, 200);
+  assert.equal(hidden.body.hidden, 2);
+  assert.equal(completed.hiddenByDriver, true);
+  assert.equal(cancelled.hiddenByDriver, true);
+  assert.equal(active.hiddenByDriver, undefined);
 });
 
 test('driver trip history status and range filters work', async (t) => {

@@ -143,6 +143,14 @@ const vanRequestSchema = new mongoose.Schema(
       default: 'searching',
       index: true,
     },
+    hiddenByParent: {
+      type: Boolean,
+      default: false,
+    },
+    hiddenByDriver: {
+      type: Boolean,
+      default: false,
+    },
     liveLocation: {
       type: locationSchema,
       default: null,

@@ -14,12 +14,41 @@
 	}
 }
 
+.driver-trip-history__hide-all,
+.driver-trip-history__trip-actions button {
+	min-height: 44px;
+	padding: 8px 14px;
+	background: #fff;
+	border: 1px solid #94a3b8;
+	border-radius: 8px;
+	color: #1e293b;
+	font-size: 14px;
+	font-weight: 700;
+	cursor: pointer;
+
+	&:hover {
+		background: #f1f5f9;
+		border-color: #64748b;
+	}
+
+	&:disabled {
+		cursor: wait;
+		opacity: 0.65;
+	}
+}
+
 .driver-trip-history__header {
 	h1 {
 		margin: 0 0 6px;
 		color: #0f172a;
 		font-size: 26px;
 		font-weight: 800;
+	}
+
+	.driver-trip-history__trip-actions {
+		display: flex;
+		justify-content: flex-end;
+		padding: 0 16px 14px;
 	}
 
 	p {
@@ -148,6 +177,8 @@
 .driver-trip-history__status-filters button:focus-visible,
 .driver-trip-history__range select:focus-visible,
 .driver-trip-history__expand:focus-visible,
+.driver-trip-history__trip-actions button:focus-visible,
+.driver-trip-history__hide-all:focus-visible,
 .driver-trip-history__message-parent:focus-visible,
 .driver-trip-history__load-more:focus-visible,
 .driver-trip-history__error button:focus-visible {

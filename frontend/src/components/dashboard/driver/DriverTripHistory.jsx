@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiFetch } from '../../../api'
+import { hideFinishedTrips } from '../../../utils/hideFinishedTrips'
 import './DriverTripHistory.scss'
 
 const STATUS_FILTERS = [
@@ -49,6 +50,10 @@ export default function DriverTripHistory({ token, onMessageParent }) {
 	const [loading, setLoading] = useState(true)
 	const [loadingMore, setLoadingMore] = useState(false)
 	const [error, setError] = useState('')
+	const [hideError, setHideError] = useState('')
+	const [retryHideIds, setRetryHideIds] = useState(null)
+	const [hiddenTripIds, setHiddenTripIds] = useState([])
+	const [hidingTrips, setHidingTrips] = useState(false)
 	const [retryCount, setRetryCount] = useState(0)
 	const loadSequence = useRef(0)
 
@@ -108,6 +113,36 @@ export default function DriverTripHistory({ token, onMessageParent }) {
 		}
 	}, [loadingMore, nextCursor, range, status, token])
 
+	const hideTrips = async (requestIds, shouldConfirm = true) => {
+		const ids = [...new Set(requestIds.map(String))]
+		if (!ids.length || hidingTrips) return
+		if (shouldConfirm && !window.confirm(
+			ids.length === 1
+				? 'Hide this trip from your history? Payment records are kept.'
+				: `Hide all ${ids.length} shown trips from your history? Payment records are kept.`
+		)) return
+
+		setHidingTrips(true)
+		setHideError('')
+		setRetryHideIds(ids)
+		setHiddenTripIds((currentIds) => [...new Set([...currentIds, ...ids])])
+		try {
+			await hideFinishedTrips('/api/drivers/trips/hide', token, ids)
+			setTrips((currentTrips) => currentTrips.filter((trip) => !ids.includes(String(trip.requestId))))
+			setRetryHideIds(null)
+			setExpandedTripId(null)
+		} catch (requestError) {
+			const hiddenIds = requestError.hiddenRequestIds || []
+			setHiddenTripIds((currentIds) => currentIds.filter((id) => !ids.includes(id) || hiddenIds.includes(id)))
+			setRetryHideIds(ids.filter((id) => !hiddenIds.includes(id)))
+			setHideError(requestError.message || 'Unable to hide trips from your history.')
+		} finally {
+			setHidingTrips(false)
+		}
+	}
+
+	const visibleTrips = trips.filter((trip) => !hiddenTripIds.includes(String(trip.requestId)))
+
 	return (
 		<section className="driver-trip-history" aria-labelledby="driver-trip-history-title">
 			<header className="driver-trip-history__header">
@@ -144,6 +179,16 @@ export default function DriverTripHistory({ token, onMessageParent }) {
 						))}
 					</select>
 				</label>
+				{visibleTrips.length > 0 && (
+					<button
+						type="button"
+						className="driver-trip-history__hide-all"
+						disabled={hidingTrips}
+						onClick={() => hideTrips(visibleTrips.map((trip) => trip.requestId))}
+					>
+						Hide all shown
+					</button>
+				)}
 			</div>
 
 			{error && (
@@ -152,13 +197,25 @@ export default function DriverTripHistory({ token, onMessageParent }) {
 					<button type="button" onClick={() => setRetryCount((count) => count + 1)}>Retry</button>
 				</div>
 			)}
+			{hideError && (
+				<div className="driver-trip-history__error" role="alert">
+					<p>{hideError}</p>
+					<button
+						type="button"
+						disabled={hidingTrips}
+						onClick={() => retryHideIds && hideTrips(retryHideIds, false)}
+					>
+						{hidingTrips ? 'Retrying...' : 'Retry'}
+					</button>
+				</div>
+			)}
 
 			{loading ? (
 				<p className="driver-trip-history__message" role="status">Loading trip history...</p>
-			) : trips.length ? (
+			) : visibleTrips.length ? (
 				<>
 					<div className="driver-trip-history__list">
-						{trips.map((trip) => {
+						{visibleTrips.map((trip) => {
 							const expanded = expandedTripId === trip.requestId
 							return (
 								<article className="driver-trip-history__trip" key={trip.requestId}>
@@ -184,6 +241,15 @@ export default function DriverTripHistory({ token, onMessageParent }) {
 											onClick={() => setExpandedTripId(expanded ? null : trip.requestId)}
 										>
 											{expanded ? 'Hide details' : 'Details'}
+										</button>
+									</div>
+									<div className="driver-trip-history__trip-actions">
+										<button
+											type="button"
+											disabled={hidingTrips}
+											onClick={() => hideTrips([trip.requestId])}
+										>
+											Hide
 										</button>
 									</div>
 									{expanded && (

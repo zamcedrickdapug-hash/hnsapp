@@ -43,6 +43,7 @@ import ChildrenEditor from '../../components/dashboard/parent/ChildrenEditor'
 import TripHistoryPage from './TripHistoryPage'
 import { distanceInMeters } from '../../utils/driverDashboard'
 import { getNotificationDestination } from '../../utils/notificationNavigation'
+import { hideFinishedTrips } from '../../utils/hideFinishedTrips'
 import './ParentDashboard.scss'
 
 // Default settings structure
@@ -375,6 +376,10 @@ export default function ParentDashboard({ token, user, onLogout }) {
     } finally {
       if (!silent) setHistoryLoading(false)
     }
+  }, [token])
+
+  const hideParentTrips = useCallback(async (requestIds) => {
+    return hideFinishedTrips('/api/parents/trips/hide', token, requestIds)
   }, [token])
 
   const loadParentNotifications = useCallback(async () => {
@@ -1125,6 +1130,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
           studentName={settingsData.studentName}
           schoolName={settingsData.schoolName}
           onViewReceipt={setSelectedReceiptId}
+          onHideTrips={hideParentTrips}
           onReportIssue={(trip) =>
             setReportingTrip({ id: trip.id, date: trip.date })
           }

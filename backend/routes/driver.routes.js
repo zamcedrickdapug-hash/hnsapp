@@ -277,7 +277,36 @@ const ensureDriver = (req, res, next) => {
   return next();
 };
 
+const validHideRequest = (body) => {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return false;
+  if (body.all === true) return Object.keys(body).length === 1;
+  return Object.keys(body).length === 1
+    && Array.isArray(body.requestIds)
+    && body.requestIds.length >= 1
+    && body.requestIds.length <= 50
+    && body.requestIds.every((id) => typeof id === 'string' && /^[a-f\d]{24}$/i.test(id));
+};
+
 router.use(requireAuth, ensureDriver);
+
+router.post('/trips/hide', async (req, res) => {
+  if (!validHideRequest(req.body)) {
+    return res.status(400).json({ message: 'Provide all: true or 1 to 50 valid trip request IDs.' });
+  }
+  try {
+    const query = {
+      driver: req.user._id,
+      status: { $in: ['completed', 'cancelled'] },
+      hiddenByDriver: { $ne: true },
+      ...(req.body.all === true ? {} : { _id: { $in: req.body.requestIds } }),
+    };
+    const result = await VanRequest.updateMany(query, { $set: { hiddenByDriver: true } });
+    return res.status(200).json({ hidden: result.modifiedCount ?? result.nModified ?? 0 });
+  } catch (error) {
+    console.error('[DRIVER] Failed to hide finished trips:', error.name || 'UnknownError');
+    return res.status(500).json({ message: 'Unable to hide finished trips right now.' });
+  }
+});
 
 router.get('/trips/history', async (req, res) => {
   try {
@@ -332,6 +361,7 @@ router.get('/trips/history', async (req, res) => {
 
     const query = {
       ...finishedQuery,
+      hiddenByDriver: { $ne: true },
       ...(status === 'all' ? {} : { status }),
     };
     if (range !== 'all') {

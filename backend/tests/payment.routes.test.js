@@ -462,6 +462,7 @@ test('receipt is verified-only, lists trip details, and excludes private fields'
   const paymentId = submitted.body.payment._id;
   assert.equal((await f.request('GET', `/${paymentId}/receipt`, ids.parent)).status, 404);
   await f.request('POST', `/${paymentId}/verify`, ids.driver, {});
+  Object.assign(f.requests[0], { hiddenByParent: true, hiddenByDriver: true });
   const receipt = await f.request('GET', `/${paymentId}/receipt`, ids.parent);
   assert.equal(receipt.status, 200);
   assert.deepEqual(receipt.body.trips[0].studentNames, ['Student A', 'Student B']);
@@ -500,6 +501,8 @@ test('billable summary covers all trips beyond payment page and excludes pre-lau
       ...Array.from({ length: 24 }, (_, index) => extraTrip({
         _id: (index + 100).toString(16).padStart(24, '0'),
         paymentStatus: index === 0 ? 'paid' : index === 1 ? 'pending' : 'unpaid',
+        ...(index === 2 ? { hiddenByParent: true } : {}),
+        ...(index === 3 ? { hiddenByDriver: true } : {}),
       })),
       extraTrip({ _id: '999999999999999999999999', updatedAt: new Date('2026-10-16T15:59:59.999Z') }),
     ],
@@ -551,6 +554,10 @@ test('driver sees allowlisted trip summaries, own collectible trips, and uncolle
       method: 'cash',
       status: 'pending',
     }],
+  });
+  Object.assign(f.requests.find((trip) => trip._id === ids.request), {
+    hiddenByParent: true,
+    hiddenByDriver: true,
   });
   const response = await f.request('GET', '/driver', ids.driver);
   assert.equal(response.body.payments[0].tripSummary[0].fare, 70);

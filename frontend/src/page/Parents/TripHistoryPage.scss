@@ -25,6 +25,34 @@ $transition: all 0.2s ease;
 		gap: 16px;
 	}
 
+	.trip-history-hide-error {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 12px 14px;
+		border: 1px solid #fecaca;
+		border-radius: 9px;
+		background: #fef2f2;
+		color: #991b1b;
+		font-size: 14px;
+
+		p {
+			margin: 0;
+		}
+
+		button {
+			min-height: 44px;
+			padding: 8px 14px;
+			border: 1px solid #b91c1c;
+			border-radius: 7px;
+			background: #fff;
+			color: #991b1b;
+			font-weight: 700;
+			cursor: pointer;
+		}
+	}
+
 	h1 {
 		margin: 0 0 6px;
 		color: #0f172a;

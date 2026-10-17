@@ -43,6 +43,43 @@ $transition: all 0.2s ease;
 		background: #f8fafc;
 	}
 
+	.trip-card-quick-actions {
+		display: flex;
+		justify-content: flex-end;
+		padding: 0 20px 14px;
+	}
+
+	.trip-card-hide-button,
+	.trip-history-hide-all {
+		min-height: 44px;
+		padding: 10px 16px;
+		border: 1px solid #94a3b8;
+		border-radius: 8px;
+		background: #fff;
+		color: #1e293b;
+		font-size: 14px;
+		font-weight: 700;
+		cursor: pointer;
+
+		&:hover {
+			background: #f1f5f9;
+		}
+
+		&:focus-visible {
+			outline: 2px solid #1d4ed8;
+			outline-offset: 2px;
+		}
+
+		&:disabled {
+			cursor: wait;
+			opacity: 0.65;
+		}
+	}
+
+	.trip-history-hide-all {
+		align-self: flex-end;
+	}
+
 	&:focus-visible {
 		position: relative;
 		z-index: 1;

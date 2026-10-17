@@ -21,6 +21,16 @@ const {
 const router = express.Router();
 
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const finishedTripStatuses = ['completed', 'cancelled'];
+const validHideRequest = (body) => {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return false;
+  if (body.all === true) return Object.keys(body).length === 1;
+  return Object.keys(body).length === 1
+    && Array.isArray(body.requestIds)
+    && body.requestIds.length >= 1
+    && body.requestIds.length <= 50
+    && body.requestIds.every((id) => typeof id === 'string' && /^[a-f\d]{24}$/i.test(id));
+};
 
 const parseRequesterLocation = (locationPayload) => {
   const latitude = Number(locationPayload?.latitude);
@@ -771,7 +781,10 @@ router.patch('/van-requests/:requestId/pickup-confirm', requireParent, async (re
 
 router.get('/van-requests', requireParent, async (req, res) => {
   try {
-    const requests = await VanRequest.find({ parent: req.user._id })
+    const requests = await VanRequest.find({
+      parent: req.user._id,
+      hiddenByParent: { $ne: true },
+    })
       .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate driver.photoUpdatedAt')
       .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model')
       .sort({ createdAt: -1 });
@@ -779,6 +792,25 @@ router.get('/van-requests', requireParent, async (req, res) => {
     return res.status(200).json({ requests: requests.map(toParentSafeRequest) });
   } catch (error) {
     return res.status(500).json({ message: 'Unable to load your ride requests right now.' });
+  }
+});
+
+router.post('/trips/hide', requireParent, async (req, res) => {
+  if (!validHideRequest(req.body)) {
+    return res.status(400).json({ message: 'Provide all: true or 1 to 50 valid trip request IDs.' });
+  }
+  try {
+    const query = {
+      parent: req.user._id,
+      status: { $in: finishedTripStatuses },
+      hiddenByParent: { $ne: true },
+      ...(req.body.all === true ? {} : { _id: { $in: req.body.requestIds } }),
+    };
+    const result = await VanRequest.updateMany(query, { $set: { hiddenByParent: true } });
+    return res.status(200).json({ hidden: result.modifiedCount ?? result.nModified ?? 0 });
+  } catch (error) {
+    console.error('[PARENTS] Failed to hide finished trips:', error.name || 'UnknownError');
+    return res.status(500).json({ message: 'Unable to hide finished trips right now.' });
   }
 });
 
