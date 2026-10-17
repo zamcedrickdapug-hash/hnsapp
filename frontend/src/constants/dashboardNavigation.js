@@ -218,7 +218,7 @@ export const SECONDARY_NAVIGATION = [
     label: 'Help & Support',
     icon: HelpCircle,
     path: '/help',
-    description: 'FAQ and support',
+    description: 'FAQs, contact details, and safety information',
     color: 'from-teal-500 to-teal-600',
   },
 ]

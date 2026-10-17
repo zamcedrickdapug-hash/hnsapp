@@ -26,6 +26,7 @@ import { apiFetch, resolveApiUrl } from '../../api'
 import { useSocket, useSocketEvent } from '../../hooks/useSocket'
 import { DashboardLayout } from '../../components/dashboard'
 import { AdminStatsCards } from '../../components/dashboard/admin'
+import HelpSupport from '../../components/common/HelpSupport'
 import AdminApplySection from './AdminApplySection'
 import AdminDashboardSection from './AdminDashboardSection'
 import AdminUsersSection from './AdminUsersSection'
@@ -447,6 +448,7 @@ export default function AdminPanel({ token, user, onLogout }) {
         issues: 'Issues',
         analytics: 'Analytics',
         settings: 'System Settings',
+        help: 'Help & Support',
       }[activeSection] || 'Admin Dashboard'}
       pageDescription={{
         dashboard: 'Live map and operational overview of drivers.',
@@ -455,6 +457,7 @@ export default function AdminPanel({ token, user, onLogout }) {
         issues: 'Review reports submitted by users.',
         analytics: 'System analytics and reports.',
         settings: 'System configuration and policies.',
+        help: 'Frequently asked questions, contact details, and safety information.',
       }[activeSection] || ''}
     >
       {/* Dashboard Section */}
@@ -586,6 +589,8 @@ export default function AdminPanel({ token, user, onLogout }) {
           description="System configuration and policies will be available here."
         />
       )}
+
+      {activeSection === 'help' && <HelpSupport role="admin" />}
     </DashboardLayout>
   )
 }

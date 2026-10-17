@@ -18,6 +18,7 @@ import { Button } from '../../components/ui/button'
 import { DashboardLayout } from '../../components/dashboard'
 import { DriverStatsCards } from '../../components/dashboard/driver'
 import TripMessages from '../../components/common/TripMessages'
+import HelpSupport from '../../components/common/HelpSupport'
 import LiveTripMap from '../../components/tracking/LiveTripGoogleMap'
 import { apiFetch } from '../../api'
 import { useSocket, useSocketEvent } from '../../hooks/useSocket'
@@ -1043,7 +1044,9 @@ export default function DriverDashboard({ token, user, onLogout }) {
 						? 'Requests'
 						: activeSection === 'messages'
 							? 'Messages'
-						: 'Settings'
+							: activeSection === 'help'
+								? 'Help & Support'
+								: 'Settings'
 			}
 			notificationCount={newRequestCount}
 			badgeValues={{ newRequestCount, unreadMessageCount }}
@@ -1569,6 +1572,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 					onUnreadCount={setUnreadMessageCount}
 				/>
 			</div>
+			{activeSection === 'help' ? <HelpSupport role="driver" /> : null}
 		</DashboardLayout>
 	)
 }

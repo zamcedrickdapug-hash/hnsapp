@@ -27,6 +27,7 @@ import { apiFetch } from '../../api'
 import { useSocket, useSocketEvent } from '../../hooks/useSocket'
 import { DashboardLayout } from '../../components/dashboard'
 import TripMessages from '../../components/common/TripMessages'
+import HelpSupport from '../../components/common/HelpSupport'
 import { ParentChildrenCard, ParentTrackingPanel } from '../../components/dashboard/parent'
 import NotificationHistory from '../../components/ui/NotificationHistory'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
@@ -861,6 +862,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
         notifications: 'Notifications',
         messages: 'Messages',
         payments: 'Payments',
+        help: 'Help & Support',
         settings: 'Settings',
       }[activeSection] || 'Parent Dashboard'}
       pageDescription={{
@@ -869,6 +871,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
         notifications: 'Review updates about your account and trips.',
         messages: 'Chat with the driver assigned to your trip.',
         payments: 'Payment information will be available here.',
+        help: 'Frequently asked questions, contact details, and safety information.',
         settings: 'Manage your profile and preferences.',
       }[activeSection] || ''}
     >
@@ -1148,6 +1151,8 @@ export default function ParentDashboard({ token, user, onLogout }) {
           </CardContent>
         </Card>
       )}
+
+      {activeSection === 'help' && <HelpSupport role="parent" />}
 
       {/* Settings Section */}
       {activeSection === 'settings' && (
