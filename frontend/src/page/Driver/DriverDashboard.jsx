@@ -175,6 +175,13 @@ export default function DriverDashboard({ token, user, onLogout }) {
 				return firstTime - secondTime
 			})
 	}, [requests, user.id])
+	const passengerCount = (request) =>
+		Array.isArray(request.students) && request.students.length > 0 ? request.students.length : 1
+	const totalPassengerCount = passengerRequests.reduce((total, request) => total + passengerCount(request), 0)
+	const onBoardPassengerCount = passengerRequests.reduce(
+		(total, request) => total + (request.status === 'picked_up' ? passengerCount(request) : 0),
+		0
+	)
 
 	const completedTrips = useMemo(
 		() => requests.filter((item) => item.status === 'completed'),
@@ -1137,8 +1144,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 							<div className="flex flex-wrap items-center justify-between gap-2">
 								<CardTitle className="text-base">Passengers</CardTitle>
 								<p className="text-sm font-semibold text-gray-600">
-									On board: {passengerRequests.filter((item) => item.status === 'picked_up').length} / Total:{' '}
-									{passengerRequests.length}
+									On board: {onBoardPassengerCount} / Total: {totalPassengerCount}
 								</p>
 							</div>
 						</CardHeader>
@@ -1160,9 +1166,20 @@ export default function DriverDashboard({ token, user, onLogout }) {
 											className="flex min-w-0 items-center justify-between gap-3 rounded-lg border p-3"
 										>
 											<div className="min-w-0 flex-1">
-												<p className="truncate font-semibold text-gray-900">
-													{item.studentName || 'Student'}
-												</p>
+												{Array.isArray(item.students) && item.students.length > 0 ? (
+													<ul className="font-semibold text-gray-900">
+														{item.students.map((student, index) => (
+															<li key={`${student.studentName}-${index}`}>
+																{student.studentName || 'Student'}
+																{student.gradeLevel ? ` - ${student.gradeLevel}` : ''}
+															</li>
+														))}
+													</ul>
+												) : (
+													<p className="truncate font-semibold text-gray-900">
+														{item.studentName || 'Student'}
+													</p>
+												)}
 												<p className="truncate text-sm text-gray-600">
 													{item.parent?.fullName || 'Parent'}
 												</p>

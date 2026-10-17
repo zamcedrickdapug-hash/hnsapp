@@ -79,6 +79,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
 
   // ====== BOOKING STATE ======
   const [activeRideRequest, setActiveRideRequest] = useState(null)
+  const [selectedStudentNames, setSelectedStudentNames] = useState(null)
   const [plannedRoute, setPlannedRoute] = useState([])
   const [bookingError, setBookingError] = useState('')
   const [bookingLoading, setBookingLoading] = useState(false)
@@ -182,6 +183,20 @@ export default function ParentDashboard({ token, user, onLogout }) {
     loadParentProfile()
   }, [loadParentProfile])
 
+  useEffect(() => {
+    setSelectedStudentNames((current) => {
+      const availableStudents = savedSettingsData.students || []
+      if (current === null) {
+        return availableStudents[0]?.fullName ? [availableStudents[0].fullName] : []
+      }
+      const availableNames = new Set(availableStudents.map((student) => student.fullName))
+      const retainedNames = current.filter((name) => availableNames.has(name))
+      return retainedNames.length || current.length === 0
+        ? retainedNames
+        : availableStudents[0]?.fullName ? [availableStudents[0].fullName] : []
+    })
+  }, [savedSettingsData.students])
+
   const tripSummary = useMemo(() => {
     const completed = tripHistory.filter((t) => t.status === 'completed').length
     const cancelled = tripHistory.filter((t) => t.status === 'cancelled').length
@@ -239,6 +254,13 @@ export default function ParentDashboard({ token, user, onLogout }) {
   }, [activeRideRequest])
 
   const children = settingsData.students || []
+  const bookingSelectedStudents = children.filter((student) => (
+    (selectedStudentNames || (children[0] ? [children[0].fullName] : [])).includes(student.fullName)
+  ))
+  const selectedSchools = new Set(bookingSelectedStudents.map((student) => (
+    String(student.schoolName || '').trim().toLowerCase()
+  )))
+  const selectedChildrenAttendDifferentSchools = selectedSchools.size > 1
   const missingStudentDetails = [
     [children.length > 0 && children.every((student) => student.fullName.trim()), 'Student name'],
     [children.length > 0 && children.every((student) => student.gradeLevel.trim()), 'Grade/section'],
@@ -407,10 +429,21 @@ export default function ParentDashboard({ token, user, onLogout }) {
       setActiveSection('settings')
       return
     }
+    if (bookingSelectedStudents.length === 0) {
+      setBookingError('Select at least one child to book.')
+      return
+    }
+    const schoolNames = new Set(bookingSelectedStudents.map((student) => (
+      String(student.schoolName || '').trim().toLowerCase()
+    )))
+    if (schoolNames.size > 1) {
+      setBookingError('Selected children attend different schools. Please book them separately.')
+      return
+    }
     setBookingLoading(true)
 
     try {
-      const { schoolLatitude, schoolLongitude } = settingsData
+      const { schoolLatitude, schoolLongitude } = bookingSelectedStudents[0]
       const hasLatitude = String(schoolLatitude ?? '').trim() !== ''
       const hasLongitude = String(schoolLongitude ?? '').trim() !== ''
       if (hasLatitude !== hasLongitude) {
@@ -440,6 +473,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
           emergencyContact: settingsData.emergencyContact || settingsData.contactNumber,
           notes: settingsData.notes,
           destinationLocation,
+          studentNames: bookingSelectedStudents.map((student) => student.fullName),
         }),
       })
 
@@ -454,7 +488,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
       setBookingError(error.message || 'Unable to book trip.')
       setBookingLoading(false)
     }
-  }, [token, savedSettingsData, settingsData])
+  }, [token, savedSettingsData, settingsData, bookingSelectedStudents])
 
   const cancelTrip = useCallback(async () => {
     if (!activeRideRequest?._id) return
@@ -850,12 +884,55 @@ export default function ParentDashboard({ token, user, onLogout }) {
                 isLoading={false}
               />
 
+              {children.length > 1 && !activeRideRequest && (
+                <fieldset className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
+                  <legend className="px-1 text-sm font-semibold text-gray-800">Children riding</legend>
+                  {children.map((student, index) => (
+                    <label key={`${student.fullName}-${index}`} className="flex items-start gap-2 text-sm text-gray-800">
+                      <input
+                        type="checkbox"
+                        checked={(selectedStudentNames || (children[0] ? [children[0].fullName] : []))
+                          .includes(student.fullName)}
+                        onChange={(event) => {
+                          const checked = event.target.checked
+                          setSelectedStudentNames((current) => {
+                            const selected = current ?? (children[0] ? [children[0].fullName] : [])
+                            return checked
+                              ? [...selected, student.fullName]
+                              : selected.filter((name) => name !== student.fullName)
+                          })
+                        }}
+                        disabled={bookingLoading}
+                      />
+                      <span>
+                        {student.fullName}
+                        {student.gradeLevel ? ` - ${student.gradeLevel}` : ''}
+                        {student.schoolName ? ` (${student.schoolName})` : ''}
+                      </span>
+                    </label>
+                  ))}
+                  {selectedChildrenAttendDifferentSchools && (
+                    <p className="text-sm text-red-700" role="alert">
+                      Selected children attend different schools. Please book them separately.
+                    </p>
+                  )}
+                  {bookingSelectedStudents.length === 0 && (
+                    <p className="text-sm text-gray-700">Select at least one child to book.</p>
+                  )}
+                </fieldset>
+              )}
+
               {/* Booking Actions */}
               {!activeRideRequest ? (
                 <>
                   <Button
                     onClick={bookTrip}
-                    disabled={bookingLoading || !hasRequiredStudentDetails}
+                    disabled={
+                      bookingLoading ||
+                      !hasRequiredStudentDetails ||
+                      bookingSelectedStudents.length === 0 ||
+                      selectedChildrenAttendDifferentSchools
+                    }
                     className="w-full bg-blue-600 hover:bg-blue-700"
                     size="lg"
                   >
@@ -898,6 +975,27 @@ export default function ParentDashboard({ token, user, onLogout }) {
                     socketConnected={socketConnected}
                     liveLocationUpdatedAt={activeRideRequest.liveLocation?.updatedAt}
                   />
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Trip passengers</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-1">
+                        {activeRideRequest.students?.length ? activeRideRequest.students.map((student, index) => (
+                          <li key={`${student.studentName}-${index}`} className="text-sm font-medium text-gray-900">
+                            {student.studentName || 'Student'}
+                            {student.gradeLevel ? ` - ${student.gradeLevel}` : ''}
+                          </li>
+                        )) : (
+                          <li className="text-sm font-medium text-gray-900">
+                            {activeRideRequest.studentName || 'Student'}
+                            {activeRideRequest.gradeSection ? ` - ${activeRideRequest.gradeSection}` : ''}
+                          </li>
+                        )}
+                      </ul>
+                    </CardContent>
+                  </Card>
 
                   <Card>
                     <CardHeader>

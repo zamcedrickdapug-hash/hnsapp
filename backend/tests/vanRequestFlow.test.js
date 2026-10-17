@@ -138,6 +138,10 @@ const createFixture = async (t) => {
       }, data);
     }
     async save() { users.set(String(this._id), this); return this; }
+    getStudentList() {
+      if (this.students?.length) return this.students;
+      return this.student?.fullName ? [this.student] : [];
+    }
     select() { return Promise.resolve(this); }
     static findById(id) {
       return new FakeQuery(users.get(String(id)) || null, (user) => user);
@@ -169,6 +173,8 @@ const createFixture = async (t) => {
       const record = {
         _id: randomBytes(12).toString('hex'),
         rejectedBy: [],
+        students: [],
+        seatsNeeded: 1,
         liveLocation: null,
         vehicleId: null,
         driver: null,
@@ -410,6 +416,8 @@ test('Parent request creation, live updates, vehicle assignment, and completion 
 
   const create = await createRequest(f);
   assert.equal(create.status, 201);
+  assert.equal(create.body.request.studentName, 'Student One');
+  assert.equal(create.body.request.seatsNeeded, 1);
   const requestId = create.body.request._id;
   assert.deepEqual(create.body.request.destinationLocation, { latitude: 14.6, longitude: 121.0, updatedAt: create.body.request.destinationLocation.updatedAt });
 
@@ -540,6 +548,124 @@ test('Parent request creation, live updates, vehicle assignment, and completion 
   assert.equal(f.vehicles.get(assignedVehicleId).status, 'available');
   assert.equal(f.statuses.get(assignedDriverId).activeRequestId, null);
   assert.ok(f.emitted.some((event) => event.room === `user:${f.parent._id}` && event.event === 'trip:completed'));
+});
+
+test('parent can book multiple saved children attending the same school in one request', async (t) => {
+  const f = await createFixture(t);
+  f.parent.students = [
+    {
+      fullName: ' First Child ',
+      gradeLevel: 'Grade 3 - A',
+      schoolName: 'La Concepcion College',
+      schoolLatitude: 14.81286,
+      schoolLongitude: 121.07172,
+    },
+    {
+      fullName: 'Second Child',
+      gradeLevel: 'Grade 5 - B',
+      schoolName: 'La Concepcion College',
+      schoolLatitude: 14.81286,
+      schoolLongitude: 121.07172,
+    },
+  ];
+
+  const created = await createRequest(f, {
+    studentNames: [' first child ', 'SECOND CHILD'],
+    schoolName: 'Untrusted School',
+    destinationLocation: { latitude: 0, longitude: 0 },
+  });
+
+  assert.equal(created.status, 201);
+  assert.equal(created.body.request.studentName, 'First Child, Second Child');
+  assert.equal(created.body.request.gradeSection, 'Grade 3 - A');
+  assert.equal(created.body.request.schoolName, 'La Concepcion College');
+  assert.equal(created.body.request.seatsNeeded, 2);
+  assert.deepEqual(created.body.request.students, [
+    { studentName: 'First Child', gradeLevel: 'Grade 3 - A' },
+    { studentName: 'Second Child', gradeLevel: 'Grade 5 - B' },
+  ]);
+  assert.equal(created.body.request.destinationLocation.latitude, 14.81286);
+  assert.equal(created.body.request.destinationLocation.longitude, 121.07172);
+
+  f.addVehicle(f.driverOne, 'ONE-MULTI');
+  await setOnline(f, f.driverOne);
+  const driverRequests = await f.request('/api/drivers/requests', f.driverOne);
+  const listedRequest = driverRequests.body.requests.find((request) => request._id === created.body.request._id);
+  assert.deepEqual(listedRequest.students, [
+    { studentName: 'First Child', gradeLevel: 'Grade 3 - A' },
+    { studentName: 'Second Child', gradeLevel: 'Grade 5 - B' },
+  ]);
+});
+
+test('parent cannot book selected children from different schools together', async (t) => {
+  const f = await createFixture(t);
+  f.parent.students = [
+    { fullName: 'First Child', gradeLevel: 'Grade 3', schoolName: 'School One' },
+    { fullName: 'Second Child', gradeLevel: 'Grade 4', schoolName: 'School Two' },
+  ];
+
+  const result = await createRequest(f, { studentNames: ['First Child', 'Second Child'] });
+  assert.equal(result.status, 400);
+  assert.equal(result.body.message, 'Selected children attend different schools. Please book them separately.');
+});
+
+test('parent cannot book a name that is not in their saved student list', async (t) => {
+  const f = await createFixture(t);
+  f.parent.students = [
+    { fullName: 'First Child', gradeLevel: 'Grade 3', schoolName: 'School One' },
+  ];
+
+  const result = await createRequest(f, { studentNames: ['Someone Else'] });
+  assert.equal(result.status, 400);
+  assert.equal(result.body.message, 'One or more selected children do not belong to your account.');
+});
+
+test('parent must select a non-empty unique list of saved children', async (t) => {
+  const f = await createFixture(t);
+  f.parent.students = [
+    { fullName: 'First Child', gradeLevel: 'Grade 3', schoolName: 'School One' },
+  ];
+
+  const emptySelection = await createRequest(f, { studentNames: [] });
+  assert.equal(emptySelection.status, 400);
+
+  const duplicateSelection = await createRequest(f, { studentNames: ['First Child', ' first child '] });
+  assert.equal(duplicateSelection.status, 400);
+  assert.equal(duplicateSelection.body.message, 'Selected children must be unique.');
+});
+
+test('selected booking ignores client destination coordinates if the saved school has none', async (t) => {
+  const f = await createFixture(t);
+  f.parent.students = [
+    { fullName: 'First Child', gradeLevel: 'Grade 3', schoolName: 'School One' },
+  ];
+
+  const result = await createRequest(f, {
+    studentNames: ['First Child'],
+    destinationLocation: { latitude: 14.6, longitude: 121.0 },
+  });
+
+  assert.equal(result.status, 201);
+  assert.equal(result.body.request.destinationLocation, null);
+});
+
+test('legacy booking without studentNames keeps the singular-student request shape', async (t) => {
+  const f = await createFixture(t);
+  f.parent.student = {
+    fullName: 'Legacy Student',
+    gradeLevel: 'Grade 2 - B',
+    schoolName: 'Legacy School',
+    pickupLatitude: 14.7118,
+    pickupLongitude: 121.0679,
+  };
+
+  const result = await createRequest(f);
+  assert.equal(result.status, 201);
+  assert.equal(result.body.request.studentName, 'Student One');
+  assert.equal(result.body.request.gradeSection, 'Grade 2 - B');
+  assert.equal(result.body.request.schoolName, 'Example School');
+  assert.equal(result.body.request.seatsNeeded, 1);
+  assert.deepEqual(result.body.request.students, []);
 });
 
 test('location near pickup updates position without automatically marking arrival', async (t) => {

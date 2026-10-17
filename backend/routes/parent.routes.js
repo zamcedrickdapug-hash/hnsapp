@@ -378,14 +378,55 @@ router.patch('/notifications/:notificationId/read', requireApplicant, async (req
 
 router.post('/van-requests', requireParent, async (req, res) => {
   try {
-    const studentName =
-      String(req.body?.studentName || '').trim() || String(req.user?.student?.fullName || '').trim();
+    let selectedStudents;
+    if (req.body?.studentNames !== undefined) {
+      if (!Array.isArray(req.body.studentNames) || req.body.studentNames.length === 0) {
+        return res.status(400).json({ message: 'Select one or more children to book.' });
+      }
+
+      const savedStudents = req.user.getStudentList();
+      const selectedNames = new Set();
+      selectedStudents = [];
+      for (const requestedName of req.body.studentNames) {
+        if (typeof requestedName !== 'string' || !requestedName.trim()) {
+          return res.status(400).json({ message: 'Select valid children to book.' });
+        }
+        const normalizedName = requestedName.trim().toLowerCase();
+        if (selectedNames.has(normalizedName)) {
+          return res.status(400).json({ message: 'Selected children must be unique.' });
+        }
+        selectedNames.add(normalizedName);
+
+        const student = savedStudents.find((savedStudent) => (
+          String(savedStudent.fullName || '').trim().toLowerCase() === normalizedName
+        ));
+        if (!student) {
+          return res.status(400).json({ message: 'One or more selected children do not belong to your account.' });
+        }
+        selectedStudents.push(student);
+      }
+
+      const selectedSchoolNames = new Set(selectedStudents.map((student) => (
+        String(student.schoolName || '').trim().toLowerCase()
+      )));
+      if (selectedSchoolNames.size > 1) {
+        return res.status(400).json({
+          message: 'Selected children attend different schools. Please book them separately.',
+        });
+      }
+    }
+
+    const studentName = selectedStudents
+      ? selectedStudents.map((student) => String(student.fullName || '').trim()).join(', ')
+      : String(req.body?.studentName || '').trim() || String(req.user?.student?.fullName || '').trim();
     const pickupZone =
       String(req.body?.pickupZone || '').trim() || String(req.user?.homeAddress || '').trim();
-    const gradeSection =
-      String(req.body?.gradeSection || '').trim() || String(req.user?.student?.gradeLevel || '').trim();
-    const schoolName =
-      String(req.body?.schoolName || '').trim() || String(req.user?.student?.schoolName || '').trim();
+    const gradeSection = selectedStudents
+      ? String(selectedStudents[0].gradeLevel || '').trim()
+      : String(req.body?.gradeSection || '').trim() || String(req.user?.student?.gradeLevel || '').trim();
+    const schoolName = selectedStudents
+      ? String(selectedStudents[0].schoolName || '').trim()
+      : String(req.body?.schoolName || '').trim() || String(req.user?.student?.schoolName || '').trim();
     const emergencyContact =
       String(req.body?.emergencyContact || '').trim() || String(req.user?.phone || '').trim();
     const notes = String(req.body?.notes || '').trim();
@@ -393,10 +434,20 @@ router.post('/van-requests', requireParent, async (req, res) => {
       latitude: req.user?.student?.pickupLatitude,
       longitude: req.user?.student?.pickupLongitude,
     });
-    const destinationLocation = parseDestinationLocation(req.body?.destinationLocation);
-    const hasDestinationCoordinates =
-      req.body?.destinationLocation?.latitude !== undefined ||
-      req.body?.destinationLocation?.longitude !== undefined;
+    const selectedSchoolCoordinates = selectedStudents?.find((student) => (
+      student.schoolLatitude !== undefined && student.schoolLatitude !== null && student.schoolLatitude !== '' ||
+      student.schoolLongitude !== undefined && student.schoolLongitude !== null && student.schoolLongitude !== ''
+    ));
+    const destinationLocation = selectedStudents
+      ? parseDestinationLocation(selectedSchoolCoordinates && {
+        latitude: selectedSchoolCoordinates.schoolLatitude,
+        longitude: selectedSchoolCoordinates.schoolLongitude,
+      })
+      : parseDestinationLocation(req.body?.destinationLocation);
+    const hasDestinationCoordinates = selectedStudents
+      ? Boolean(selectedSchoolCoordinates)
+      : req.body?.destinationLocation?.latitude !== undefined ||
+        req.body?.destinationLocation?.longitude !== undefined;
 
     if (!requesterLocation) {
       return res.status(400).json({ message: 'Set your pickup location first' });
@@ -436,6 +487,13 @@ router.post('/van-requests', requireParent, async (req, res) => {
       notes,
       requesterLocation,
       destinationLocation,
+      ...(selectedStudents ? {
+        students: selectedStudents.map((student) => ({
+          studentName: String(student.fullName || '').trim(),
+          gradeLevel: String(student.gradeLevel || '').trim(),
+        })),
+        seatsNeeded: selectedStudents.length,
+      } : {}),
       status: 'searching',
     });
 

@@ -54,6 +54,10 @@ const requestStudentSchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
+  gradeLevel: {
+    type: String,
+    trim: true,
+  },
 });
 
 const vanRequestSchema = new mongoose.Schema(
