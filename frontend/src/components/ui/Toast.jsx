@@ -10,6 +10,7 @@ import './Toast.scss';
 export const Toast = ({
   notification,
   onClose,
+  onNotificationClick,
   autoCloseDuration = 5000,
 }) => {
   const [isExiting, setIsExiting] = useState(false);
@@ -24,12 +25,17 @@ export const Toast = ({
     }
   }, [autoCloseDuration]);
 
-  const handleClose = useCallback(() => {
+  const handleClose = useCallback((event) => {
+    event?.stopPropagation();
     setIsExiting(true);
     setTimeout(() => {
       onClose(notification._id);
     }, 300);
   }, [notification._id, onClose]);
+
+  const handleNotificationClick = useCallback(() => {
+    if (onNotificationClick?.(notification)) handleClose();
+  }, [handleClose, notification, onNotificationClick]);
 
   const colorClass = `toast--${notification.color}`;
   const animationClass = `toast--${notification.animation || 'slide'}`;
@@ -37,79 +43,68 @@ export const Toast = ({
   return (
     <div
       className={`toast ${colorClass} ${animationClass} ${isExiting ? 'toast--exiting' : 'toast--entering'}`}
-      onClick={handleClose}
       role="alert"
       aria-live="polite"
     >
       {/* Left color indicator bar */}
       <div className="toast__color-bar" />
 
-      {/* Icon section */}
-      <div className="toast__icon-section">
-        <span className="toast__icon" role="img" aria-label={notification.title}>
-          {notification.icon || '📦'}
+      <button className="toast__navigation" onClick={handleNotificationClick} type="button">
+        <span className="toast__icon-section">
+          <span className="toast__icon" role="img" aria-label={notification.title}>
+            {notification.icon || '📦'}
+          </span>
         </span>
-      </div>
 
-      {/* Content section */}
-      <div className="toast__content-section">
-        {/* Title */}
-        <h4 className="toast__title">{notification.title}</h4>
-
-        {/* Message */}
-        <p className="toast__message">{notification.message}</p>
-
-        {/* Metadata display (driver name, student, plate number, etc.) */}
-        {notification.metadata && (
-          <div className="toast__metadata">
-            {notification.metadata.driverName && (
-              <span className="toast__meta-badge">
-                <span className="toast__meta-icon">🚗</span>
-                <span className="toast__meta-text">{notification.metadata.driverName}</span>
-              </span>
-            )}
-            {notification.metadata.plateNumber && (
-              <span className="toast__meta-badge">
-                <span className="toast__meta-icon">🔢</span>
-                <span className="toast__meta-text">{notification.metadata.plateNumber}</span>
-              </span>
-            )}
-            {notification.metadata.studentName && (
-              <span className="toast__meta-badge">
-                <span className="toast__meta-icon">👶</span>
-                <span className="toast__meta-text">{notification.metadata.studentName}</span>
-              </span>
-            )}
-            {notification.metadata.schoolName && (
-              <span className="toast__meta-badge">
-                <span className="toast__meta-icon">🏫</span>
-                <span className="toast__meta-text">{notification.metadata.schoolName}</span>
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Timestamp */}
-        {notification.timestamp && (
-          <div className="toast__timestamp">
-            {new Date(notification.timestamp).toLocaleTimeString('en-US', {
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit',
-            })}
-          </div>
-        )}
-      </div>
+        <span className="toast__content-section">
+          <span className="toast__title">{notification.title}</span>
+          <span className="toast__message">{notification.message}</span>
+          {notification.metadata && (
+            <span className="toast__metadata">
+              {notification.metadata.driverName && (
+                <span className="toast__meta-badge">
+                  <span className="toast__meta-icon">🚗</span>
+                  <span className="toast__meta-text">{notification.metadata.driverName}</span>
+                </span>
+              )}
+              {notification.metadata.plateNumber && (
+                <span className="toast__meta-badge">
+                  <span className="toast__meta-icon">🔢</span>
+                  <span className="toast__meta-text">{notification.metadata.plateNumber}</span>
+                </span>
+              )}
+              {notification.metadata.studentName && (
+                <span className="toast__meta-badge">
+                  <span className="toast__meta-icon">👶</span>
+                  <span className="toast__meta-text">{notification.metadata.studentName}</span>
+                </span>
+              )}
+              {notification.metadata.schoolName && (
+                <span className="toast__meta-badge">
+                  <span className="toast__meta-icon">🏫</span>
+                  <span className="toast__meta-text">{notification.metadata.schoolName}</span>
+                </span>
+              )}
+            </span>
+          )}
+          {notification.timestamp && (
+            <span className="toast__timestamp">
+              {new Date(notification.timestamp).toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+              })}
+            </span>
+          )}
+        </span>
+      </button>
 
       {/* Close button */}
       <button
-        className="toast__close"
-        onClick={(e) => {
-          e.stopPropagation();
-          handleClose();
-        }}
-        aria-label="Close notification"
         type="button"
+        className="toast__close"
+        onClick={handleClose}
+        aria-label="Close notification"
       >
         ✕
       </button>
@@ -128,7 +123,7 @@ export const Toast = ({
 /**
  * Toast Container - manages multiple toasts with stacking
  */
-export const ToastContainer = ({ toasts = [], onClose, position = 'top-right' }) => {
+export const ToastContainer = ({ toasts = [], onClose, onNotificationClick, position = 'top-right' }) => {
   return (
     <div className={`toast-container toast-container--${position}`}>
       {toasts.map((notification) => (
@@ -136,6 +131,7 @@ export const ToastContainer = ({ toasts = [], onClose, position = 'top-right' })
           key={notification._id}
           notification={notification}
           onClose={onClose}
+          onNotificationClick={onNotificationClick}
           autoCloseDuration={5000}
         />
       ))}

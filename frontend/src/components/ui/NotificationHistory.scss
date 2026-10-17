@@ -309,6 +309,27 @@
   margin-top: 2px;
 }
 
+.notification-history__item-navigation {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 3px solid #2563eb;
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+}
+
 .notification-history__item-content {
   flex: 1;
   min-width: 0;
@@ -378,8 +399,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  min-width: 44px;
+  min-height: 44px;
   background: rgba(255, 255, 255, 0.6);
   border: 1px solid #cbd5e1;
   border-radius: 6px;

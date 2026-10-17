@@ -9,7 +9,7 @@ import { useNotifications } from '../context/NotificationContext';
  */
 
 const NotificationSystem = () => {
-  const { toasts, removeToast } = useNotifications();
+  const { toasts, removeToast, navigateFromNotification } = useNotifications();
 
   return (
     <>
@@ -17,6 +17,7 @@ const NotificationSystem = () => {
       <ToastContainer
         toasts={toasts}
         onClose={removeToast}
+        onNotificationClick={navigateFromNotification}
         position="top-right"
       />
     </>

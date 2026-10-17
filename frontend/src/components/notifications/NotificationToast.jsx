@@ -35,7 +35,7 @@ const NOTIFICATION_COLORS = {
 	info: '#6366f1',
 }
 
-export function NotificationToast({ notification, onDismiss, autoClose = 5000 }) {
+export function NotificationToast({ notification, onDismiss, onNotificationClick, autoClose = 5000 }) {
 	const [isVisible, setIsVisible] = useState(true)
 
 	useEffect(() => {
@@ -57,6 +57,12 @@ export function NotificationToast({ notification, onDismiss, autoClose = 5000 })
 		onDismiss?.()
 	}
 
+	const handleNotificationClick = () => {
+		if (!onNotificationClick?.(notification)) return
+		setIsVisible(false)
+		onDismiss?.()
+	}
+
 	return (
 		<AnimatePresence>
 			{isVisible && (
@@ -68,19 +74,28 @@ export function NotificationToast({ notification, onDismiss, autoClose = 5000 })
 					transition={{ duration: 0.3 }}
 					style={{ '--notification-color': color }}
 				>
-					<div className="toast-icon">
-						<IconComponent size={24} style={{ color }} />
-					</div>
-
-					<div className="toast-content">
-						<h4 className="toast-title">{notification?.title}</h4>
-						<p className="toast-message">{notification?.message}</p>
-					</div>
+					<button
+						type="button"
+						className="notification-toast__action"
+						onClick={handleNotificationClick}
+					>
+						<span className="toast-icon">
+							<IconComponent size={24} style={{ color }} />
+						</span>
+						<span className="toast-content">
+							<span className="toast-title">{notification?.title}</span>
+							<span className="toast-message">{notification?.message}</span>
+						</span>
+					</button>
 
 					<button
 						className="toast-close"
-						onClick={handleClose}
+						onClick={(event) => {
+							event.stopPropagation()
+							handleClose()
+						}}
 						aria-label="Dismiss notification"
+						type="button"
 					>
 						✕
 					</button>
@@ -92,7 +107,7 @@ export function NotificationToast({ notification, onDismiss, autoClose = 5000 })
 	)
 }
 
-export function NotificationsContainer({ notifications, onDismiss }) {
+export function NotificationsContainer({ notifications, onDismiss, onNotificationClick }) {
 	return (
 		<div className="notifications-container">
 			<AnimatePresence>
@@ -101,6 +116,7 @@ export function NotificationsContainer({ notifications, onDismiss }) {
 						key={notification.id}
 						notification={notification}
 						onDismiss={() => onDismiss?.(notification.id)}
+						onNotificationClick={onNotificationClick}
 					/>
 				))}
 			</AnimatePresence>

@@ -61,7 +61,6 @@
   border: 1px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1),
     0 0 0 1px rgba(255, 255, 255, 0.2) inset;
-  cursor: pointer;
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   position: relative;
   overflow: hidden;
@@ -72,6 +71,27 @@
     border-color: rgba(255, 255, 255, 0.1);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4),
       0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+  }
+
+  .toast__navigation {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    &:focus-visible {
+      outline: 3px solid #2563eb;
+      outline-offset: 3px;
+      border-radius: 6px;
+    }
   }
 
   // Animation states
@@ -175,12 +195,28 @@
   animation: iconBounce 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+.toast__icon-section {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+}
+
+.toast__content-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
 .toast__content {
   flex: 1;
   min-width: 0;
 }
 
 .toast__title {
+  display: block;
   font-weight: 600;
   font-size: 14px;
   line-height: 1.4;
@@ -194,6 +230,7 @@
 }
 
 .toast__message {
+  display: block;
   font-weight: 400;
   font-size: 13px;
   line-height: 1.4;
@@ -219,6 +256,8 @@
 
 .toast__close {
   flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
   background: none;
   border: none;
   color: #9ca3af;

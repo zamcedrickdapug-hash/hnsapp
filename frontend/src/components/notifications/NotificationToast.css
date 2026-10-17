@@ -37,6 +37,28 @@
 		padding: 12px 14px;
 	}
 
+	.notification-toast__action {
+		display: flex;
+		align-items: flex-start;
+		gap: 12px;
+		flex: 1;
+		min-width: 0;
+		min-height: 44px;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: inherit;
+		text-align: left;
+		cursor: pointer;
+
+	}
+
+.notification-toast__action:focus-visible {
+	outline: 3px solid #2563eb;
+	outline-offset: 3px;
+	border-radius: 6px;
+}
+
 	&::before {
 		content: '';
 		position: absolute;
@@ -87,8 +109,8 @@
 
 .toast-close {
 	flex-shrink: 0;
-	width: 28px;
-	height: 28px;
+	width: 44px;
+	height: 44px;
 	padding: 0;
 	border: none;
 	background: transparent;

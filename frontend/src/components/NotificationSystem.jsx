@@ -23,6 +23,7 @@ export const NotificationSystem = ({ socket }) => {
     markAllAsRead,
     deleteNotification,
     deleteAllNotifications,
+    navigateFromNotification,
   } = useNotifications();
 
   const [showHistory, setShowHistory] = useState(false);
@@ -64,6 +65,7 @@ export const NotificationSystem = ({ socket }) => {
       <ToastContainer
         toasts={toasts}
         onClose={removeToast}
+        onNotificationClick={navigateFromNotification}
         position="top-right"
       />
 
@@ -85,6 +87,7 @@ export const NotificationSystem = ({ socket }) => {
           <NotificationHistory
             notifications={notifications}
             unreadCount={unreadCount}
+            onNotificationClick={navigateFromNotification}
             onMarkAsRead={markAsRead}
             onMarkAllAsRead={markAllAsRead}
             onDelete={deleteNotification}

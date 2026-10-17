@@ -11,7 +11,7 @@
  * ✅ Professional code organization
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
@@ -24,6 +24,7 @@ import HelpSupport from '../../components/common/HelpSupport'
 import LiveTripMap from '../../components/tracking/LiveTripGoogleMap'
 import { apiFetch } from '../../api'
 import { useSocket, useSocketEvent } from '../../hooks/useSocket'
+import { useNotifications } from '../../context/NotificationContext'
 import { registerPushSubscription } from '../../lib/pushNotifications'
 import Requests from './Requests'
 import DriverSettings from './DriverSettings'
@@ -37,6 +38,7 @@ import {
 	playNotificationSound,
 	showBrowserNotification,
 } from '../../utils/driverDashboard'
+import { getNotificationDestination } from '../../utils/notificationNavigation'
 import './DriverDashboard.scss'
 
 // ====== CONSTANTS ======
@@ -65,6 +67,7 @@ const DEFAULT_MAP_CENTER = [14.5995, 120.9842]
 export default function DriverDashboard({ token, user, onLogout }) {
 	// ====== SOCKET ======
 	const { socket } = useSocket(token)
+	const { setNotificationNavigationHandler } = useNotifications()
 	const socketRef = useRef(null)
 
 	// ====== STATE ======
@@ -338,12 +341,27 @@ export default function DriverDashboard({ token, user, onLogout }) {
 		}
 	}
 
-	const handleChangeSection = (section) => {
+	const handleChangeSection = useCallback((section) => {
 		setActiveSection(section)
 		if (section === 'requests') {
 			setNewRequestCount(0)
 		}
-	}
+	}, [])
+
+	const handleNotificationNavigation = useCallback((notification) => {
+		const destination = getNotificationDestination(notification, 'driver')
+		if (!destination) return false
+		if (destination.section === 'messages') {
+			setSelectedMessageRequestId(destination.requestId ? String(destination.requestId) : null)
+		}
+		handleChangeSection(destination.section)
+		return true
+	}, [handleChangeSection])
+
+	useEffect(() => {
+		setNotificationNavigationHandler(handleNotificationNavigation)
+		return () => setNotificationNavigationHandler(null)
+	}, [handleNotificationNavigation, setNotificationNavigationHandler])
 
 	const handleAcceptRequest = async (requestId) => {
 		setAcceptingRequestId(requestId)

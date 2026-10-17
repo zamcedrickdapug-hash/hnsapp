@@ -16,6 +16,15 @@ export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const handledNotificationIds = useRef(new Set());
+  const notificationNavigationHandler = useRef(null);
+
+  const setNotificationNavigationHandler = useCallback((handler) => {
+    notificationNavigationHandler.current = handler;
+  }, []);
+
+  const navigateFromNotification = useCallback((notification) => (
+    notificationNavigationHandler.current?.(notification) || false
+  ), []);
 
   /**
    * Play notification sound using Web Audio API
@@ -105,6 +114,8 @@ export const NotificationProvider = ({ children }) => {
         notifications,
         unreadCount,
         setUnreadCount,
+        setNotificationNavigationHandler,
+        navigateFromNotification,
       }}
     >
       {children}

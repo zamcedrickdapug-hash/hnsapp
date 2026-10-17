@@ -20,6 +20,7 @@ export const NotificationHistory = ({
   notifications = [],
   unreadCount = 0,
   onMarkAsRead,
+  onNotificationClick,
   onMarkAllAsRead,
   onDelete,
   onDeleteAll,
@@ -142,32 +143,39 @@ export const NotificationHistory = ({
                   notification.color
                 } ${!notification.read ? 'notification-history__item--unread' : ''}`}
               >
-                <div className="notification-history__item-icon">
-                  {iconMap[notification.icon] || iconMap.info}
-                </div>
+                <button
+                  type="button"
+                  className="notification-history__item-navigation"
+                  onClick={() => onNotificationClick?.(notification)}
+                >
+                  <span className="notification-history__item-icon">
+                    {iconMap[notification.icon] || iconMap.info}
+                  </span>
 
-                <div className="notification-history__item-content">
-                  <div className="notification-history__item-title">
-                    {notification.title}
-                  </div>
-                  <div className="notification-history__item-message">
-                    {notification.message}
-                  </div>
-                  <div className="notification-history__item-meta">
-                    <span className="notification-history__item-time">
-                      {formatTime(notification.createdAt)}
+                  <span className="notification-history__item-content">
+                    <span className="notification-history__item-title">
+                      {notification.title}
                     </span>
-                    {notification.priority === 'urgent' && (
-                      <span className="notification-history__item-priority">
-                        🚨 Urgent
+                    <span className="notification-history__item-message">
+                      {notification.message}
+                    </span>
+                    <span className="notification-history__item-meta">
+                      <span className="notification-history__item-time">
+                        {formatTime(notification.createdAt)}
                       </span>
-                    )}
-                  </div>
-                </div>
+                      {notification.priority === 'urgent' && (
+                        <span className="notification-history__item-priority">
+                          🚨 Urgent
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                </button>
 
                 <div className="notification-history__item-actions">
                   {!notification.read && (
                     <button
+                      type="button"
                       className="notification-history__item-action"
                       onClick={(e) => handleMarkAsRead(notification._id, e)}
                       title="Mark as read"
@@ -177,6 +185,7 @@ export const NotificationHistory = ({
                   )}
                   {onDelete && (
                     <button
+                      type="button"
                       className="notification-history__item-action notification-history__item-action--delete"
                       onClick={(e) => handleDelete(notification._id, e)}
                       title="Delete notification"

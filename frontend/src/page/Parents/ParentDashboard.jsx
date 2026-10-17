@@ -25,6 +25,7 @@ import { Wifi, WifiOff, AlertCircle, UserRound, CheckCircle2, AlertTriangle, Sav
 import { isValidPhoneNumber, normalizePhoneNumber } from '../../constants/authConstants'
 import { apiFetch } from '../../api'
 import { useSocket, useSocketEvent } from '../../hooks/useSocket'
+import { useNotifications } from '../../context/NotificationContext'
 import { DashboardLayout } from '../../components/dashboard'
 import TripMessages from '../../components/common/TripMessages'
 import HelpSupport from '../../components/common/HelpSupport'
@@ -41,6 +42,7 @@ import PickupLocationPicker from '../../components/dashboard/parent/PickupLocati
 import ChildrenEditor from '../../components/dashboard/parent/ChildrenEditor'
 import TripHistoryPage from './TripHistoryPage'
 import { distanceInMeters } from '../../utils/driverDashboard'
+import { getNotificationDestination } from '../../utils/notificationNavigation'
 import './ParentDashboard.scss'
 
 // Default settings structure
@@ -74,6 +76,7 @@ const asLatLng = (location) => {
 export default function ParentDashboard({ token, user, onLogout }) {
   // ====== SOCKET CONNECTION ======
   const { socket } = useSocket(token)
+  const { setNotificationNavigationHandler } = useNotifications()
 
   // ====== UI STATE ======
   const [activeSection, setActiveSection] = useState('dashboard')
@@ -650,6 +653,21 @@ export default function ParentDashboard({ token, user, onLogout }) {
     setToastNotifications((prev) => prev.filter((notif) => notif.id !== id))
   }, [])
 
+  const handleNotificationNavigation = useCallback((notification) => {
+    const destination = getNotificationDestination(notification, 'parent')
+    if (!destination) return false
+    if (destination.section === 'messages') {
+      setSelectedMessageRequestId(destination.requestId ? String(destination.requestId) : null)
+    }
+    setActiveSection(destination.section)
+    return true
+  }, [])
+
+  useEffect(() => {
+    setNotificationNavigationHandler(handleNotificationNavigation)
+    return () => setNotificationNavigationHandler(null)
+  }, [handleNotificationNavigation, setNotificationNavigationHandler])
+
   // ====== EFFECTS ======
 
   useEffect(() => {
@@ -877,7 +895,11 @@ export default function ParentDashboard({ token, user, onLogout }) {
       }[activeSection] || ''}
     >
       {/* Toast Notifications */}
-      <NotificationsContainer notifications={toastNotifications} onDismiss={dismissToast} />
+      <NotificationsContainer
+        notifications={toastNotifications}
+        onDismiss={dismissToast}
+        onNotificationClick={handleNotificationNavigation}
+      />
 
       {/* Dashboard Section */}
       {activeSection === 'dashboard' && (
@@ -1123,6 +1145,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
               notifications={parentNotifications}
               unreadCount={notificationsUnreadCount}
               onMarkAsRead={markNotificationAsRead}
+              onNotificationClick={handleNotificationNavigation}
               onMarkAllAsRead={markAllNotificationsAsRead}
               onDelete={deleteNotification}
               onDeleteAll={deleteAllNotifications}
