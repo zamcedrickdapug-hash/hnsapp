@@ -66,6 +66,7 @@ const createFixture = async (t) => {
   const emitted = [];
   const notifications = [];
   const pickupArrivalNotifications = [];
+  const schoolArrivalNotifications = [];
   const plainUser = (user) => {
     if (!user) return null;
     return {
@@ -284,7 +285,7 @@ const createFixture = async (t) => {
       notifyParentArrivalAtPickup: async (...args) => { pickupArrivalNotifications.push(args); },
       notifyParentStudentPickedUp: noOpNotification,
       notifyParentHeadingToSchool: noOpNotification,
-      notifyParentArrivedAtSchool: noOpNotification,
+      notifyParentArrivedAtSchool: async (...args) => { schoolArrivalNotifications.push(args); },
       clearNotificationsForRequest: noOpNotification,
     },
     '../services/driverService': driverService,
@@ -351,7 +352,7 @@ const createFixture = async (t) => {
     };
   };
 
-  return { parent, driverOne, driverTwo, users, requests, statuses, vehicles, emitted, notifications, pickupArrivalNotifications, addVehicle, request };
+  return { parent, driverOne, driverTwo, users, requests, statuses, vehicles, emitted, notifications, pickupArrivalNotifications, schoolArrivalNotifications, addVehicle, request };
 };
 
 const createRequest = (fixture, data = {}) => fixture.request('/api/parents/van-requests', fixture.parent, {
@@ -439,11 +440,38 @@ test('Parent request creation, live updates, vehicle assignment, and completion 
   assert.equal(pickedUp.status, 200);
   assert.equal(pickedUp.body.request.status, 'picked_up');
 
+  const nearSchoolLocation = await f.request(`/api/drivers/requests/${requestId}/location`, assignedDriver, {
+    method: 'PATCH',
+    body: { latitude: 14.6001, longitude: 121.0 },
+  });
+  assert.equal(nearSchoolLocation.status, 200);
+  assert.equal(nearSchoolLocation.body.request.status, 'picked_up');
+  assert.equal(f.schoolArrivalNotifications.length, 0);
+  assert.ok(f.emitted.some((event) =>
+    event.room === `user:${f.parent._id}` &&
+    event.event === 'trip:location-updated' &&
+    event.payload.status === 'picked_up'
+  ));
+
   const arrivedAtSchool = await f.request(`/api/drivers/requests/${requestId}/arrived-at-school`, assignedDriver, {
     method: 'PATCH',
   });
   assert.equal(arrivedAtSchool.status, 200);
   assert.equal(arrivedAtSchool.body.requests[0].status, 'arrived_at_school');
+  assert.equal(f.schoolArrivalNotifications.length, 1);
+  for (const room of [`trip:${requestId}`, `user:${f.parent._id}`, `user:${assignedDriverId}`]) {
+    assert.ok(f.emitted.some((event) =>
+      event.room === room &&
+      event.event === 'trip:request-updated' &&
+      event.payload.request.status === 'arrived_at_school'
+    ));
+  }
+  const repeatedSchoolArrival = await f.request(`/api/drivers/requests/${requestId}/arrived-at-school`, assignedDriver, {
+    method: 'PATCH',
+  });
+  assert.equal(repeatedSchoolArrival.status, 409);
+  assert.equal(f.schoolArrivalNotifications.length, 1);
+
   const completed = await f.request('/api/drivers/requests/complete-school-run', assignedDriver, {
     method: 'PATCH',
   });
