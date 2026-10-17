@@ -6,12 +6,11 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const School = require('../models/School');
 
 const seedSchools = async () => {
-  const schools = JSON.parse(
-    fs.readFileSync(path.resolve(__dirname, '../data/schools.json'), 'utf8')
-  );
-  const mongoUri = process.env.MONGO_URL || process.env.MONGODB_URI || 'mongodb://localhost:27017/hnsapp';
-
   try {
+    const schools = JSON.parse(
+      fs.readFileSync(path.resolve(__dirname, '../data/schools.json'), 'utf8')
+    );
+    const mongoUri = process.env.MONGO_URL || process.env.MONGODB_URI || 'mongodb://localhost:27017/hnsapp';
     await mongoose.connect(mongoUri);
     for (const school of schools) {
       await School.updateOne(
@@ -22,7 +21,7 @@ const seedSchools = async () => {
     }
     console.log(`Seeded ${schools.length} school(s).`);
   } catch (error) {
-    console.error('School catalog seed failed:', error.message);
+    console.error('School catalog seed failed:', error.name || 'UnknownError');
     process.exitCode = 1;
   } finally {
     if (mongoose.connection.readyState !== 0) {
