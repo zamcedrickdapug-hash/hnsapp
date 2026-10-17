@@ -2,6 +2,7 @@ const express = require('express');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const VanRequest = require('../models/VanRequest');
+const School = require('../models/School');
 const { releaseVanRequestAssignment } = require('../services/releaseVanRequestAssignment');
 const { requireApplicant, requireParent } = require('../middleware/auth');
 const { normalizePhoneNumber, isValidPhoneNumber } = require('../utils/validation');
@@ -15,6 +16,8 @@ const {
 } = require('../services/driverEligibility');
 
 const router = express.Router();
+
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const parseRequesterLocation = (locationPayload) => {
   const latitude = Number(locationPayload?.latitude);
@@ -477,8 +480,31 @@ router.post('/van-requests', requireParent, async (req, res) => {
       return res.status(409).json({ message: 'You already have an active ride request.' });
     }
 
+    const school = schoolName
+      ? await School.findOne({
+        name: new RegExp(`^${escapeRegExp(schoolName)}$`, 'i'),
+        active: true,
+      })
+      : null;
+    if (school) {
+      const approvedDrivers = await User.find({
+        role: 'driver',
+        status: 'approved',
+        accountState: { $in: ['active', null] },
+      }).select('_id driver.assignedSchools');
+      const hasAssignedDriver = approvedDrivers.some((driver) =>
+        (driver.driver?.assignedSchools || []).some((assignedSchool) =>
+          String(assignedSchool?._id || assignedSchool) === String(school._id)
+        )
+      );
+      if (!hasAssignedDriver) {
+        return res.status(409).json({ message: 'No driver is assigned to this school yet.' });
+      }
+    }
+
     const rideRequest = await VanRequest.create({
       parent: req.user._id,
+      school: school?._id || null,
       studentName,
       gradeSection,
       schoolName,

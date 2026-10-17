@@ -302,6 +302,9 @@ router.patch('/requests/:requestId/accept', async (req, res) => {
     }
 
     const eligibility = await getDriverEligibility(req.user._id, existingRequest);
+    if (existingRequest.school && !eligibility.schoolAssigned) {
+      return res.status(409).json({ message: 'You are not assigned to this school.' });
+    }
     if (!eligibility.vehicle) {
       return res.status(400).json({ message: 'You need an assigned vehicle before accepting requests.' });
     }

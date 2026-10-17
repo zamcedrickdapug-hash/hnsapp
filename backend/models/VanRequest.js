@@ -79,6 +79,11 @@ const vanRequestSchema = new mongoose.Schema(
       ref: 'Vehicle',
       default: null,
     },
+    school: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'School',
+      default: null,
+    },
     rejectedBy: [{
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

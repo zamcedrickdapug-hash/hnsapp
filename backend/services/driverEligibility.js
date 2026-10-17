@@ -66,6 +66,14 @@ const isLocationWithinZone = (location, zone) =>
 const isPickupInAnyServiceZone = (location) =>
   Object.values(SERVICE_ZONE_CONFIG.zones).some((zone) => isLocationWithinZone(location, zone));
 
+const isDriverAssignedToSchool = (driver, school) => {
+  if (!school) return true;
+  const schoolId = String(school?._id || school);
+  return (driver?.driver?.assignedSchools || []).some((assignedSchool) =>
+    String(assignedSchool?._id || assignedSchool) === schoolId
+  );
+};
+
 const areScheduleDetailsCompatible = (request, activeRequests) => {
   const requestedSlot = request.slot || 'AM';
   const requestedDate = request.scheduledDate ? new Date(request.scheduledDate).getTime() : null;
@@ -79,7 +87,7 @@ const areScheduleDetailsCompatible = (request, activeRequests) => {
 
 const getDriverEligibility = async (driverId, request) => {
   const [driver, driverStatus, vehicle, activeRequests] = await Promise.all([
-    User.findById(driverId).select('role status accountState'),
+    User.findById(driverId).select('role status accountState driver.assignedSchools'),
     DriverStatus.findOne({ driverId }).select('isOnline'),
     Vehicle.findOne({ assignedDriver: driverId }),
     VanRequest.find({
@@ -96,12 +104,19 @@ const getDriverEligibility = async (driverId, request) => {
   const slotDateCompatible = request
     ? areScheduleDetailsCompatible(request, activeRequests)
     : true;
+  const schoolAssigned = request
+    ? isDriverAssignedToSchool(driver, request.school)
+    : true;
   const isApprovedAndActive = driver?.role === 'driver'
     && driver.status === 'approved'
     && (driver.accountState || 'active') === 'active';
   const isOnline = driverStatus?.isOnline === true;
   const pickupWithinServiceZone = request
-    ? Boolean(vehicle && isLocationWithinZone(request.requesterLocation, getVehicleServiceZone(vehicle)))
+    ? Boolean(vehicle && (
+      request.school
+        ? isPickupInAnyServiceZone(request.requesterLocation)
+        : isLocationWithinZone(request.requesterLocation, getVehicleServiceZone(vehicle))
+    ))
     : true;
 
   return {
@@ -111,6 +126,7 @@ const getDriverEligibility = async (driverId, request) => {
     usedSeats,
     freeSeats,
     slotDateCompatible,
+    schoolAssigned,
     isApprovedAndActive,
     isOnline,
     pickupWithinServiceZone,
@@ -119,6 +135,7 @@ const getDriverEligibility = async (driverId, request) => {
       && Boolean(vehicle)
       && freeSeats >= (request ? Math.max(1, Number(request.seatsNeeded) || 1) : 1)
       && slotDateCompatible
+      && schoolAssigned
       && pickupWithinServiceZone,
   };
 };

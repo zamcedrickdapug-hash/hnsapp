@@ -158,6 +158,13 @@ const documentUploadSchema = new mongoose.Schema(
 
 const driverSchema = new mongoose.Schema(
   {
+    assignedSchools: {
+      type: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'School',
+      }],
+      default: [],
+    },
     dateOfBirth: {
       type: Date,
       required: false,

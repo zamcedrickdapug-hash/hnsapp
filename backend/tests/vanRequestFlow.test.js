@@ -63,6 +63,7 @@ const createFixture = async (t) => {
   const requests = new Map();
   const statuses = new Map();
   const vehicles = new Map();
+  const schools = new Map();
   const emitted = [];
   const notifications = [];
   const collectionNotifications = [];
@@ -165,6 +166,14 @@ const createFixture = async (t) => {
     }
     static findOne(query) {
       return new FakeQuery(collectionNotifications.find((notification) => matches(notification, query)) || null);
+    }
+  }
+
+  class School {
+    static async findOne(query) {
+      return [...schools.values()].find((school) =>
+        school.active === query.active && query.name.test(school.name)
+      ) || null;
     }
   }
 
@@ -294,6 +303,7 @@ const createFixture = async (t) => {
   };
   const routeDependencies = {
     '../models/User': User,
+    '../models/School': School,
     '../models/Notification': Notification,
     '../models/VanRequest': VanRequest,
     '../models/Vehicle': Vehicle,
@@ -353,6 +363,11 @@ const createFixture = async (t) => {
     role: 'driver', status: 'approved', fullName: 'Driver Two', email: 'driver2@example.test',
     driver: { vehicleType: 'mpv', plateNumber: 'TWO-123' },
   }).save();
+  const addSchool = (name, active = true) => {
+    const school = { _id: randomBytes(12).toString('hex'), name, active };
+    schools.set(String(school._id), school);
+    return school;
+  };
   const addVehicle = (driver, plateNumber) => {
     driverEligibility.SERVICE_ZONE_CONFIG.vehicleZonesByPlate[plateNumber] = 'FAIRVIEW';
     const vehicle = {
@@ -388,7 +403,7 @@ const createFixture = async (t) => {
     };
   };
 
-  return { parent, driverOne, driverTwo, users, requests, statuses, vehicles, emitted, notifications, collectionNotifications, pickupArrivalNotifications, schoolArrivalNotifications, addVehicle, request };
+  return { parent, driverOne, driverTwo, users, requests, statuses, vehicles, schools, driverEligibility, emitted, notifications, collectionNotifications, pickupArrivalNotifications, schoolArrivalNotifications, addSchool, addVehicle, request };
 };
 
 const createRequest = (fixture, data = {}) => fixture.request('/api/parents/van-requests', fixture.parent, {
@@ -618,6 +633,120 @@ test('parent cannot book a name that is not in their saved student list', async 
   const result = await createRequest(f, { studentNames: ['Someone Else'] });
   assert.equal(result.status, 400);
   assert.equal(result.body.message, 'One or more selected children do not belong to your account.');
+});
+
+test('school requests are visible and acceptable only to a driver assigned to that school', async (t) => {
+  const f = await createFixture(t);
+  const school = f.addSchool('La Concepcion College');
+  const otherSchool = f.addSchool('Other School');
+  f.driverOne.driver.assignedSchools = [school._id];
+  f.driverTwo.driver.assignedSchools = [otherSchool._id];
+
+  const created = await createRequest(f, { schoolName: 'la concepcion college' });
+  assert.equal(created.status, 201);
+  assert.equal(created.body.request.school, school._id);
+
+  f.addVehicle(f.driverOne, 'ONE-SCHOOL');
+  f.addVehicle(f.driverTwo, 'TWO-SCHOOL');
+  f.driverEligibility.SERVICE_ZONE_CONFIG.vehicleZonesByPlate['ONE-SCHOOL'] = 'LCC';
+  await Promise.all([setOnline(f, f.driverOne), setOnline(f, f.driverTwo)]);
+
+  const assignedRequests = await f.request('/api/drivers/requests', f.driverOne);
+  const otherRequests = await f.request('/api/drivers/requests', f.driverTwo);
+  assert.ok(assignedRequests.body.requests.some((request) => request._id === created.body.request._id));
+  assert.equal(otherRequests.body.requests.some((request) => request._id === created.body.request._id), false);
+
+  const otherAccept = await f.request(`/api/drivers/requests/${created.body.request._id}/accept`, f.driverTwo, {
+    method: 'PATCH',
+  });
+  assert.equal(otherAccept.status, 409);
+  assert.equal(otherAccept.body.message, 'You are not assigned to this school.');
+
+  const assignedAccept = await f.request(`/api/drivers/requests/${created.body.request._id}/accept`, f.driverOne, {
+    method: 'PATCH',
+  });
+  assert.equal(assignedAccept.status, 200);
+});
+
+test('driver with no school assignments cannot see school requests', async (t) => {
+  const f = await createFixture(t);
+  const school = f.addSchool('La Concepcion College');
+  f.driverTwo.driver.assignedSchools = [school._id];
+
+  const created = await createRequest(f, { schoolName: 'La Concepcion College' });
+  assert.equal(created.status, 201);
+
+  f.addVehicle(f.driverOne, 'ONE-UNASSIGNED');
+  await setOnline(f, f.driverOne);
+  const requests = await f.request('/api/drivers/requests', f.driverOne);
+  assert.equal(requests.body.requests.some((request) => request._id === created.body.request._id), false);
+});
+
+test('booking for a catalog school without an assigned active driver is rejected', async (t) => {
+  const f = await createFixture(t);
+  f.addSchool('La Concepcion College');
+
+  const result = await createRequest(f, { schoolName: 'La Concepcion College' });
+  assert.equal(result.status, 409);
+  assert.equal(result.body.message, 'No driver is assigned to this school yet.');
+});
+
+test('school booking keeps the all-zone pickup check', async (t) => {
+  const f = await createFixture(t);
+  const school = f.addSchool('La Concepcion College');
+  f.driverOne.driver.assignedSchools = [school._id];
+  f.parent.student.pickupLatitude = 14.65;
+  f.parent.student.pickupLongitude = 120.983;
+
+  const result = await createRequest(f, { schoolName: 'La Concepcion College' });
+  assert.equal(result.status, 400);
+  assert.equal(result.body.message, 'Outside our service area');
+});
+
+test('requests without a catalog school keep the vehicle-zone rule', async (t) => {
+  const f = await createFixture(t);
+  const created = await createRequest(f, { schoolName: 'Unlisted School' });
+  assert.equal(created.status, 201);
+  assert.equal(created.body.request.school, null);
+
+  f.addVehicle(f.driverOne, 'ONE-LEGACY');
+  f.addVehicle(f.driverTwo, 'TWO-LEGACY');
+  f.driverEligibility.SERVICE_ZONE_CONFIG.vehicleZonesByPlate['ONE-LEGACY'] = 'LCC';
+  await Promise.all([setOnline(f, f.driverOne), setOnline(f, f.driverTwo)]);
+
+  const lccRequests = await f.request('/api/drivers/requests', f.driverOne);
+  const fairviewRequests = await f.request('/api/drivers/requests', f.driverTwo);
+  assert.equal(lccRequests.body.requests.some((request) => request._id === created.body.request._id), false);
+  assert.ok(fairviewRequests.body.requests.some((request) => request._id === created.body.request._id));
+
+  const wrongZoneAccept = await f.request(`/api/drivers/requests/${created.body.request._id}/accept`, f.driverOne, {
+    method: 'PATCH',
+  });
+  assert.equal(wrongZoneAccept.status, 409);
+  assert.equal(wrongZoneAccept.body.message, 'This pickup is outside your service zone.');
+  const correctZoneAccept = await f.request(`/api/drivers/requests/${created.body.request._id}/accept`, f.driverTwo, {
+    method: 'PATCH',
+  });
+  assert.equal(correctZoneAccept.status, 200);
+});
+
+test('driver profile ignores client-sent assignedSchools', async (t) => {
+  const f = await createFixture(t);
+  const assignedSchool = f.addSchool('Assigned School');
+  f.driverOne.driver.assignedSchools = [assignedSchool._id];
+  const existingDriverData = { ...f.driverOne.driver };
+  f.driverOne.driver.toObject = () => existingDriverData;
+
+  const result = await f.request('/api/drivers/profile', f.driverOne, {
+    method: 'PATCH',
+    body: {
+      assignedSchools: [randomBytes(12).toString('hex')],
+      vehicleType: 'Updated Van',
+    },
+  });
+
+  assert.equal(result.status, 200);
+  assert.deepEqual(f.driverOne.driver.assignedSchools, [assignedSchool._id]);
 });
 
 test('parent must select a non-empty unique list of saved children', async (t) => {
