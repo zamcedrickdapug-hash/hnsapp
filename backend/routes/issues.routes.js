@@ -164,7 +164,7 @@ router.patch('/:id/status', requireAdmin, async (req, res) => {
 				resolution: resolution || null,
 				updatedAt: new Date(),
 			},
-			{ new: true }
+			{ returnDocument: 'after' }
 		)
 
 		if (!issue) {

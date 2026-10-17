@@ -91,7 +91,7 @@ async function setDriverPhoto() {
     await DriverPhoto.findOneAndUpdate(
       { userId: user._id },
       { $set: { data, contentType, size, updatedAt } },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
     );
     await User.updateOne(
       { _id: user._id, role: 'driver' },

@@ -684,7 +684,7 @@ router.patch('/van-requests/:requestId/requester-location', requireParent, async
         status: { $in: ['searching', 'accepted', 'arrived', 'picked_up'] },
       },
       { $set: { requesterLocation } },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!rideRequest) {
@@ -732,7 +732,7 @@ router.patch('/van-requests/:requestId/pickup-confirm', requireParent, async (re
         pickupConfirmedByParentAt: null,
       },
       { $set: { pickupConfirmedByParentAt: new Date() } },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!rideRequest) {
@@ -820,7 +820,7 @@ router.patch('/van-requests/:requestId/cancel', requireParent, async (req, res) 
         status: { $in: ['searching', 'accepted', 'arrived'] },
       },
       { $set: { status: 'cancelled', liveLocation: null } },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!request) {

@@ -143,7 +143,7 @@ const toggleDriverStatus = async (driverId, isOnline) => {
           lastStatusUpdate: new Date(),
         },
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!status) {
@@ -339,7 +339,7 @@ const updateTripStatus = async (driverId, requestId, tripStatus) => {
     const trip = await VanRequest.findOneAndUpdate(
       { _id: requestId, driver: driverId, status: currentTrip.status },
       { $set: updates },
-      { new: true }
+      { returnDocument: 'after' }
     )
       .populate('parent', 'fullName phone')
       .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate driver.photoUpdatedAt')

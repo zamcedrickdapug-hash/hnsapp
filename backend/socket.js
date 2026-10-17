@@ -234,7 +234,7 @@ const initSocketServer = (server) => {
         const updatedRequest = await VanRequest.findOneAndUpdate(
           { _id: requestId, driver: driverId, status: { $in: ['accepted', 'arrived', 'picked_up'] } },
           { $set: { liveLocation: null } },
-          { new: true }
+          { returnDocument: 'after' }
         );
 
         if (!updatedRequest) {

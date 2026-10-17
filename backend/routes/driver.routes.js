@@ -359,7 +359,7 @@ router.patch('/requests/:requestId/accept', async (req, res) => {
           liveLocation: null,
         },
       },
-      { new: true }
+      { returnDocument: 'after' }
     ).populate('parent', '_id fullName phone');
 
     if (!rideRequest) {
@@ -432,12 +432,12 @@ router.patch('/requests/:requestId/accept', async (req, res) => {
           lastStatusUpdate: new Date(),
         },
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
     await Vehicle.findOneAndUpdate(
       { _id: vehicle._id, assignedDriver: req.user._id },
       { $set: { status: 'assigned', isAvailable: false } },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     const populatedRequest = await VanRequest.findById(rideRequest._id)
@@ -514,7 +514,7 @@ router.patch('/requests/:requestId/reject', async (req, res) => {
         rejectedBy: { $ne: req.user._id },
       },
       { $addToSet: { rejectedBy: req.user._id } },
-      { new: true }
+      { returnDocument: 'after' }
     );
     let releasedAssignment = false;
 
@@ -540,7 +540,7 @@ router.patch('/requests/:requestId/reject', async (req, res) => {
           },
           $addToSet: { rejectedBy: req.user._id },
         },
-        { new: true }
+        { returnDocument: 'after' }
       );
       releasedAssignment = Boolean(rejectedRequest);
       if (releasedAssignment) rejectedRequest.vehicleId = assignedRequest?.vehicleId || null;
@@ -617,7 +617,7 @@ router.patch('/requests/:requestId/location', async (req, res) => {
         status: previousStatus,
       },
       { $set: { liveLocation: nextLiveLocation } },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!rideRequest) {
@@ -727,7 +727,7 @@ router.patch('/requests/:requestId/arrived', async (req, res) => {
     const rideRequest = await VanRequest.findOneAndUpdate(
       { _id: currentRequest._id, driver: req.user._id, status: 'accepted' },
       { $set: { status: 'arrived', arrivedAtDestinationAt: arrivedAt } },
-      { new: true }
+      { returnDocument: 'after' }
     ).populate('parent', '_id fullName');
 
     if (!rideRequest) {
@@ -782,7 +782,7 @@ router.patch('/requests/:requestId/picked-up', async (req, res) => {
     const rideRequest = await VanRequest.findOneAndUpdate(
       { _id: currentRequest._id, driver: req.user._id, status: 'arrived' },
       { $set: { status: 'picked_up', pickedUpAt: new Date() } },
-      { new: true }
+      { returnDocument: 'after' }
     ).populate('parent', '_id fullName');
 
     if (!rideRequest) {
@@ -864,7 +864,7 @@ router.patch('/requests/:requestId/arrived-at-school', async (req, res) => {
           status: 'picked_up',
         },
         { $set: { status: 'arrived_at_school', arrivedAtSchoolAt: arrivalTime } },
-        { new: true }
+        { returnDocument: 'after' }
       ).populate('parent', '_id fullName');
 
       if (!arrivedRequest) continue;
@@ -927,7 +927,7 @@ router.patch('/requests/complete-school-run', async (req, res) => {
           status: 'arrived_at_school',
         },
         { $set: { status: 'completed', liveLocation: null } },
-        { new: true }
+        { returnDocument: 'after' }
       ).populate('parent', '_id fullName');
 
       if (!completedRequest) continue;

@@ -145,7 +145,7 @@ class IncidentManagementService {
           investigatedBy: investigatorId,
           investigationStartedAt: new Date(),
         },
-        { new: true }
+        { returnDocument: 'after' }
       );
       
       if (!report) {
@@ -352,7 +352,7 @@ class IncidentManagementService {
           resolvedAt: new Date(),
           resolvedBy,
         },
-        { new: true }
+        { returnDocument: 'after' }
       );
       
       if (!report) {

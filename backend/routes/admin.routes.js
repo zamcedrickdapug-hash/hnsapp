@@ -232,7 +232,7 @@ router.patch('/registrations/:registrationId/status', requireAdmin, async (req, 
             },
             {
               upsert: true,
-              new: true,
+              returnDocument: 'after',
               runValidators: true,
               session,
             }

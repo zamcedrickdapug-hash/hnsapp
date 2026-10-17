@@ -550,6 +550,14 @@ test('Parent request creation, live updates, vehicle assignment, and completion 
   const assignedDriverId = String(winningResult.body.request.driver._id);
   const assignedVehicleId = String(winningResult.body.request.vehicleId._id);
   assert.equal(winningResult.body.request.status, 'accepted');
+  const acceptedNotification = f.collectionNotifications.find(
+    (notification) => notification.type === 'accepted' && notification.requestId === requestId
+  );
+  assert.ok(acceptedNotification);
+  assert.equal(
+    acceptedNotification.metadata.plateNumber,
+    f.vehicles.get(assignedVehicleId).plateNumber
+  );
   const offlineWhileBusy = await f.request('/api/drivers/status/toggle', assignedDriverId === f.driverOne._id ? f.driverOne : f.driverTwo, {
     method: 'PATCH',
     body: { isOnline: false },

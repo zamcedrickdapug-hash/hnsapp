@@ -330,7 +330,7 @@ class TripSafetyService {
           acknowledgedBy: adminId,
           adminNotes: notes,
         },
-        { new: true }
+        { returnDocument: 'after' }
       );
 
       return alert;
@@ -352,7 +352,7 @@ class TripSafetyService {
           resolvedAt: new Date(),
           resolutionNotes,
         },
-        { new: true }
+        { returnDocument: 'after' }
       );
 
       return alert;
