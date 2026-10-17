@@ -191,7 +191,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
       }
       const availableNames = new Set(availableStudents.map((student) => student.fullName))
       const retainedNames = current.filter((name) => availableNames.has(name))
-      return retainedNames.length || current.length === 0
+      return retainedNames.length
         ? retainedNames
         : availableStudents[0]?.fullName ? [availableStudents[0].fullName] : []
     })
@@ -254,8 +254,11 @@ export default function ParentDashboard({ token, user, onLogout }) {
   }, [activeRideRequest])
 
   const children = settingsData.students || []
+  const effectiveSelectedStudentNames = children.length === 1
+    ? [children[0].fullName]
+    : selectedStudentNames || (children[0] ? [children[0].fullName] : [])
   const bookingSelectedStudents = children.filter((student) => (
-    (selectedStudentNames || (children[0] ? [children[0].fullName] : [])).includes(student.fullName)
+    effectiveSelectedStudentNames.includes(student.fullName)
   ))
   const selectedSchools = new Set(bookingSelectedStudents.map((student) => (
     String(student.schoolName || '').trim().toLowerCase()
@@ -891,8 +894,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
                     <label key={`${student.fullName}-${index}`} className="flex items-start gap-2 text-sm text-gray-800">
                       <input
                         type="checkbox"
-                        checked={(selectedStudentNames || (children[0] ? [children[0].fullName] : []))
-                          .includes(student.fullName)}
+                        checked={effectiveSelectedStudentNames.includes(student.fullName)}
                         onChange={(event) => {
                           const checked = event.target.checked
                           setSelectedStudentNames((current) => {
