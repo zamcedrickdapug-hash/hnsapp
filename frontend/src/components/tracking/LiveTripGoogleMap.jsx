@@ -36,25 +36,44 @@ function FollowVan({ van, target }) {
 
 // Iginuguhit ang planned route na galing sa backend (walang dagdag na Google API call)
 function PlannedRoute({ path }) {
-  const map = useMap()
+  const dots = useMemo(() => {
+    if (!path || path.length < 2) return []
 
-  useEffect(() => {
-    if (!map || !path || path.length < 2) return
-    const feature = map.data.add({
-      geometry: new window.google.maps.Data.LineString(
-        path.map((point) => new window.google.maps.LatLng(point.lat, point.lng)),
-      ),
-    })
-    map.data.setStyle({
-      strokeColor: '#3b82f6',
-      strokeWeight: 5,
-      strokeOpacity: 0.9,
-      zIndex: 10,
-    })
-    return () => map.data.remove(feature)
-  }, [map, path])
+    if (path.length === 2) {
+      return Array.from({ length: 20 }, (_, index) => {
+        const fraction = index / 19
+        return {
+          lat: path[0].lat + (path[1].lat - path[0].lat) * fraction,
+          lng: path[0].lng + (path[1].lng - path[0].lng) * fraction,
+        }
+      })
+    }
 
-  return null
+    const step = Math.max(1, Math.ceil(path.length / 60))
+    const sampled = path.filter((_, index) => index % step === 0)
+    if (sampled[sampled.length - 1] !== path[path.length - 1]) {
+      sampled.push(path[path.length - 1])
+    }
+    return sampled
+  }, [path])
+
+  return (
+    <>
+      {dots.map((dot, i) => (
+        <AdvancedMarker key={i} position={{ lat: dot.lat, lng: dot.lng }}>
+          <div
+            style={{
+              width: 10,
+              height: 10,
+              borderRadius: '50%',
+              background: '#3b82f6',
+              border: '2px solid white',
+            }}
+          />
+        </AdvancedMarker>
+      ))}
+    </>
+  )
 }
 
 export default function LiveTripGoogleMap({
