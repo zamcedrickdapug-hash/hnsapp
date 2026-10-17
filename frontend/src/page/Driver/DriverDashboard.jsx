@@ -109,6 +109,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 		pending: false,
 		requestId: 0,
 	})
+	const locallyStoppedAfterArrivalRef = useRef('')
 
 	// Profile data
 	const [profileData, setProfileData] = useState(() => {
@@ -866,6 +867,22 @@ export default function DriverDashboard({ token, user, onLogout }) {
 			setSelectedRequestId(acceptedRequests[0]._id)
 		}
 	}, [acceptedRequests, selectedRequestId])
+
+	useEffect(() => {
+		if (selectedTrip?.status !== 'arrived') {
+			locallyStoppedAfterArrivalRef.current = ''
+			return
+		}
+
+		const arrivalKey = `${selectedTrip._id}:arrived`
+		if (
+			locallyStoppedAfterArrivalRef.current === arrivalKey ||
+			!['Active', 'Preparing'].includes(gpsStatus)
+		) return
+
+		locallyStoppedAfterArrivalRef.current = arrivalKey
+		stopGpsLocally()
+	}, [selectedTrip?._id, selectedTrip?.status, gpsStatus])
 
 	useEffect(() => {
 		if (acceptedRequests.length === 0) {
