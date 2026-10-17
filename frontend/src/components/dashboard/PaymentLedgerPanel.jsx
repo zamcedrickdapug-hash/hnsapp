@@ -1,25 +1,59 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CircleCheck, CircleX, Clock3, RefreshCw } from 'lucide-react'
+import { BadgeCheck, CircleCheck, CircleX, Clock3, RefreshCw, TriangleAlert } from 'lucide-react'
 import { apiFetch } from '../../api'
+import { paymentInfo } from '../../config/paymentInfo'
 import PaymentReceipt from '../payments/PaymentReceipt'
 import PaymentReferenceVerifier from '../payments/PaymentReferenceVerifier'
 
-const ACTIVE_REQUEST_STATUSES = ['accepted', 'arrived', 'picked_up', 'arrived_at_school', 'completed']
+const MAX_TRIPS_PER_PAYMENT = 20
 
-const formatMoney = (amount, currency = 'PHP') => new Intl.NumberFormat('en-PH', {
-  style: 'currency',
-  currency,
-}).format(Number(amount) || 0)
+const formatMoney = (amount, currency = 'PHP') => (
+  `${currency} ${new Intl.NumberFormat('en-PH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(amount) || 0)}`
+)
 
-const requestId = (request) => String(request?._id || '')
+const dateTimeInManila = (value) => {
+  if (!value) return 'Date unavailable'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Date unavailable'
+  return new Intl.DateTimeFormat('en-PH', {
+    dateStyle: 'medium',
+    timeZone: 'Asia/Manila',
+  }).format(date)
+}
 
-export default function PaymentLedgerPanel({ role, token, user }) {
+const tripIdsForPayment = (payment) => (
+  payment.tripSummary || []
+)
+
+const getTripLabel = (trip) => {
+  const students = trip.studentNames?.filter(Boolean).join(', ')
+  return [trip.schoolName || 'School not listed', students].filter(Boolean).join(' · ')
+}
+
+const hasPaymentValue = (value) => (
+  typeof value === 'string'
+  && value.trim().length > 0
+  && !/(placeholder|your|todo|tbd)/i.test(value)
+)
+
+const getErrorMessage = (error) => {
+  const message = error?.message || 'The payment action could not be completed.'
+  return /one driver at a time/i.test(message)
+    ? `${message} Select trips for one driver only.`
+    : message
+}
+
+export default function PaymentLedgerPanel({ role, token }) {
+  const isParent = role === 'parent'
   const [payments, setPayments] = useState([])
   const [summary, setSummary] = useState({})
+  const [billableTrips, setBillableTrips] = useState([])
+  const [collectibleTrips, setCollectibleTrips] = useState([])
   const [nextCursor, setNextCursor] = useState(null)
-  const [requests, setRequests] = useState([])
-  const [selectedRequestId, setSelectedRequestId] = useState('')
-  const [amount, setAmount] = useState('')
+  const [selectedTripIds, setSelectedTripIds] = useState([])
   const [method, setMethod] = useState('cash')
   const [externalRef, setExternalRef] = useState('')
   const [note, setNote] = useState('')
@@ -29,6 +63,9 @@ export default function PaymentLedgerPanel({ role, token, user }) {
   const [actionLoading, setActionLoading] = useState('')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [confirming, setConfirming] = useState(false)
+  const [rejectingPayment, setRejectingPayment] = useState(null)
+  const [rejectReason, setRejectReason] = useState('')
   const [receiptPaymentId, setReceiptPaymentId] = useState(null)
   const receiptTriggerRef = useRef(null)
 
@@ -36,52 +73,39 @@ export default function PaymentLedgerPanel({ role, token, user }) {
     if (append) setLoadingMore(true)
     else setLoading(true)
     try {
-      const endpoint = role === 'parent'
+      const endpoint = isParent
         ? `/api/payments/mine${before ? `?before=${encodeURIComponent(before)}` : ''}`
         : `/api/payments/driver?status=${encodeURIComponent(statusFilter)}${before ? `&before=${encodeURIComponent(before)}` : ''}`
       const response = await apiFetch(endpoint, {
         headers: { Authorization: `Bearer ${token}` },
       })
       setPayments((current) => append ? [...current, ...response.payments] : response.payments)
-      setSummary(response.summary)
-      setNextCursor(response.nextCursor)
+      setSummary(response.summary || {})
+      setNextCursor(response.nextCursor || null)
+      if (isParent) {
+        const trips = response.billableTrips || []
+        setBillableTrips(trips)
+        setSelectedTripIds((current) => current.filter((id) => (
+          trips.some((trip) => trip.requestId === id && trip.paymentStatus === 'unpaid')
+        )))
+      } else {
+        const trips = response.collectibleTrips || []
+        setCollectibleTrips(trips)
+        setSelectedTripIds((current) => current.filter((id) => trips.some((trip) => trip.requestId === id)))
+      }
+      setError('')
     } catch (loadError) {
-      setError(loadError.message || 'Unable to load payments.')
+      setError(getErrorMessage(loadError))
     } finally {
       setLoading(false)
       setLoadingMore(false)
     }
-  }, [role, statusFilter, token])
+  }, [isParent, statusFilter, token])
 
-  const loadRequests = useCallback(async () => {
-    try {
-      const endpoint = role === 'parent'
-        ? '/api/parents/van-requests'
-        : '/api/drivers/requests'
-      const response = await apiFetch(endpoint, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const ownRequests = (response.requests || []).filter((request) => (
-        role === 'parent'
-          ? Boolean(request.driver?._id || request.driver)
-          : String(request.driver?._id || request.driver || '') === String(user?._id || user?.id || '')
-            && ACTIVE_REQUEST_STATUSES.includes(request.status)
-      ))
-      setRequests(ownRequests)
-      setSelectedRequestId((current) => (
-        ownRequests.some((request) => requestId(request) === current)
-          ? current
-          : requestId(ownRequests[0])
-      ))
-    } catch (loadError) {
-      setError(loadError.message || 'Unable to load assigned requests.')
-    }
-  }, [role, token, user])
-
-  const refresh = useCallback(async (clearError = true) => {
-    if (clearError) setError('')
-    await Promise.all([loadPayments(), loadRequests()])
-  }, [loadPayments, loadRequests])
+  const refresh = useCallback(async (clearMessage = false) => {
+    if (clearMessage) setMessage('')
+    await loadPayments()
+  }, [loadPayments])
 
   useEffect(() => {
     refresh()
@@ -91,61 +115,86 @@ export default function PaymentLedgerPanel({ role, token, user }) {
     return () => window.clearInterval(intervalId)
   }, [refresh])
 
-  const runAction = async (key, action, successMessage) => {
-    setActionLoading(key)
-    setError('')
-    setMessage('')
-    try {
-      await action()
-      setMessage(successMessage)
-    } catch (actionError) {
-      setError(actionError.message || 'The payment action could not be completed.')
-    } finally {
-      await refresh(false)
-      setActionLoading('')
-    }
+  const selectableTrips = isParent
+    ? billableTrips.filter((trip) => trip.paymentStatus === 'unpaid')
+    : collectibleTrips
+  const selectedTrips = selectableTrips.filter((trip) => selectedTripIds.includes(trip.requestId))
+  const selectedAmount = selectedTrips.reduce((total, trip) => total + Number(trip.fare || 0), 0)
+
+  const toggleTrip = (tripId) => {
+    setSelectedTripIds((current) => current.includes(tripId)
+      ? current.filter((id) => id !== tripId)
+      : current.length < MAX_TRIPS_PER_PAYMENT ? [...current, tripId] : current)
+    setConfirming(false)
+  }
+
+  const selectAll = () => {
+    setSelectedTripIds(selectableTrips.slice(0, MAX_TRIPS_PER_PAYMENT).map((trip) => trip.requestId))
+    setConfirming(false)
   }
 
   const submitPayment = async (event) => {
     event.preventDefault()
-    const formAmount = Number(amount)
-    const body = role === 'parent'
-      ? {
-          vanRequestId: selectedRequestId,
-          amount: formAmount,
-          method,
-          ...(method === 'gcash' ? { externalRef: externalRef.trim() } : {}),
-          ...(note.trim() ? { note: note.trim() } : {}),
-        }
-      : {
-          vanRequestId: selectedRequestId,
-          amount: formAmount,
-          ...(note.trim() ? { note: note.trim() } : {}),
-        }
-    await runAction('submit', async () => {
-      await apiFetch(role === 'parent' ? '/api/payments' : '/api/payments/driver/record-cash', {
+    if (!selectedTripIds.length || actionLoading) return
+    if (!confirming) {
+      setConfirming(true)
+      return
+    }
+
+    setActionLoading('submit')
+    setError('')
+    setMessage('')
+    try {
+      const body = isParent
+        ? {
+            vanRequestIds: selectedTripIds,
+            method,
+            ...(method === 'gcash' ? { externalRef: externalRef.trim() } : {}),
+            ...(note.trim() ? { note: note.trim() } : {}),
+          }
+        : {
+            vanRequestIds: selectedTripIds,
+            ...(note.trim() ? { note: note.trim() } : {}),
+          }
+      await apiFetch(isParent ? '/api/payments' : '/api/payments/driver/record-cash', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: JSON.stringify(body),
       })
-      setAmount('')
+      setSelectedTripIds([])
       setExternalRef('')
       setNote('')
-    }, role === 'parent' ? 'Payment submitted for driver verification.' : 'Cash payment recorded and verified.')
+      setConfirming(false)
+      setMessage(isParent ? 'Payment submitted to your driver for verification.' : 'Cash payment recorded and verified.')
+    } catch (actionError) {
+      setError(getErrorMessage(actionError))
+    } finally {
+      await loadPayments()
+      setActionLoading('')
+    }
   }
 
-  const reviewPayment = (payment, action) => runAction(
-    `${action}-${payment._id}`,
-    async () => {
-      const body = action === 'reject' ? { rejectReason: 'Payment could not be confirmed.' } : {}
-      await apiFetch(`/api/payments/${payment._id}/${action}`, {
+  const reviewPayment = async (payment, action, reason = '') => {
+    const key = `${action}-${payment._id}`
+    setActionLoading(key)
+    setError('')
+    setMessage('')
+    try {
+      await apiFetch(`/api/payments/${encodeURIComponent(payment._id)}/${action}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
-        body: JSON.stringify(body),
+        ...(action === 'reject' ? { body: JSON.stringify({ rejectReason: reason }) } : {}),
       })
-    },
-    action === 'verify' ? 'Payment verified.' : 'Payment rejected.'
-  )
+      setMessage(action === 'verify' ? 'Payment verified.' : 'Payment rejected.')
+      setRejectingPayment(null)
+      setRejectReason('')
+    } catch (actionError) {
+      setError(getErrorMessage(actionError))
+    } finally {
+      await loadPayments()
+      setActionLoading('')
+    }
+  }
 
   const closeReceipt = useCallback(() => {
     setReceiptPaymentId(null)
@@ -153,220 +202,102 @@ export default function PaymentLedgerPanel({ role, token, user }) {
   }, [])
 
   return (
-    <section className="space-y-6" aria-labelledby="payments-heading">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <section className="space-y-6 pb-24 text-slate-900" aria-labelledby="payments-heading">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 id="payments-heading" className="text-xl font-semibold text-on-dark-primary">Payments</h2>
-          <p className="mt-1 text-sm text-on-dark-label">Manual payment tracking and verification. No payment gateway is used.</p>
+          <h2 id="payments-heading" className="text-xl font-semibold text-slate-900">
+            {isParent ? 'Payments' : 'Collections'}
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-slate-600">
+            {isParent
+              ? 'Pay completed trips directly to your driver. No payment gateway is used.'
+              : 'Review parent payments and record cash collected for completed trips.'}
+          </p>
         </div>
         <button
           type="button"
-          onClick={() => refresh()}
+          onClick={() => refresh(true)}
           disabled={loading || loadingMore || Boolean(actionLoading)}
-          className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-500 px-4 text-sm font-medium text-on-dark-primary outline-none hover:bg-white/10 focus-visible:ring-4 focus-visible:ring-blue-400 disabled:opacity-60"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 outline-none hover:bg-slate-50 focus-visible:ring-4 focus-visible:ring-blue-300 disabled:cursor-not-allowed disabled:bg-slate-100"
         >
-          <RefreshCw size={16} aria-hidden="true" className={loading ? 'animate-spin' : ''} />
+          <RefreshCw size={17} aria-hidden="true" className={loading ? 'animate-spin' : ''} />
           Refresh
         </button>
       </div>
 
-      {error && <p role="alert" className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>}
-      {message && <p role="status" className="rounded-lg border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800">{message}</p>}
-
+      {error && <MessageBox type="error" message={error} onRetry={() => refresh(true)} />}
+      {message && <MessageBox type="success" message={message} />}
       <PaymentReferenceVerifier token={token} />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {role === 'parent' ? (
-          <>
-            <SummaryCard label="Completed trips" value={summary.completedTrips ?? 0} />
-            <SummaryCard label="Total fees" value={formatMoney(summary.totalFees)} />
-            <SummaryCard label="Verified payments" value={formatMoney(summary.totalVerified)} />
-            <SummaryCard label="Outstanding balance" value={formatMoney(summary.outstanding)} />
-          </>
-        ) : (
-          <>
-            <SummaryCard label="Pending payments" value={summary.pendingCount ?? 0} />
-            <SummaryCard label="Pending amount" value={formatMoney(summary.pendingAmount)} />
-            <SummaryCard label="Verified today" value={summary.verifiedToday ?? 0} />
-            <SummaryCard label="Verified total" value={formatMoney(summary.verifiedTotal)} />
-          </>
-        )}
-      </div>
+      {isParent ? (
+        <ParentLedger
+          summary={summary}
+          trips={billableTrips}
+          selectableTrips={selectableTrips}
+          selectedTripIds={selectedTripIds}
+          selectedTrips={selectedTrips}
+          selectedAmount={selectedAmount}
+          method={method}
+          setMethod={setMethod}
+          externalRef={externalRef}
+          setExternalRef={setExternalRef}
+          note={note}
+          setNote={setNote}
+          toggleTrip={toggleTrip}
+          selectAll={selectAll}
+          submitPayment={submitPayment}
+          confirming={confirming}
+          cancelConfirm={() => setConfirming(false)}
+          sending={actionLoading === 'submit'}
+          payments={payments}
+          loading={loading}
+          nextCursor={nextCursor}
+          loadingMore={loadingMore}
+          loadMore={() => loadPayments(nextCursor, true)}
+          openReceipt={(payment, event) => {
+            receiptTriggerRef.current = event.currentTarget
+            setReceiptPaymentId(payment._id)
+          }}
+          paymentInfo={paymentInfo}
+        />
+      ) : (
+        <DriverLedger
+          summary={summary}
+          payments={payments}
+          trips={collectibleTrips}
+          selectedTripIds={selectedTripIds}
+          selectedTrips={selectedTrips}
+          selectedAmount={selectedAmount}
+          note={note}
+          setNote={setNote}
+          toggleTrip={toggleTrip}
+          selectAll={selectAll}
+          submitPayment={submitPayment}
+          confirming={confirming}
+          cancelConfirm={() => setConfirming(false)}
+          sending={actionLoading === 'submit'}
+          statusFilter={statusFilter}
+          setStatusFilter={(next) => {
+            setStatusFilter(next)
+            setNextCursor(null)
+          }}
+          loading={loading}
+          nextCursor={nextCursor}
+          loadingMore={loadingMore}
+          loadMore={() => loadPayments(nextCursor, true)}
+          reviewPayment={reviewPayment}
+          actionLoading={actionLoading}
+          rejectingPayment={rejectingPayment}
+          setRejectingPayment={setRejectingPayment}
+          rejectReason={rejectReason}
+          setRejectReason={setRejectReason}
+          openReceipt={(payment, event) => {
+            receiptTriggerRef.current = event.currentTarget
+            setReceiptPaymentId(payment._id)
+          }}
+        />
+      )}
 
-      <form onSubmit={submitPayment} className="space-y-4 rounded-xl border border-white/10 bg-slate-900/40 p-4">
-        <h3 className="font-semibold text-on-dark-primary">{role === 'parent' ? 'Submit a payment' : 'Record cash received'}</h3>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="space-y-1 text-sm text-on-dark-label">
-            <span>{role === 'parent' ? 'Assigned trip' : 'Active or completed trip'}</span>
-            <select
-              required
-              value={selectedRequestId}
-              onChange={(event) => setSelectedRequestId(event.target.value)}
-              className="min-h-11 w-full rounded-lg border border-slate-500 bg-slate-950 px-3 text-base text-on-dark-primary outline-none focus-visible:ring-4 focus-visible:ring-blue-400"
-            >
-              <option value="">Select a trip</option>
-              {requests.map((request) => (
-                <option key={request._id} value={request._id}>
-                  {request.studentName || 'Trip'}{request.schoolName ? ` - ${request.schoolName}` : ''}
-                  {role === 'parent' && request.driver?.fullName ? ` (${request.driver.fullName})` : ''}
-                </option>
-              ))}
-            </select>
-            {requests.length === 0 && (
-              <span className="block text-sm text-on-dark-label">
-                {role === 'parent'
-                  ? 'A trip with an assigned driver is required to submit a payment.'
-                  : 'No active or completed trips are assigned to this driver.'}
-              </span>
-            )}
-          </label>
-          <label className="space-y-1 text-sm text-on-dark-label">
-            <span>Amount (PHP)</span>
-            <input
-              type="number"
-              min="0.01"
-              max="50000"
-              step="0.01"
-              required
-              value={amount}
-              onChange={(event) => setAmount(event.target.value)}
-              className="min-h-11 w-full rounded-lg border border-slate-500 bg-slate-950 px-3 text-base text-on-dark-primary outline-none focus-visible:ring-4 focus-visible:ring-blue-400"
-            />
-          </label>
-          {role === 'parent' && (
-            <>
-              <label className="space-y-1 text-sm text-on-dark-label">
-                <span>Payment method</span>
-                <select
-                  value={method}
-                  onChange={(event) => setMethod(event.target.value)}
-                  className="min-h-11 w-full rounded-lg border border-slate-500 bg-slate-950 px-3 text-base text-on-dark-primary outline-none focus-visible:ring-4 focus-visible:ring-blue-400"
-                >
-                  <option value="cash">Cash</option>
-                  <option value="gcash">GCash</option>
-                </select>
-              </label>
-              {method === 'gcash' && (
-                <label className="space-y-1 text-sm text-on-dark-label">
-                  <span>GCash reference</span>
-                  <input
-                    required
-                    maxLength="40"
-                    value={externalRef}
-                    onChange={(event) => setExternalRef(event.target.value)}
-                    className="min-h-11 w-full rounded-lg border border-slate-500 bg-slate-950 px-3 text-base text-on-dark-primary outline-none focus-visible:ring-4 focus-visible:ring-blue-400"
-                  />
-                </label>
-              )}
-            </>
-          )}
-          <label className="space-y-1 text-sm text-on-dark-label sm:col-span-2">
-            <span>Note (optional)</span>
-            <input
-              maxLength="200"
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              className="min-h-11 w-full rounded-lg border border-slate-500 bg-slate-950 px-3 text-base text-on-dark-primary outline-none focus-visible:ring-4 focus-visible:ring-blue-400"
-            />
-          </label>
-        </div>
-        <button
-          type="submit"
-          disabled={!selectedRequestId || !amount || Boolean(actionLoading)}
-          className="min-h-11 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white outline-none hover:bg-blue-700 focus-visible:ring-4 focus-visible:ring-blue-300 disabled:opacity-60"
-        >
-          {actionLoading === 'submit' ? 'Saving…' : role === 'parent' ? 'Submit payment' : 'Record and verify cash'}
-        </button>
-      </form>
-
-      <div className="rounded-xl border border-white/10 bg-slate-900/40">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 p-4">
-          <h3 className="font-semibold text-on-dark-primary">Payment ledger</h3>
-          {role === 'driver' && (
-            <label className="flex items-center gap-2 text-sm text-on-dark-label">
-              Status
-              <select
-                value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value)}
-                className="min-h-11 rounded-lg border border-slate-500 bg-slate-950 px-2 text-base text-on-dark-primary outline-none focus-visible:ring-4 focus-visible:ring-blue-400"
-              >
-                {['all', 'pending', 'verified', 'rejected'].map((status) => (
-                  <option key={status} value={status}>{status[0].toUpperCase() + status.slice(1)}</option>
-                ))}
-              </select>
-            </label>
-          )}
-        </div>
-        {loading && payments.length === 0 ? (
-          <p className="p-4 text-sm text-on-dark-label">Loading payments…</p>
-        ) : payments.length === 0 ? (
-          <p className="p-4 text-sm text-on-dark-label">No payments to show.</p>
-        ) : (
-          <ul className="divide-y divide-white/10">
-            {payments.map((payment) => (
-              <li key={payment._id} className="flex flex-wrap items-center justify-between gap-3 p-4">
-                <div className="min-w-0">
-                  <p className="font-medium text-on-dark-primary">
-                    {formatMoney(payment.amount, payment.currency)} · {payment.method.toUpperCase()}
-                  </p>
-                  <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-300">
-                    <PaymentStatus status={payment.status} />
-                    {payment.referenceNo ? ` · ${payment.referenceNo}` : ''}
-                    {payment.createdAt ? ` · ${new Date(payment.createdAt).toLocaleString()}` : ''}
-                  </p>
-                  {payment.rejectReason && <p className="mt-1 text-sm text-red-300">{payment.rejectReason}</p>}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {payment.status === 'verified' && (
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        receiptTriggerRef.current = event.currentTarget
-                        setReceiptPaymentId(payment._id)
-                      }}
-                      className="min-h-11 rounded-lg border border-slate-300 px-3 text-sm font-semibold text-white outline-none focus-visible:ring-4 focus-visible:ring-blue-400"
-                    >
-                      View receipt
-                    </button>
-                  )}
-                  {role === 'driver' && payment.status === 'pending' && (
-                    <>
-                    <button
-                      type="button"
-                      onClick={() => reviewPayment(payment, 'verify')}
-                      disabled={Boolean(actionLoading)}
-                      className="min-h-11 rounded-lg bg-green-700 px-3 text-sm font-medium text-white outline-none focus-visible:ring-4 focus-visible:ring-green-300 disabled:opacity-60"
-                    >
-                      {actionLoading === `verify-${payment._id}` ? 'Verifying…' : 'Verify'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => reviewPayment(payment, 'reject')}
-                      disabled={Boolean(actionLoading)}
-                      className="min-h-11 rounded-lg border border-red-400 px-3 text-sm font-medium text-red-200 outline-none focus-visible:ring-4 focus-visible:ring-red-300 disabled:opacity-60"
-                    >
-                      {actionLoading === `reject-${payment._id}` ? 'Rejecting…' : 'Reject'}
-                    </button>
-                    </>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-        {nextCursor && (
-          <div className="border-t border-white/10 p-4">
-            <button
-              type="button"
-              onClick={() => loadPayments(nextCursor, true)}
-              disabled={loadingMore}
-              className="min-h-11 rounded-lg border border-slate-500 px-4 text-sm font-medium text-on-dark-primary outline-none focus-visible:ring-4 focus-visible:ring-blue-400 disabled:opacity-60"
-            >
-              {loadingMore ? 'Loading…' : 'Load more'}
-            </button>
-          </div>
-        )}
-      </div>
       {receiptPaymentId && (
         <PaymentReceipt paymentId={receiptPaymentId} token={token} onClose={closeReceipt} />
       )}
@@ -374,22 +305,524 @@ export default function PaymentLedgerPanel({ role, token, user }) {
   )
 }
 
-function PaymentStatus({ status }) {
-  const Icon = status === 'verified' ? CircleCheck : status === 'rejected' ? CircleX : Clock3
-  const label = status ? status[0].toUpperCase() + status.slice(1) : 'Pending'
+function ParentLedger({
+  summary,
+  trips,
+  selectableTrips,
+  selectedTripIds,
+  selectedTrips,
+  selectedAmount,
+  method,
+  setMethod,
+  externalRef,
+  setExternalRef,
+  note,
+  setNote,
+  toggleTrip,
+  selectAll,
+  submitPayment,
+  confirming,
+  cancelConfirm,
+  sending,
+  payments,
+  loading,
+  nextCursor,
+  loadingMore,
+  loadMore,
+  openReceipt,
+  paymentInfo: info,
+}) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-slate-500 bg-slate-900 px-2.5 py-1 text-sm font-medium text-white">
+    <>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <SummaryCard label="Billable trips" value={summary.billableTrips ?? 0} />
+        <SummaryCard label="Total fees" value={formatMoney(summary.totalFees)} />
+        <SummaryCard label="Paid" value={formatMoney(summary.paid)} />
+        <SummaryCard label="Awaiting verification" value={formatMoney(summary.awaiting)} />
+        <SummaryCard label="Outstanding" value={formatMoney(summary.outstanding)} />
+      </div>
+
+      <section className="space-y-4" aria-labelledby="trips-to-pay-title">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 id="trips-to-pay-title" className="text-lg font-semibold text-slate-900">Trips to pay</h3>
+            <p className="text-sm text-slate-600">Select up to {MAX_TRIPS_PER_PAYMENT} unpaid trips for one driver.</p>
+          </div>
+          <button
+            type="button"
+            onClick={selectAll}
+            disabled={!selectableTrips.length}
+            className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 outline-none hover:bg-slate-50 focus-visible:ring-4 focus-visible:ring-blue-300 disabled:cursor-not-allowed disabled:bg-slate-100"
+          >
+            Select all unpaid
+          </button>
+        </div>
+        {loading && !trips.length ? (
+          <PanelMessage>Loading billable trips…</PanelMessage>
+        ) : trips.length === 0 ? (
+          <PanelMessage>No completed billable trips yet.</PanelMessage>
+        ) : (
+          <ul className="grid min-w-0 gap-3 lg:grid-cols-2">
+            {trips.map((trip) => (
+              <li key={trip.requestId} className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start gap-3">
+                  {trip.paymentStatus === 'unpaid' ? (
+                    <label className="flex h-11 w-11 shrink-0 items-start justify-start pt-1" aria-label={`Select trip ${getTripLabel(trip)}`}>
+                      <input
+                        type="checkbox"
+                        checked={selectedTripIds.includes(trip.requestId)}
+                        onChange={() => toggleTrip(trip.requestId)}
+                        className="h-6 w-6 rounded border-slate-300 text-blue-700 focus-visible:ring-4 focus-visible:ring-blue-300"
+                      />
+                    </label>
+                  ) : <span className="w-6 shrink-0" aria-hidden="true" />}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <StatusChip status={trip.paymentStatus === 'pending' ? 'pending' : trip.paymentStatus === 'paid' ? 'verified' : 'unpaid'} />
+                      <p className="text-base font-semibold text-slate-900">{formatMoney(trip.fare)}</p>
+                    </div>
+                    <p className="mt-2 text-sm font-medium text-slate-900">{trip.schoolName || 'School not listed'}</p>
+                    {!!trip.studentNames?.length && <p className="mt-1 break-words text-sm text-slate-700">{trip.studentNames.join(', ')}</p>}
+                    <p className="mt-2 text-sm text-slate-600">
+                      {dateTimeInManila(trip.date)} · {trip.distanceKm == null ? 'Distance unavailable' : `${Number(trip.distanceKm).toFixed(2)} km`}
+                    </p>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="sticky bottom-[calc(64px+var(--safe-area-inset-bottom))] z-10 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-300 bg-white p-3 shadow-lg">
+          <p className="text-sm font-semibold text-slate-900">{selectedTrips.length} trips selected</p>
+          <p className="text-base font-bold text-slate-900">{formatMoney(selectedAmount)}</p>
+        </div>
+      </section>
+
+      <form onSubmit={submitPayment} className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h3 className="text-lg font-semibold text-slate-900">Submit payment</h3>
+        <p className="text-sm text-slate-600">Pay your driver directly. Payments are manually verified by your assigned driver.</p>
+        {hasPaymentValue(info.gcashAccountName) && hasPaymentValue(info.gcashNumber) && (
+          <p className="text-sm text-slate-700">
+            GCash: {info.gcashAccountName} · {info.gcashNumber}
+          </p>
+        )}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="space-y-1 text-sm font-medium text-slate-700">
+            <span>Payment method</span>
+            <select
+              value={method}
+              onChange={(event) => setMethod(event.target.value)}
+              className={inputClasses}
+            >
+              <option value="cash">Cash</option>
+              <option value="gcash">GCash</option>
+            </select>
+          </label>
+          {method === 'gcash' && (
+            <label className="space-y-1 text-sm font-medium text-slate-700">
+              <span>GCash reference number</span>
+              <input
+                required
+                maxLength={40}
+                value={externalRef}
+                onChange={(event) => setExternalRef(event.target.value)}
+                className={inputClasses}
+                placeholder="Enter the GCash transaction reference"
+              />
+            </label>
+          )}
+          <label className="space-y-1 text-sm font-medium text-slate-700 sm:col-span-2">
+            <span>Note (optional)</span>
+            <input
+              maxLength={200}
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              className={inputClasses}
+            />
+          </label>
+        </div>
+        {confirming ? (
+          <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-4" role="group" aria-label="Confirm payment">
+            <p className="text-base font-semibold text-slate-900">
+              Submit {formatMoney(selectedAmount)} for {selectedTrips.length} trips to your driver?
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button type="submit" disabled={sending || !selectedTrips.length} className={primaryButtonClasses}>
+                {sending ? 'Submitting…' : 'Confirm and submit'}
+              </button>
+              <button type="button" onClick={cancelConfirm} className={secondaryButtonClasses}>Back</button>
+            </div>
+          </div>
+        ) : (
+          <button type="submit" disabled={sending || !selectedTrips.length || (method === 'gcash' && !externalRef.trim())} className={primaryButtonClasses}>
+            Continue to confirmation
+          </button>
+        )}
+        <p className="text-sm leading-6 text-slate-600">
+          How fares work: first 2 km is PHP 50, then PHP 10 per additional km, rounded up to PHP 5, based on pickup-to-school distance.
+        </p>
+      </form>
+
+      <PaymentHistory
+        payments={payments}
+        role="parent"
+        loading={loading}
+        nextCursor={nextCursor}
+        loadingMore={loadingMore}
+        loadMore={loadMore}
+        openReceipt={openReceipt}
+      />
+    </>
+  )
+}
+
+function DriverLedger({
+  summary,
+  payments,
+  trips,
+  selectedTripIds,
+  selectedTrips,
+  selectedAmount,
+  note,
+  setNote,
+  toggleTrip,
+  selectAll,
+  submitPayment,
+  confirming,
+  cancelConfirm,
+  sending,
+  statusFilter,
+  setStatusFilter,
+  loading,
+  nextCursor,
+  loadingMore,
+  loadMore,
+  reviewPayment,
+  actionLoading,
+  rejectingPayment,
+  setRejectingPayment,
+  rejectReason,
+  setRejectReason,
+  openReceipt,
+}) {
+  return (
+    <>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <SummaryCard label="Awaiting verification" value={summary.pendingCount ?? 0} />
+        <SummaryCard label="Awaiting amount" value={formatMoney(summary.pendingAmount)} />
+        <SummaryCard label="Not yet collected" value={formatMoney(summary.uncollectedAmount)} />
+        <SummaryCard label="Verified today" value={summary.verifiedToday ?? 0} />
+        <SummaryCard label="Verified total" value={formatMoney(summary.verifiedTotal)} />
+      </div>
+
+      <section className="space-y-3" aria-labelledby="pending-payments-title">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 id="pending-payments-title" className="text-lg font-semibold text-slate-900">Pending payments</h3>
+          <div className="flex flex-wrap gap-2" aria-label="Filter payments by status">
+            {['all', 'pending', 'verified', 'rejected'].map((status) => (
+              <button
+                key={status}
+                type="button"
+                aria-pressed={statusFilter === status}
+                onClick={() => setStatusFilter(status)}
+                className={`min-h-11 rounded-full border px-3 text-sm font-semibold capitalize outline-none focus-visible:ring-4 focus-visible:ring-blue-300 ${
+                  statusFilter === status
+                    ? 'border-slate-900 bg-slate-900 text-white'
+                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
+        </div>
+        <PaymentHistory
+          payments={payments}
+          role="driver"
+          loading={loading}
+          nextCursor={nextCursor}
+          loadingMore={loadingMore}
+          loadMore={loadMore}
+          openReceipt={openReceipt}
+          reviewPayment={reviewPayment}
+          actionLoading={actionLoading}
+          rejectingPayment={rejectingPayment}
+          setRejectingPayment={setRejectingPayment}
+          rejectReason={rejectReason}
+          setRejectReason={setRejectReason}
+        />
+      </section>
+
+      <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="record-cash-title">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 id="record-cash-title" className="text-lg font-semibold text-slate-900">Record cash payment</h3>
+            <p className="text-sm text-slate-600">Choose completed, unpaid trips assigned to you.</p>
+          </div>
+          <button type="button" onClick={selectAll} disabled={!trips.length} className={secondaryButtonClasses}>
+            Select all unpaid
+          </button>
+        </div>
+        {loading && !trips.length ? (
+          <PanelMessage>Loading collectible trips…</PanelMessage>
+        ) : trips.length === 0 ? (
+          <PanelMessage>No completed unpaid trips are available to collect.</PanelMessage>
+        ) : (
+          <ul className="grid min-w-0 gap-3 lg:grid-cols-2">
+            {trips.map((trip) => (
+              <TripCheckbox
+                key={trip.requestId}
+                trip={trip}
+                checked={selectedTripIds.includes(trip.requestId)}
+                onChange={() => toggleTrip(trip.requestId)}
+              />
+            ))}
+          </ul>
+        )}
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="text-sm font-semibold text-slate-700">{selectedTrips.length} trips selected</p>
+          <p className="text-lg font-bold text-slate-900">{formatMoney(selectedAmount)}</p>
+        </div>
+        <form onSubmit={submitPayment} className="space-y-4">
+          <label className="block space-y-1 text-sm font-medium text-slate-700">
+            <span>Note (optional)</span>
+            <input maxLength={200} value={note} onChange={(event) => setNote(event.target.value)} className={inputClasses} />
+          </label>
+          {confirming ? (
+            <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-4">
+              <p className="text-base font-semibold text-slate-900">
+                Record {formatMoney(selectedAmount)} cash for {selectedTrips.length} trips?
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button type="submit" disabled={sending || !selectedTrips.length} className={primaryButtonClasses}>
+                  {sending ? 'Recording…' : 'Confirm cash received'}
+                </button>
+                <button type="button" onClick={cancelConfirm} className={secondaryButtonClasses}>Back</button>
+              </div>
+            </div>
+          ) : (
+            <button type="submit" disabled={sending || !selectedTrips.length} className={primaryButtonClasses}>
+              Continue to confirmation
+            </button>
+          )}
+        </form>
+      </section>
+    </>
+  )
+}
+
+function PaymentHistory({
+  payments,
+  role,
+  loading,
+  nextCursor,
+  loadingMore,
+  loadMore,
+  openReceipt,
+  reviewPayment,
+  actionLoading,
+  rejectingPayment,
+  setRejectingPayment,
+  rejectReason,
+  setRejectReason,
+}) {
+  return (
+    <section className="space-y-3" aria-labelledby={`${role}-payment-history-title`}>
+      <h3 id={`${role}-payment-history-title`} className="text-lg font-semibold text-slate-900">Payment history</h3>
+      {loading && !payments.length ? (
+        <PanelMessage>Loading payments…</PanelMessage>
+      ) : payments.length === 0 ? (
+        <PanelMessage>
+          {role === 'driver' ? 'No payments yet. Parents pay completed trips here.' : 'No payment history yet.'}
+        </PanelMessage>
+      ) : (
+        <ul className="space-y-3">
+          {payments.map((payment) => (
+            <li key={payment._id} className="min-w-0 space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <StatusChip status={payment.status} />
+                  <p className="mt-2 text-lg font-semibold text-slate-900">{formatMoney(payment.amount, payment.currency)}</p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {payment.method?.toUpperCase() || 'Payment'} · {dateTimeInManila(payment.createdAt)}
+                  </p>
+                  {payment.referenceNo && (
+                    <p className="mt-1 break-all text-sm font-medium text-slate-700">Reference: {payment.referenceNo}</p>
+                  )}
+                  {payment.parentName && <p className="mt-1 text-sm text-slate-700">Parent: {payment.parentName}</p>}
+                  {payment.externalRef && <p className="mt-1 break-all text-sm text-slate-700">GCash reference: {payment.externalRef}</p>}
+                  {payment.rejectReason && (
+                    <p className="mt-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+                      Rejection reason: {payment.rejectReason}
+                    </p>
+                  )}
+                </div>
+                {payment.status === 'verified' && (
+                  <button
+                    type="button"
+                    onClick={(event) => openReceipt(payment, event)}
+                    className={secondaryButtonClasses}
+                  >
+                    View receipt
+                  </button>
+                )}
+              </div>
+              {!!tripIdsForPayment(payment).length && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-sm font-semibold text-slate-700">Trips covered</p>
+                  <ul className="mt-2 space-y-2">
+                    {tripIdsForPayment(payment).map((trip, index) => (
+                      <li key={`${payment._id}-${index}`} className="flex flex-wrap justify-between gap-2 text-sm text-slate-700">
+                        <span className="min-w-0 break-words">{getTripLabel(trip)} · {dateTimeInManila(trip.date)}</span>
+                        <span className="font-semibold text-slate-900">{formatMoney(trip.fare, payment.currency)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {role === 'driver' && payment.status === 'pending' && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={Boolean(actionLoading)}
+                    onClick={() => reviewPayment(payment, 'verify')}
+                    className={primaryButtonClasses}
+                  >
+                    {actionLoading === `verify-${payment._id}` ? 'Verifying…' : 'Verify payment'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={Boolean(actionLoading)}
+                    onClick={() => {
+                      setRejectingPayment(payment._id)
+                      setRejectReason('')
+                    }}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-red-300 bg-white px-4 text-sm font-semibold text-red-800 outline-none hover:bg-red-50 focus-visible:ring-4 focus-visible:ring-red-300 disabled:bg-slate-100"
+                  >
+                    <CircleX size={17} aria-hidden="true" />
+                    Reject
+                  </button>
+                </div>
+              )}
+              {role === 'driver' && rejectingPayment === payment._id && (
+                <div className="space-y-3 rounded-lg border border-red-200 bg-red-50 p-4">
+                  <label className="block space-y-1 text-sm font-medium text-red-950">
+                    <span>Reason for rejection</span>
+                    <input
+                      autoFocus
+                      maxLength={200}
+                      required
+                      value={rejectReason}
+                      onChange={(event) => setRejectReason(event.target.value)}
+                      className={inputClasses}
+                    />
+                  </label>
+                  <p className="text-sm text-red-900">Confirm that this payment cannot be matched before rejecting it.</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={!rejectReason.trim() || Boolean(actionLoading)}
+                      onClick={() => reviewPayment(payment, 'reject', rejectReason.trim())}
+                      className="min-h-11 rounded-lg bg-red-700 px-4 text-sm font-semibold text-white outline-none hover:bg-red-800 focus-visible:ring-4 focus-visible:ring-red-300 disabled:bg-slate-400"
+                    >
+                      {actionLoading === `reject-${payment._id}` ? 'Rejecting…' : 'Confirm reject'}
+                    </button>
+                    <button type="button" onClick={() => setRejectingPayment(null)} className={secondaryButtonClasses}>Cancel</button>
+                  </div>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {nextCursor && (
+        <button type="button" onClick={loadMore} disabled={loadingMore} className={secondaryButtonClasses}>
+          {loadingMore ? 'Loading…' : 'Load more'}
+        </button>
+      )}
+    </section>
+  )
+}
+
+function TripCheckbox({ trip, checked, onChange }) {
+  return (
+    <li className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
+      <label className="flex min-h-11 items-start gap-3">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={onChange}
+          aria-label={`Select trip ${getTripLabel(trip)}`}
+          className="mt-0.5 h-6 w-6 shrink-0 rounded border-slate-300 text-blue-700 focus-visible:ring-4 focus-visible:ring-blue-300"
+        />
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-start justify-between gap-2">
+            <span className="text-sm font-semibold text-slate-900">{trip.schoolName || 'School not listed'}</span>
+            <span className="text-sm font-semibold text-slate-900">{formatMoney(trip.fare)}</span>
+          </span>
+          {!!trip.studentNames?.length && <span className="mt-1 block break-words text-sm text-slate-700">{trip.studentNames.join(', ')}</span>}
+          <span className="mt-1 block text-sm text-slate-600">{dateTimeInManila(trip.date)}</span>
+        </span>
+      </label>
+    </li>
+  )
+}
+
+function SummaryCard({ label, value }) {
+  return (
+    <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <p className="text-sm font-medium text-slate-600">{label}</p>
+      <p className="mt-2 break-words text-lg font-bold text-slate-900">{value}</p>
+    </div>
+  )
+}
+
+function StatusChip({ status }) {
+  const verified = status === 'verified'
+  const rejected = status === 'rejected'
+  const unpaid = status === 'unpaid'
+  const Icon = verified || unpaid ? (unpaid ? Clock3 : CircleCheck) : rejected ? CircleX : Clock3
+  const label = unpaid ? 'Unpaid' : status === 'pending' ? 'Awaiting verification' : verified ? 'Paid' : rejected ? 'Rejected' : 'Pending'
+  const styles = rejected
+    ? 'border-red-300 bg-red-50 text-red-900'
+    : verified
+      ? 'border-green-300 bg-green-50 text-green-900'
+      : 'border-amber-300 bg-amber-50 text-amber-950'
+  return (
+    <span className={`inline-flex min-h-7 items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm font-semibold ${styles}`}>
       <Icon size={16} aria-hidden="true" />
       {label}
     </span>
   )
 }
 
-function SummaryCard({ label, value }) {
+function PanelMessage({ children }) {
+  return <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600">{children}</p>
+}
+
+function MessageBox({ type, message, onRetry }) {
+  const error = type === 'error'
   return (
-    <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
-      <p className="text-sm text-on-dark-label">{label}</p>
-      <p className="mt-2 text-lg font-semibold text-on-dark-primary">{value}</p>
+    <div
+      role={error ? 'alert' : 'status'}
+      className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4 text-sm leading-6 ${
+        error ? 'border-red-300 bg-red-50 text-red-900' : 'border-green-300 bg-green-50 text-green-900'
+      }`}
+    >
+      <p className="flex min-w-0 items-start gap-2">
+        {error ? <TriangleAlert size={18} aria-hidden="true" className="mt-1 shrink-0" /> : <BadgeCheck size={18} aria-hidden="true" className="mt-1 shrink-0" />}
+        <span className="break-words">{message}</span>
+      </p>
+      {onRetry && (
+        <button type="button" onClick={onRetry} className={secondaryButtonClasses}>
+          Retry
+        </button>
+      )}
     </div>
   )
 }
+
+const inputClasses = 'min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-900 placeholder:text-slate-500 outline-none focus-visible:border-blue-600 focus-visible:ring-4 focus-visible:ring-blue-200'
+const primaryButtonClasses = 'inline-flex min-h-11 items-center justify-center rounded-lg bg-blue-700 px-4 text-sm font-semibold text-white outline-none hover:bg-blue-800 focus-visible:ring-4 focus-visible:ring-blue-300 disabled:cursor-not-allowed disabled:bg-slate-400'
+const secondaryButtonClasses = 'inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 outline-none hover:bg-slate-50 focus-visible:ring-4 focus-visible:ring-blue-300 disabled:cursor-not-allowed disabled:bg-slate-100'

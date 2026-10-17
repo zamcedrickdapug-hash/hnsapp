@@ -14,12 +14,12 @@ const dateTimeInManila = (value) => {
   }).format(date)
 }
 
-const formatAmount = (value, currency = 'PHP') => new Intl.NumberFormat('en-PH', {
-  style: 'currency',
-  currency,
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-}).format(Number(value) || 0)
+const formatAmount = (value, currency = 'PHP') => (
+  `${currency} ${new Intl.NumberFormat('en-PH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(value) || 0)}`
+)
 
 export default function PaymentReceipt({ paymentId, token, onClose }) {
   const dialogRef = useRef(null)
@@ -137,11 +137,37 @@ export default function PaymentReceipt({ paymentId, token, onClose }) {
               <ReceiptField label="Parent" value={receipt.parentName || 'Not available'} />
               <ReceiptField label="Driver" value={receipt.driverName || 'Not available'} />
               {receipt.plateNumber && <ReceiptField label="Plate number" value={receipt.plateNumber} />}
-              {receipt.studentNames?.length > 0 && (
+              {!receipt.trips?.length && receipt.studentNames?.length > 0 && (
                 <ReceiptField label="Students" value={receipt.studentNames.join(', ')} />
               )}
-              {receipt.schoolName && <ReceiptField label="School" value={receipt.schoolName} />}
+              {!receipt.trips?.length && receipt.schoolName && <ReceiptField label="School" value={receipt.schoolName} />}
             </dl>
+
+            {!!receipt.trips?.length && (
+              <section className="space-y-3" aria-labelledby="receipt-trips-title">
+                <h3 id="receipt-trips-title" className="text-lg font-semibold text-slate-950">Trips covered</h3>
+                <ul className="space-y-3">
+                  {receipt.trips.map((trip, index) => (
+                    <li key={`${trip.date || 'trip'}-${index}`} className="rounded-lg border border-slate-300 bg-white p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="break-words font-semibold text-slate-950">{trip.schoolName || 'School not listed'}</p>
+                          {trip.studentNames?.length > 0 && (
+                            <p className="mt-1 break-words text-sm text-slate-700">{trip.studentNames.join(', ')}</p>
+                          )}
+                          <p className="mt-1 text-sm text-slate-600">{dateTimeInManila(trip.date)}</p>
+                        </div>
+                        <p className="font-semibold text-slate-950">{formatAmount(trip.fare, receipt.currency)}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex justify-between gap-3 border-t border-slate-300 pt-3 text-base font-bold text-slate-950">
+                  <span>Total</span>
+                  <span>{formatAmount(receipt.total ?? receipt.amount, receipt.currency)}</span>
+                </div>
+              </section>
+            )}
 
             <p className="border-t border-slate-300 pt-4 text-center text-sm leading-relaxed text-slate-700">
               This reference number can be verified in the app.

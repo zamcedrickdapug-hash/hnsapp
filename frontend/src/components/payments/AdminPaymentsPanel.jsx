@@ -4,12 +4,12 @@ import { apiFetch } from '../../api'
 
 const STATUSES = ['pending', 'verified', 'rejected']
 
-const formatMoney = (amount, currency = 'PHP') => new Intl.NumberFormat('en-PH', {
-  style: 'currency',
-  currency,
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-}).format(Number(amount) || 0)
+const formatMoney = (amount, currency = 'PHP') => (
+  `${currency} ${new Intl.NumberFormat('en-PH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(amount) || 0)}`
+)
 
 const dateTimeInManila = (value) => {
   if (!value) return 'Not available'
@@ -56,10 +56,14 @@ export default function AdminPaymentsPanel({ token }) {
 
   useEffect(() => {
     loadPayments()
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') loadPayments()
+    }, 30_000)
+    return () => window.clearInterval(intervalId)
   }, [loadPayments])
 
   return (
-    <section className="space-y-6 text-slate-950" aria-labelledby="admin-payments-title">
+    <section className="space-y-6 pb-24 text-slate-950" aria-labelledby="admin-payments-title">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 id="admin-payments-title" className="text-xl font-semibold text-slate-900">Payments</h2>

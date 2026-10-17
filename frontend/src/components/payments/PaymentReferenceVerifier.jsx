@@ -15,12 +15,12 @@ const dateTimeInManila = (value) => {
   }).format(date)
 }
 
-const formatAmount = (amount, currency = 'PHP') => new Intl.NumberFormat('en-PH', {
-  style: 'currency',
-  currency,
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-}).format(Number(amount) || 0)
+const formatAmount = (amount, currency = 'PHP') => (
+  `${currency} ${new Intl.NumberFormat('en-PH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(amount) || 0)}`
+)
 
 export default function PaymentReferenceVerifier({ token }) {
   const [referenceNo, setReferenceNo] = useState('')
@@ -55,10 +55,10 @@ export default function PaymentReferenceVerifier({ token }) {
   }
 
   return (
-    <section className="space-y-4 rounded-xl border border-slate-700 bg-slate-900 p-4 text-slate-50" aria-labelledby="reference-verifier-title">
+    <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 text-slate-900 shadow-sm" aria-labelledby="reference-verifier-title">
       <div>
-        <h3 id="reference-verifier-title" className="text-lg font-semibold">Verify a reference number</h3>
-        <p className="mt-1 text-sm text-slate-300">Format: HNS-YYYYMMDD-XXXXXX</p>
+        <h3 id="reference-verifier-title" className="text-lg font-semibold text-slate-900">Verify a reference number</h3>
+        <p className="mt-1 text-sm text-slate-600">Format: HNS-YYYYMMDD-XXXXXX</p>
       </div>
       <form onSubmit={verify} className="flex flex-col gap-3 sm:flex-row">
         <label className="sr-only" htmlFor="payment-reference-input">Payment reference number</label>
@@ -76,12 +76,12 @@ export default function PaymentReferenceVerifier({ token }) {
           maxLength={20}
           autoCapitalize="characters"
           autoComplete="off"
-          className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-500 bg-slate-950 px-3 text-base text-white placeholder:text-slate-400 outline-none focus-visible:ring-4 focus-visible:ring-blue-400"
+          className="min-h-11 min-w-0 w-full flex-1 rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-900 placeholder:text-slate-500 outline-none focus-visible:border-blue-600 focus-visible:ring-4 focus-visible:ring-blue-200"
         />
         <button
           type="submit"
           disabled={loading || !referenceNo.trim()}
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white outline-none hover:bg-blue-700 focus-visible:ring-4 focus-visible:ring-blue-300 disabled:opacity-60"
+          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 text-sm font-semibold text-white outline-none hover:bg-blue-800 focus-visible:ring-4 focus-visible:ring-blue-300 disabled:cursor-not-allowed disabled:bg-slate-400 sm:w-auto"
         >
           <Search size={18} aria-hidden="true" />
           {loading ? 'Checking…' : 'Verify reference'}
@@ -89,19 +89,19 @@ export default function PaymentReferenceVerifier({ token }) {
       </form>
 
       {error && (
-        <p role="alert" className="flex items-start gap-2 rounded-lg border border-red-400 bg-red-950/40 p-3 text-sm text-red-100">
+        <p role="alert" className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900">
           <TriangleAlert size={18} aria-hidden="true" className="mt-0.5 shrink-0" />
           {error}
         </p>
       )}
       {notFound && (
-        <p role="status" className="flex items-start gap-2 rounded-lg border border-amber-400 bg-amber-950/40 p-3 text-sm text-amber-100">
+        <p role="status" className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
           <TriangleAlert size={18} aria-hidden="true" className="mt-0.5 shrink-0" />
           Reference not found or not verified.
         </p>
       )}
       {result?.valid && (
-        <div role="status" className="space-y-2 rounded-lg border border-green-400 bg-green-950/40 p-4 text-sm text-green-50">
+        <div role="status" className="space-y-2 rounded-lg border border-green-300 bg-green-50 p-4 text-sm text-green-950">
           <p className="flex items-center gap-2 font-semibold">
             <BadgeCheck size={19} aria-hidden="true" />
             Valid verified payment
