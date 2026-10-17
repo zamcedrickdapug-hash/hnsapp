@@ -98,7 +98,7 @@ export default function LiveTripGoogleMap({
           style={{ width: '100%', height: '100%' }}
           defaultCenter={van || mapCenter || target || DEFAULT_CENTER}
           defaultZoom={15}
-          mapId="DEMO_MAP_ID"
+          mapId={import.meta.env.VITE_GOOGLE_MAP_ID || 'DEMO_MAP_ID'}
           gestureHandling="greedy"
           disableDefaultUI
         >
