@@ -869,17 +869,12 @@ export default function DriverDashboard({ token, user, onLogout }) {
 	}, [acceptedRequests, selectedRequestId])
 
 	useEffect(() => {
-		const arrivalPhase = selectedTrip?.status === 'arrived'
-			? 'pickup'
-			: selectedTrip?.status === 'arrived_at_school'
-				? 'school'
-				: ''
-		if (!arrivalPhase) {
+		if (selectedTrip?.status !== 'arrived') {
 			locallyStoppedAfterArrivalRef.current = ''
 			return
 		}
 
-		const arrivalKey = `${selectedTrip._id}:${arrivalPhase}`
+		const arrivalKey = `${selectedTrip._id}:arrived`
 		if (
 			locallyStoppedAfterArrivalRef.current === arrivalKey ||
 			!['Active', 'Preparing'].includes(gpsStatus)

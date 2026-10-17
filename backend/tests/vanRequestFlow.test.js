@@ -65,7 +65,6 @@ const createFixture = async (t) => {
   const vehicles = new Map();
   const emitted = [];
   const notifications = [];
-  const schoolArrivalNotifications = [];
   const plainUser = (user) => {
     if (!user) return null;
     return {
@@ -284,7 +283,7 @@ const createFixture = async (t) => {
       notifyParentArrivalAtPickup: noOpNotification,
       notifyParentStudentPickedUp: noOpNotification,
       notifyParentHeadingToSchool: noOpNotification,
-      notifyParentArrivedAtSchool: async (...args) => { schoolArrivalNotifications.push(args); },
+      notifyParentArrivedAtSchool: noOpNotification,
       clearNotificationsForRequest: noOpNotification,
     },
     '../services/driverService': driverService,
@@ -351,7 +350,7 @@ const createFixture = async (t) => {
     };
   };
 
-  return { parent, driverOne, driverTwo, users, requests, statuses, vehicles, emitted, notifications, schoolArrivalNotifications, addVehicle, request };
+  return { parent, driverOne, driverTwo, users, requests, statuses, vehicles, emitted, notifications, addVehicle, request };
 };
 
 const createRequest = (fixture, data = {}) => fixture.request('/api/parents/van-requests', fixture.parent, {
@@ -464,70 +463,6 @@ test('booking rejects saved student pickup coordinates outside all service zones
 
   assert.equal(result.status, 400);
   assert.equal(result.body.message, 'Outside our service area');
-});
-
-test('location updates auto-arrive at school once and do not auto-arrive far from pickup', async (t) => {
-  const f = await createFixture(t);
-  const create = await createRequest(f);
-  const requestId = create.body.request._id;
-  f.addVehicle(f.driverOne, 'ONE-SCHOOL-ARRIVAL');
-  await setOnline(f, f.driverOne);
-
-  const accepted = await f.request(`/api/drivers/requests/${requestId}/accept`, f.driverOne, { method: 'PATCH' });
-  assert.equal(accepted.status, 200);
-
-  const farFromPickup = await f.request(`/api/drivers/requests/${requestId}/location`, f.driverOne, {
-    method: 'PATCH',
-    body: { latitude: 14.8, longitude: 121.2 },
-  });
-  assert.equal(farFromPickup.status, 200);
-  assert.equal(farFromPickup.body.request.status, 'accepted');
-  assert.equal(f.schoolArrivalNotifications.length, 0);
-
-  const pickupArrival = await f.request(`/api/drivers/requests/${requestId}/location`, f.driverOne, {
-    method: 'PATCH',
-    body: { latitude: 14.71181, longitude: 121.06791 },
-  });
-  assert.equal(pickupArrival.body.request.status, 'arrived');
-
-  const pickedUp = await f.request(`/api/drivers/requests/${requestId}/picked-up`, f.driverOne, { method: 'PATCH' });
-  assert.equal(pickedUp.body.request.status, 'picked_up');
-
-  const schoolArrival = await f.request(`/api/drivers/requests/${requestId}/location`, f.driverOne, {
-    method: 'PATCH',
-    body: { latitude: 14.6, longitude: 121.0 },
-  });
-  assert.equal(schoolArrival.status, 200);
-  assert.equal(schoolArrival.body.request.status, 'arrived_at_school');
-  assert.ok(schoolArrival.body.request.arrivedAtSchoolAt);
-  assert.deepEqual(schoolArrival.body.request.liveLocation, {
-    latitude: 14.6,
-    longitude: 121.0,
-    updatedAt: schoolArrival.body.request.liveLocation.updatedAt,
-  });
-  assert.equal(f.schoolArrivalNotifications.length, 1);
-  assert.ok(f.emitted.some((event) =>
-    event.room === `user:${f.parent._id}` &&
-    event.event === 'trip:request-updated' &&
-    event.payload.request.status === 'arrived_at_school'
-  ));
-  assert.ok(f.emitted.some((event) =>
-    event.room === `user:${f.driverOne._id}` &&
-    event.event === 'trip:request-updated' &&
-    event.payload.request.status === 'arrived_at_school'
-  ));
-  assert.ok(f.emitted.some((event) =>
-    event.room === `user:${f.parent._id}` &&
-    event.event === 'trip:location-updated' &&
-    event.payload.status === 'arrived_at_school'
-  ));
-
-  const duplicateArrival = await f.request(`/api/drivers/requests/${requestId}/location`, f.driverOne, {
-    method: 'PATCH',
-    body: { latitude: 14.6, longitude: 121.0 },
-  });
-  assert.equal(duplicateArrival.status, 409);
-  assert.equal(f.schoolArrivalNotifications.length, 1);
 });
 
 test('rejecting a searching request excludes that driver but leaves it available to others', async (t) => {
