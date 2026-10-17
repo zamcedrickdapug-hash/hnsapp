@@ -167,7 +167,7 @@ h4 {
 
   .mobile-bottom-nav__sheet {
     padding-right: calc(16px + var(--safe-area-inset-right));
-    padding-bottom: calc(64px + var(--safe-area-inset-bottom) + 12px);
+    padding-bottom: 12px;
     padding-left: calc(16px + var(--safe-area-inset-left));
   }
 
@@ -179,6 +179,60 @@ h4 {
   select,
   textarea {
     font-size: 16px !important;
+  }
+
+  .trip-messages-layout {
+    height: calc(100dvh - 56px - 64px - var(--safe-area-inset-top) - var(--safe-area-inset-bottom));
+    min-height: 0;
+    margin-top: -16px;
+    margin-bottom: -16px;
+    border-radius: 0;
+  }
+
+  .trip-messages-layout > aside {
+    min-height: 0;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .trip-messages-layout > aside > div:first-child {
+    flex: 0 0 auto;
+  }
+
+  .trip-messages-layout > aside > div:nth-child(2) {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .trip-messages-layout > aside button {
+    height: auto;
+    min-height: 72px;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .trip-messages-conversation {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .trip-messages-conversation__header {
+    flex: 0 0 auto;
+  }
+
+  .trip-messages-conversation > form {
+    flex: 0 0 auto;
+  }
+
+  .trip-messages-composer__footer > * {
+    min-width: 0;
+  }
+
+  .mobile-bottom-nav__label {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
   }
 
   .notifications-container {

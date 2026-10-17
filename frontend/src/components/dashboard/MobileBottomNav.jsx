@@ -6,6 +6,27 @@ import {
   SECONDARY_NAVIGATION,
 } from '../../constants/dashboardNavigation'
 
+const MOBILE_LABELS = {
+  parent: {
+    dashboard: 'Home',
+    trips: 'Trips',
+    messages: 'Chat',
+    notifications: 'Alerts',
+  },
+  driver: {
+    dashboard: 'Home',
+    requests: 'Requests',
+    messages: 'Chat',
+    trips: 'Trips',
+  },
+  admin: {
+    dashboard: 'Home',
+    users: 'Users',
+    applications: 'Applicants',
+    issues: 'Issues',
+  },
+}
+
 function MobileBottomNav({
   role,
   currentPage,
@@ -57,7 +78,7 @@ function MobileBottomNav({
         aria-current={active ? 'page' : undefined}
         aria-expanded={item.id === 'more' ? moreOpen : undefined}
         aria-controls={item.id === 'more' ? 'mobile-more-sheet' : undefined}
-        className={`mobile-bottom-nav__slot relative flex h-16 min-w-[44px] flex-1 flex-col items-center justify-center gap-1 px-1 text-xs font-semibold ${
+        className={`mobile-bottom-nav__slot relative flex h-16 min-w-[44px] flex-1 flex-col items-center justify-center gap-1 px-1 text-center text-xs font-semibold ${
           active ? 'mobile-bottom-nav__slot--active' : 'text-slate-200'
         }`}
       >
@@ -70,7 +91,9 @@ function MobileBottomNav({
             </span>
           )}
         </span>
-        <span className="max-w-full truncate leading-tight">{item.label}</span>
+        <span className="mobile-bottom-nav__label max-w-full leading-tight">
+          {item.id === 'more' ? item.label : MOBILE_LABELS[normalizedRole]?.[item.id] || item.label}
+        </span>
       </button>
     )
   }
@@ -96,7 +119,7 @@ function MobileBottomNav({
             role="dialog"
             aria-modal="true"
             aria-label="More navigation"
-            className="mobile-bottom-nav__sheet fixed inset-x-0 bottom-0 z-[45] max-h-[min(75dvh,640px)] overflow-y-auto rounded-t-2xl border-t border-slate-700 bg-slate-900 px-4 pt-3 text-slate-50 shadow-2xl md:hidden"
+            className="mobile-bottom-nav__sheet fixed inset-x-0 bottom-[calc(64px+var(--safe-area-inset-bottom))] z-[45] max-h-[min(75dvh,640px)] overflow-y-auto rounded-t-2xl border-t border-slate-700 bg-slate-900 px-4 pt-3 text-slate-50 shadow-2xl md:hidden"
           >
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-500" aria-hidden="true" />
             <h2 className="mb-2 px-2 text-base font-semibold">More</h2>

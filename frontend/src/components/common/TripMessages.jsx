@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { MessageCircle, Send } from 'lucide-react'
+import { ArrowLeft, MessageCircle, Send } from 'lucide-react'
 import { apiFetch } from '../../api'
 import { useSocketEvent } from '../../hooks/useSocket'
 
@@ -207,7 +207,9 @@ export default function TripMessages({
     const composer = composerRef.current
     if (!composer) return
     composer.style.height = 'auto'
-    composer.style.height = `${Math.min(composer.scrollHeight, 120)}px`
+    const lineHeight = Number.parseFloat(window.getComputedStyle(composer).lineHeight) || 24
+    const maxHeight = lineHeight * 5 + 16
+    composer.style.height = `${Math.min(composer.scrollHeight, maxHeight)}px`
   }, [draft])
 
   const markSelectedThreadRead = useCallback(async (requestId) => {
@@ -365,8 +367,10 @@ export default function TripMessages({
   }
 
   return (
-    <section className="grid h-[min(68vh,680px)] min-h-[400px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm md:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.6fr)] md:grid-rows-1">
-      <aside className="flex max-h-[140px] min-h-0 flex-col border-b border-gray-200 bg-gray-50 md:max-h-none md:border-b-0 md:border-r">
+    <section className="trip-messages-layout grid h-[min(68vh,680px)] min-h-[400px] grid-rows-[minmax(0,1fr)] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm md:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.6fr)] md:grid-rows-1">
+      <aside className={`flex min-h-0 flex-col border-b border-gray-200 bg-gray-50 md:border-b-0 md:border-r ${
+        selectedThread ? 'hidden md:flex' : 'flex'
+      }`}>
         <div className="border-b border-gray-200 px-4 py-4">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
             <MessageCircle size={19} aria-hidden="true" />
@@ -394,8 +398,9 @@ export default function TripMessages({
                   key={thread.requestId}
                   type="button"
                   onClick={() => setSelectedRequestId(String(thread.requestId))}
-                  className={`flex w-full min-w-0 flex-col gap-1 border-b border-gray-200 px-4 py-3 text-left transition-colors ${
-                    isSelected ? 'bg-blue-50' : 'hover:bg-white'
+                  aria-pressed={isSelected}
+                  className={`flex min-h-[72px] w-full min-w-0 flex-col gap-1 border-b border-gray-200 px-4 py-3 text-left transition-colors md:min-h-0 ${
+                    isSelected ? 'bg-blue-100 ring-2 ring-inset ring-blue-500 md:bg-blue-50 md:ring-0' : 'hover:bg-white'
                   }`}
                 >
                   <div className="flex w-full min-w-0 items-center justify-between gap-2">
@@ -406,16 +411,16 @@ export default function TripMessages({
                       {thread.lastMessage?.createdAt ? formatThreadTime(thread.lastMessage.createdAt) : ''}
                     </span>
                   </div>
-                  <p className="block w-full min-w-0 truncate text-sm text-gray-600">
+                  <p className="block w-full min-w-0 break-words text-sm text-gray-600">
                     {thread.studentName || 'Student'} · {thread.schoolName || 'School'}
                   </p>
-                  <div className="flex w-full min-w-0 items-center gap-2">
-                    <p className="block min-w-0 flex-1 truncate text-sm text-gray-600">
+                  <div className="flex w-full min-w-0 flex-wrap items-start gap-x-2 gap-y-1">
+                    <p className="min-w-0 flex-1 whitespace-normal break-words text-sm text-gray-600 md:truncate">
                       {thread.lastMessage?.text
                         ? `${previewSender || 'Message'}: ${thread.lastMessage.text}`
                         : 'No messages yet'}
                     </p>
-                    <div className="flex min-w-0 shrink-0 items-center gap-1">
+                    <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-1 md:flex-nowrap">
                       {statusLabel && (
                         <span className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-sm font-semibold ${
                         statusLabel === 'Active'
@@ -450,14 +455,26 @@ export default function TripMessages({
         </div>
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-col">
+      <div className={`trip-messages-conversation min-h-0 min-w-0 flex-col ${
+        selectedThread ? 'flex' : 'hidden md:flex'
+      }`}>
         {selectedThread ? (
           <>
-            <header className="border-b border-gray-200 px-4 py-3">
-              <h3 className="font-semibold text-gray-900">{selectedThread.otherParty?.name || (role === 'parent' ? 'Driver' : 'Parent')}</h3>
-              <p className="mt-0.5 text-sm text-gray-600">
+            <header className="trip-messages-conversation__header sticky top-0 z-10 flex min-w-0 items-center gap-2 border-b border-gray-200 bg-white px-3 py-2 md:px-4 md:py-3">
+              <button
+                type="button"
+                onClick={() => setSelectedRequestId('')}
+                aria-label="Back to conversations"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-700 hover:bg-gray-100 md:hidden"
+              >
+                <ArrowLeft size={22} aria-hidden="true" />
+              </button>
+              <div className="min-w-0 flex-1">
+                <h3 className="truncate font-semibold text-gray-900">{selectedThread.otherParty?.name || (role === 'parent' ? 'Driver' : 'Parent')}</h3>
+                <p className="mt-0.5 truncate text-sm text-gray-600">
                 {[selectedThread.studentName, selectedThread.schoolName].filter(Boolean).join(' · ')}
-              </p>
+                </p>
+              </div>
             </header>
 
             <div ref={listRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-gray-50 p-4">
@@ -516,12 +533,12 @@ export default function TripMessages({
                     rows={2}
                     maxLength={500}
                     placeholder="Write a message..."
-                    className="min-h-12 w-full min-w-0 flex-1 resize-none overflow-y-auto rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    className="trip-messages-composer min-h-12 w-full min-w-0 resize-none overflow-y-auto rounded-lg border border-gray-300 px-3 py-2 text-base text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   />
-                  <div className="box-border flex w-full min-w-0 items-center justify-between gap-2">
-                    <span className="shrink-0 text-sm text-gray-600">{draft.length}/500</span>
+                  <div className="trip-messages-composer__footer box-border flex w-full min-w-0 items-center gap-3">
+                    <span className="min-w-0 flex-1 text-sm text-gray-600">{draft.length}/500</span>
                     <p
-                      className="min-w-0 flex-1 truncate text-sm text-gray-600"
+                      className="hidden min-w-0 flex-1 truncate text-sm text-gray-600 sm:block"
                       title="Enter to send, Shift+Enter for a new line"
                     >
                       Enter to send, Shift+Enter for a new line
@@ -529,7 +546,7 @@ export default function TripMessages({
                     <button
                       type="submit"
                       disabled={!draft.trim() || sending}
-                      className="inline-flex h-10 max-w-full shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-blue-700 px-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-50 sm:px-3"
+                      className="inline-flex h-11 min-w-[96px] max-w-full flex-[0_0_auto] items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-blue-700 px-3 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-50"
                     >
                       <Send size={16} aria-hidden="true" />
                       <span>{sending ? 'Sending...' : 'Send'}</span>
