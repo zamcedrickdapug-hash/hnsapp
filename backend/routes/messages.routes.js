@@ -205,8 +205,14 @@ router.post('/threads/:requestId/messages', messageRateLimit, async (req, res) =
     const serializedMessage = serializeMessage(message);
     const payload = { message: serializedMessage, requestId: idString(request._id) };
     const io = getIo();
-    io.to(buildUserRoomName(request.parent)).emit('trip:message', payload);
-    io.to(buildUserRoomName(request.driver)).emit('trip:message', payload);
+    if (io) {
+      try {
+        io.to(buildUserRoomName(request.parent)).emit('trip:message', payload);
+        io.to(buildUserRoomName(request.driver)).emit('trip:message', payload);
+      } catch (error) {
+        console.error('[Messages] Failed to emit message:', error.name || 'UnknownError');
+      }
+    }
 
     return res.status(201).json({ message: serializedMessage });
   } catch (error) {

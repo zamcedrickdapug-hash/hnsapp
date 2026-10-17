@@ -73,7 +73,7 @@ class FakeQuery {
   }
 }
 
-const createFixture = async (t) => {
+const createFixture = async (t, { socketUnavailable = false } = {}) => {
   const users = new Map();
   const requests = new Map();
   const messages = new Map();
@@ -157,7 +157,7 @@ const createFixture = async (t) => {
     '../models/User': User,
     '../middleware/auth': auth,
     '../socket': {
-      getIo: () => ({
+      getIo: () => socketUnavailable ? null : ({
         to: (room) => ({ emit: (event, payload) => emitted.push({ room, event, payload }) }),
       }),
       buildUserRoomName: (id) => `user:${idString(id)}`,
@@ -300,6 +300,21 @@ test('parent and assigned driver can chat, page oldest-first, and emit only to p
   assert.equal(f.rateLimitOptions().keyGenerator({ user: f.parent }), f.parent._id);
   assert.ok(f.messages.has(first._id));
   assert.ok(f.messages.has(third._id));
+});
+
+test('saved message returns 201 when the socket is unavailable', async (t) => {
+  const f = await createFixture(t, { socketUnavailable: true });
+  const request = f.addRequest();
+
+  const sent = await f.call(`/api/messages/threads/${request._id}/messages`, f.parent, {
+    method: 'POST',
+    body: { text: 'persisted without socket' },
+  });
+
+  assert.equal(sent.status, 201);
+  assert.equal(sent.body.message.text, 'persisted without socket');
+  assert.equal(f.messages.size, 1);
+  assert.equal(f.emitted.length, 0);
 });
 
 test('threads show only safe names, last-message data, and per-recipient unread counts', async (t) => {
