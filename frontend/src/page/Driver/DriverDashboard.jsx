@@ -892,8 +892,8 @@ export default function DriverDashboard({ token, user, onLogout }) {
 				pending: false,
 				requestId: routeRequestRef.current.requestId + 1,
 			}
-			setOptimizedRoute([])
-			setRouteStops([])
+			setOptimizedRoute((current) => (current.length ? [] : current))
+			setRouteStops((current) => (current.length ? [] : current))
 			return
 		}
 
@@ -979,11 +979,14 @@ export default function DriverDashboard({ token, user, onLogout }) {
 			})
 
 	}, [
-		selectedTrip,
-		selectedTripDestinationPosition,
-		selectedTripMapTargetPosition,
-		selectedTripRequesterPosition,
-		selectedTripVanPosition,
+		selectedTrip?._id,
+		selectedTrip?.status,
+		selectedTrip?.liveLocation?.latitude,
+		selectedTrip?.liveLocation?.longitude,
+		selectedTrip?.requesterLocation?.latitude,
+		selectedTrip?.requesterLocation?.longitude,
+		selectedTrip?.destinationLocation?.latitude,
+		selectedTrip?.destinationLocation?.longitude,
 		gpsStatus,
 		token,
 	])
