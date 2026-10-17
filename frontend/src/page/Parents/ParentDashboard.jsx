@@ -966,6 +966,8 @@ export default function ParentDashboard({ token, user, onLogout }) {
                 <>
                   <ParentTrackingPanel
                     tripStatus={activeRideRequest.status}
+                    requestId={activeRideRequest._id}
+                    token={token}
                     driverProfile={activeRideRequest.driverProfile}
                     driverName={activeRideRequest.driverProfile?.name || activeRideRequest.driver?.fullName}
                     driverPhone={activeRideRequest.driverProfile?.phone || activeRideRequest.driver?.phone}

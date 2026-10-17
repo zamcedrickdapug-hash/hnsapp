@@ -2,6 +2,7 @@ const express = require('express');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const VanRequest = require('../models/VanRequest');
+const DriverPhoto = require('../models/DriverPhoto');
 const School = require('../models/School');
 const { releaseVanRequestAssignment } = require('../services/releaseVanRequestAssignment');
 const { toParentSafeRequest } = require('../services/driverPublicProfile');
@@ -526,7 +527,7 @@ router.post('/van-requests', requireParent, async (req, res) => {
 
     const populatedRequest = await VanRequest.findById(rideRequest._id)
       .populate('parent', 'fullName phone')
-      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate')
+      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate driver.photoUpdatedAt')
       .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model');
     const parentSafeRequest = toParentSafeRequest(populatedRequest);
 
@@ -631,7 +632,7 @@ router.patch('/van-requests/:requestId/requester-location', requireParent, async
 
     const populatedRequest = await VanRequest.findById(rideRequest._id)
       .populate('parent', 'fullName phone')
-      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate')
+      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate driver.photoUpdatedAt')
       .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model');
     const parentSafeRequest = toParentSafeRequest(populatedRequest);
 
@@ -681,7 +682,7 @@ router.patch('/van-requests/:requestId/pickup-confirm', requireParent, async (re
 
     const populatedRequest = await VanRequest.findById(rideRequest._id)
       .populate('parent', 'fullName phone')
-      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate')
+      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate driver.photoUpdatedAt')
       .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model');
     const parentSafeRequest = toParentSafeRequest(populatedRequest);
 
@@ -708,13 +709,38 @@ router.patch('/van-requests/:requestId/pickup-confirm', requireParent, async (re
 router.get('/van-requests', requireParent, async (req, res) => {
   try {
     const requests = await VanRequest.find({ parent: req.user._id })
-      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate')
+      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate driver.photoUpdatedAt')
       .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model')
       .sort({ createdAt: -1 });
 
     return res.status(200).json({ requests: requests.map(toParentSafeRequest) });
   } catch (error) {
     return res.status(500).json({ message: 'Unable to load your ride requests right now.' });
+  }
+});
+
+router.get('/van-requests/:requestId/driver-photo', requireParent, async (req, res) => {
+  try {
+    const request = await VanRequest.findOne({
+      _id: req.params.requestId,
+      parent: req.user._id,
+    }).select('driver status');
+    if (!request || !request.driver || request.status === 'cancelled') {
+      return res.status(404).json({ message: 'Driver photo not found.' });
+    }
+
+    const photo = await DriverPhoto.findOne({ userId: request.driver }).select('+data');
+    if (!photo || !['image/jpeg', 'image/png', 'image/webp'].includes(photo.contentType)) {
+      return res.status(404).json({ message: 'Driver photo not found.' });
+    }
+
+    return res
+      .set('Content-Type', photo.contentType)
+      .set('Cache-Control', 'private, max-age=300')
+      .set('X-Content-Type-Options', 'nosniff')
+      .send(photo.data);
+  } catch (error) {
+    return res.status(500).json({ message: 'Unable to load driver photo.' });
   }
 });
 
@@ -745,7 +771,7 @@ router.patch('/van-requests/:requestId/cancel', requireParent, async (req, res) 
     }
 
     const populatedRequest = await VanRequest.findById(request._id)
-      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate')
+      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate driver.photoUpdatedAt')
       .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model');
     const parentSafeRequest = toParentSafeRequest(populatedRequest);
 

@@ -181,6 +181,10 @@ const driverSchema = new mongoose.Schema(
     licenseExpirationDate: {
       type: Date,
     },
+    photoUpdatedAt: {
+      type: Date,
+      default: null,
+    },
     licenseVerified: {
       type: Boolean,
       default: false,

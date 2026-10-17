@@ -10,6 +10,9 @@ const buildPublicDriverProfile = (driverUser) => {
     : null;
   const hasValidExpiry = licenseExpiry && Number.isFinite(licenseExpiry.getTime());
   const licenseExpired = hasValidExpiry && licenseExpiry.getTime() < Date.now();
+  const photoVersion = driver.driver?.photoUpdatedAt
+    ? new Date(driver.driver.photoUpdatedAt).getTime()
+    : null;
 
   return {
     name: String(driver.fullName || ''),
@@ -20,6 +23,7 @@ const buildPublicDriverProfile = (driverUser) => {
     licenseValidUntil: hasValidExpiry
       ? `${licenseExpiry.getUTCFullYear()}-${String(licenseExpiry.getUTCMonth() + 1).padStart(2, '0')}`
       : null,
+    photoVersion: Number.isFinite(photoVersion) ? photoVersion : null,
     ...(licenseExpired ? { licenseExpired: true } : {}),
   };
 };

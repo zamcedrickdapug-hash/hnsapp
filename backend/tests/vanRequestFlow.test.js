@@ -22,6 +22,8 @@ const loadWithDependencies = (relativePath, dependencies) => {
 
 const copy = (value) => {
   if (Array.isArray(value)) return value.map(copy);
+  if (value instanceof Date) return new Date(value.getTime());
+  if (Buffer.isBuffer(value)) return Buffer.from(value);
   if (value && typeof value === 'object') {
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, copy(item)]));
   }
@@ -63,6 +65,7 @@ const createFixture = async (t) => {
   const requests = new Map();
   const statuses = new Map();
   const vehicles = new Map();
+  const driverPhotos = new Map();
   const schools = new Map();
   const emitted = [];
   const notifications = [];
@@ -167,6 +170,21 @@ const createFixture = async (t) => {
     }
     static findOne(query) {
       return new FakeQuery(collectionNotifications.find((notification) => matches(notification, query)) || null);
+    }
+  }
+
+  class DriverPhoto {
+    static findOne(query) {
+      return new FakeQuery(driverPhotos.get(String(query.userId)) || null);
+    }
+    static async findOneAndUpdate(query, update) {
+      const photo = { userId: String(query.userId), ...copy(update.$set) };
+      driverPhotos.set(String(query.userId), photo);
+      return photo;
+    }
+    static async deleteOne(query) {
+      driverPhotos.delete(String(query.userId));
+      return { deletedCount: 1 };
     }
   }
 
@@ -326,6 +344,7 @@ const createFixture = async (t) => {
   };
   const routeDependencies = {
     '../models/User': User,
+    '../models/DriverPhoto': DriverPhoto,
     '../models/School': School,
     '../models/Notification': Notification,
     '../models/VanRequest': VanRequest,
@@ -411,7 +430,7 @@ const createFixture = async (t) => {
     { expiresIn: '1h' }
   );
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
-  const request = async (route, user, { method = 'GET', body } = {}) => {
+  const request = async (route, user, { method = 'GET', body, responseType = 'json' } = {}) => {
     const response = await fetch(`${baseUrl}${route}`, {
       method,
       headers: {
@@ -420,13 +439,19 @@ const createFixture = async (t) => {
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+    const responseBody = responseType === 'arrayBuffer'
+      ? Buffer.from(await response.arrayBuffer())
+      : await response.json();
     return {
       status: response.status,
-      body: await response.json(),
+      body: responseBody,
+      contentType: response.headers.get('content-type'),
+      cacheControl: response.headers.get('cache-control'),
+      nosniff: response.headers.get('x-content-type-options'),
     };
   };
 
-  return { parent, driverOne, driverTwo, users, requests, statuses, vehicles, schools, driverEligibility, emitted, notifications, collectionNotifications, pickupArrivalNotifications, schoolArrivalNotifications, addSchool, addVehicle, request };
+  return { parent, driverOne, driverTwo, User, users, requests, statuses, vehicles, schools, driverPhotos, driverEligibility, emitted, notifications, collectionNotifications, pickupArrivalNotifications, schoolArrivalNotifications, addSchool, addVehicle, request, baseUrl };
 };
 
 const createRequest = (fixture, data = {}) => fixture.request('/api/parents/van-requests', fixture.parent, {
@@ -781,6 +806,7 @@ test('parent responses, trip events, and notifications exclude private driver fi
     'PRIVATE_EMAIL_CANARY',
     'PRIVATE_DOCUMENT_CANARY',
     'PRIVATE_IMAGE_CANARY',
+    'PHOTO_BUFFER_CANARY',
   ];
   const rawExpiry = '2099-07-15T00:00:00.000Z';
   f.driverOne.phone = '5550100100';
@@ -792,6 +818,7 @@ test('parent responses, trip events, and notifications exclude private driver fi
     licenseNumber: canaries[0],
     dateOfBirth: canaries[1],
     licenseExpirationDate: rawExpiry,
+    photoUpdatedAt: new Date('2026-03-01T00:00:00.000Z'),
     vehicleType: 'Van',
     plateNumber: 'TEST-PLATE',
     documents: {
@@ -808,6 +835,12 @@ test('parent responses, trip events, and notifications exclude private driver fi
     method: 'PATCH',
   });
   assert.equal(accepted.status, 200);
+  const privatePhotoBytes = Buffer.from('PHOTO_BUFFER_CANARY');
+  f.driverPhotos.set(String(f.driverOne._id), {
+    data: privatePhotoBytes,
+    contentType: 'image/png',
+    size: privatePhotoBytes.length,
+  });
 
   const parentRequests = await f.request('/api/parents/van-requests', f.parent);
   assert.equal(parentRequests.status, 200);
@@ -817,11 +850,13 @@ test('parent responses, trip events, and notifications exclude private driver fi
     'licenseValidUntil',
     'name',
     'phone',
+    'photoVersion',
     'plateNumber',
     'vehicleType',
     'verified',
   ]);
   assert.equal(safeRequest.driverProfile.licenseValidUntil, '2099-07');
+  assert.equal(safeRequest.driverProfile.photoVersion, new Date('2026-03-01T00:00:00.000Z').getTime());
   assert.equal(safeRequest.driverProfile.verified, true);
   assert.deepEqual(Object.keys(safeRequest.driver).sort(), ['_id', 'driver', 'fullName', 'phone']);
   assert.deepEqual(Object.keys(safeRequest.driver.driver).sort(), ['plateNumber', 'vehicleType']);
@@ -837,6 +872,7 @@ test('parent responses, trip events, and notifications exclude private driver fi
       'licenseValidUntil',
       'name',
       'phone',
+      'photoVersion',
       'plateNumber',
       'vehicleType',
       'verified',
@@ -856,7 +892,77 @@ test('parent responses, trip events, and notifications exclude private driver fi
     assert.equal(serializedPayloads.includes(canary), false, `private-field canary ${index} leaked`);
   });
   assert.equal(serializedPayloads.includes(rawExpiry), false);
+  assert.equal(serializedPayloads.includes('"type":"Buffer"'), false);
   assert.equal(serializedPayloads.includes('accountState'), false);
+});
+
+test('driver photos are readable only by the trip parent or that driver', async (t) => {
+  const f = await createFixture(t);
+  const created = await createRequest(f);
+  f.addVehicle(f.driverOne, 'ONE-PHOTO');
+  await setOnline(f, f.driverOne);
+  const accepted = await f.request(`/api/drivers/requests/${created.body.request._id}/accept`, f.driverOne, {
+    method: 'PATCH',
+  });
+  assert.equal(accepted.status, 200);
+
+  const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01]);
+  f.driverPhotos.set(String(f.driverOne._id), {
+    data: bytes,
+    contentType: 'image/png',
+    size: bytes.length,
+  });
+
+  const parentPhoto = await f.request(
+    `/api/parents/van-requests/${created.body.request._id}/driver-photo`,
+    f.parent,
+    { responseType: 'arrayBuffer' }
+  );
+  assert.equal(parentPhoto.status, 200);
+  assert.deepEqual(parentPhoto.body, bytes);
+  assert.equal(parentPhoto.contentType, 'image/png');
+  assert.equal(parentPhoto.cacheControl, 'private, max-age=300');
+  assert.equal(parentPhoto.nosniff, 'nosniff');
+
+  const secondParent = await new f.User({
+    role: 'parent',
+    status: 'approved',
+    fullName: 'Parent Two',
+    email: 'parent2@example.test',
+    student: { pickupLatitude: 14.7118, pickupLongitude: 121.0679 },
+  }).save();
+  const forbiddenPhoto = await f.request(
+    `/api/parents/van-requests/${created.body.request._id}/driver-photo`,
+    secondParent,
+    { responseType: 'arrayBuffer' }
+  );
+  assert.equal(forbiddenPhoto.status, 404);
+
+  const noDriverRequest = await f.request('/api/parents/van-requests', secondParent, {
+    method: 'POST',
+    body: {
+      studentName: 'Student Two',
+      pickupZone: 'Second pickup',
+      schoolName: 'Example School',
+    },
+  });
+  const noDriverPhoto = await f.request(
+    `/api/parents/van-requests/${noDriverRequest.body.request._id}/driver-photo`,
+    f.parent,
+    { responseType: 'arrayBuffer' }
+  );
+  assert.equal(noDriverPhoto.status, 404);
+
+  const ownPhoto = await f.request('/api/drivers/me/photo', f.driverOne, { responseType: 'arrayBuffer' });
+  assert.equal(ownPhoto.status, 200);
+  assert.deepEqual(ownPhoto.body, bytes);
+  const anotherDriversPhoto = await f.request('/api/drivers/me/photo', f.driverTwo, { responseType: 'arrayBuffer' });
+  assert.equal(anotherDriversPhoto.status, 404);
+
+  const unauthenticated = await fetch(
+    `${f.baseUrl}/api/parents/van-requests/${created.body.request._id}/driver-photo`
+  );
+  assert.equal(unauthenticated.status, 401);
 });
 
 test('parent must select a non-empty unique list of saved children', async (t) => {

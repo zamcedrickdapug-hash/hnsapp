@@ -10,7 +10,8 @@
     "dev": "nodemon index.js",
     "start": "node index.js",
     "seed:schools": "node scripts/seed-schools.js",
-    "assign:school": "node scripts/assign-driver-school.js"
+    "assign:school": "node scripts/assign-driver-school.js",
+    "set:driverphoto": "node scripts/set-driver-photo.js"
   },
   "keywords": [],
   "author": "",

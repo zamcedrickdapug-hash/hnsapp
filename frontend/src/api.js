@@ -24,8 +24,9 @@ export function resolveApiUrl(path) {
 }
 
 export async function apiFetch(path, options = {}) {
+  const { responseType, ...fetchOptions } = options
   const response = await fetch(resolveApiUrl(path), {
-    ...options,
+    ...fetchOptions,
     headers: {
       ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
       ...(options.headers || {}),
@@ -34,7 +35,11 @@ export async function apiFetch(path, options = {}) {
 
   const contentType = response.headers.get('content-type') || '';
   const isJson = contentType.includes('application/json');
-  const payload = isJson ? await response.json() : await response.text();
+  const payload = response.ok && responseType === 'blob'
+    ? await response.blob()
+    : isJson
+      ? await response.json()
+      : await response.text();
 
   if (!response.ok) {
     const message = isJson ? payload?.message : 'Request failed.';

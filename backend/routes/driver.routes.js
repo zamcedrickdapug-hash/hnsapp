@@ -2,10 +2,11 @@ const express = require('express');
 const multer = require('multer');
 const VanRequest = require('../models/VanRequest');
 const User = require('../models/User');
+const DriverPhoto = require('../models/DriverPhoto');
 const ValidIdDocument = require('../models/ValidIdDocument');
 const Vehicle = require('../models/Vehicle');
 const DriverStatus = require('../models/DriverStatus');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireDriver } = require('../middleware/auth');
 const { getIo, buildTripRoomName, buildUserRoomName } = require('../socket');
 const {
   notifyParentDriverAccepted,
@@ -27,6 +28,24 @@ const {
 } = require('../services/driverEligibility');
 
 const router = express.Router();
+
+router.get('/me/photo', requireDriver, async (req, res) => {
+  try {
+    const photo = await DriverPhoto.findOne({ userId: req.user._id }).select('+data');
+    if (!photo || !['image/jpeg', 'image/png', 'image/webp'].includes(photo.contentType)) {
+      return res.status(404).json({ message: 'Driver photo not found.' });
+    }
+
+    return res
+      .set('Content-Type', photo.contentType)
+      .set('Cache-Control', 'private, max-age=300')
+      .set('X-Content-Type-Options', 'nosniff')
+      .send(photo.data);
+  } catch (error) {
+    return res.status(500).json({ message: 'Unable to load driver photo.' });
+  }
+});
+
 const MAX_VALID_ID_SIZE = 2 * 1024 * 1024;
 
 const allowedMimeTypes = new Map([
@@ -423,7 +442,7 @@ router.patch('/requests/:requestId/accept', async (req, res) => {
 
     const populatedRequest = await VanRequest.findById(rideRequest._id)
       .populate('parent', 'fullName phone')
-      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate')
+      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate driver.photoUpdatedAt')
       .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model');
     const parentSafeRequest = toParentSafeRequest(populatedRequest);
 
@@ -543,7 +562,7 @@ router.patch('/requests/:requestId/reject', async (req, res) => {
 
     const populatedRequest = await VanRequest.findById(rejectedRequest._id)
       .populate('parent', 'fullName phone')
-      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate')
+      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate driver.photoUpdatedAt')
       .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model');
     const parentSafeRequest = toParentSafeRequest(populatedRequest);
 
@@ -726,7 +745,7 @@ router.patch('/requests/:requestId/arrived', async (req, res) => {
 
     const populatedRequest = await VanRequest.findById(rideRequest._id)
       .populate('parent', 'fullName phone')
-      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate')
+      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate driver.photoUpdatedAt')
       .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model');
     const parentSafeRequest = toParentSafeRequest(populatedRequest);
 
@@ -788,7 +807,7 @@ router.patch('/requests/:requestId/picked-up', async (req, res) => {
 
     const populatedRequest = await VanRequest.findById(rideRequest._id)
       .populate('parent', 'fullName phone')
-      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate');
+      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate driver.photoUpdatedAt');
     const parentSafeRequest = toParentSafeRequest(populatedRequest);
 
     const io = getIo();
@@ -862,7 +881,7 @@ router.patch('/requests/:requestId/arrived-at-school', async (req, res) => {
 
       const populatedRequest = await VanRequest.findById(arrivedRequest._id)
         .populate('parent', 'fullName phone')
-        .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate')
+        .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate driver.photoUpdatedAt')
         .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model');
       const parentSafeRequest = toParentSafeRequest(populatedRequest);
       const io = getIo();
@@ -947,7 +966,7 @@ router.patch('/requests/complete-school-run', async (req, res) => {
 
       const populatedRequest = await VanRequest.findById(completedRequest._id)
         .populate('parent', 'fullName phone')
-        .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate')
+        .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate driver.photoUpdatedAt')
         .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model');
       const parentSafeRequest = toParentSafeRequest(populatedRequest);
       const io = getIo();

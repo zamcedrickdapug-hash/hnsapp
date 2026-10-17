@@ -342,7 +342,7 @@ const updateTripStatus = async (driverId, requestId, tripStatus) => {
       { new: true }
     )
       .populate('parent', 'fullName phone')
-      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate')
+      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate driver.photoUpdatedAt')
       .populate('vehicleId', 'plateNumber vehicleType seatCapacity');
 
     if (!trip) {

@@ -11,9 +11,12 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card'
 import { Phone, MapPin, Clock, AlertCircle } from 'lucide-react'
+import { apiFetch } from '../../../api'
 
 export function ParentTrackingPanel({
   tripStatus = 'waiting',
+  requestId = null,
+  token = null,
   driverProfile = null,
   driverName = null,
   driverPhone = null,
@@ -27,10 +30,40 @@ export function ParentTrackingPanel({
   isLoading = false,
 }) {
   const [currentTime, setCurrentTime] = useState(Date.now())
+  const [driverPhoto, setDriverPhoto] = useState(null)
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 5000)
     return () => clearInterval(interval)
   }, [])
+
+  useEffect(() => {
+    const photoVersion = driverProfile?.photoVersion
+    if (photoVersion == null || !requestId || !token) {
+      setDriverPhoto(null)
+      return undefined
+    }
+
+    setDriverPhoto(null)
+    let isCurrent = true
+    let photoUrl = null
+    apiFetch(`/api/parents/van-requests/${requestId}/driver-photo?v=${encodeURIComponent(photoVersion)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      responseType: 'blob',
+    })
+      .then((photoBlob) => {
+        if (!isCurrent) return
+        photoUrl = URL.createObjectURL(photoBlob)
+        setDriverPhoto({ requestId, photoVersion, url: photoUrl })
+      })
+      .catch(() => {
+        if (isCurrent) setDriverPhoto(null)
+      })
+
+    return () => {
+      isCurrent = false
+      if (photoUrl) URL.revokeObjectURL(photoUrl)
+    }
+  }, [driverProfile?.photoVersion, requestId, token])
 
   const locationUpdatedAt = Date.parse(liveLocationUpdatedAt || '')
   const locationAge = currentTime - locationUpdatedAt
@@ -49,6 +82,10 @@ export function ParentTrackingPanel({
 
   const statusInfo = statusConfig[tripStatus] || statusConfig.searching
   const publicDriverName = driverProfile?.name || driverName
+  const driverPhotoUrl = driverPhoto?.requestId === requestId &&
+    driverPhoto?.photoVersion === driverProfile?.photoVersion
+    ? driverPhoto.url
+    : null
   const initials = String(publicDriverName || '')
     .trim()
     .split(/\s+/)
@@ -106,7 +143,15 @@ export function ParentTrackingPanel({
                   aria-hidden="true"
                   className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-800"
                 >
-                  {initials || 'D'}
+                  {driverPhotoUrl ? (
+                    <img
+                      src={driverPhotoUrl}
+                      alt=""
+                      className="h-11 w-11 rounded-full object-cover"
+                    />
+                  ) : (
+                    initials || 'D'
+                  )}
                 </div>
                 <div className="min-w-0">
                   <p className="font-semibold text-gray-900">{publicDriverName}</p>
