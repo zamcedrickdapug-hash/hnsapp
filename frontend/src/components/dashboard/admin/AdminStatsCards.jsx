@@ -15,25 +15,25 @@ const statsConfig = [
   {
     label: 'Total Registrations',
     icon: Users,
-    colorClass: 'text-blue-600',
+    colorClass: 'text-blue-800',
     bgClass: 'bg-blue-50',
   },
   {
     label: 'Pending Approvals',
     icon: Clock,
-    colorClass: 'text-yellow-600',
+    colorClass: 'text-yellow-800',
     bgClass: 'bg-yellow-50',
   },
   {
     label: 'Approved Users',
     icon: CheckCircle,
-    colorClass: 'text-green-600',
+    colorClass: 'text-green-800',
     bgClass: 'bg-green-50',
   },
   {
     label: 'System Alerts',
     icon: AlertCircle,
-    colorClass: 'text-red-600',
+    colorClass: 'text-red-800',
     bgClass: 'bg-red-50',
   },
 ]
@@ -53,7 +53,7 @@ export function AdminStatsCards({
         {statsConfig.map((stat, index) => (
           <Card key={index}>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">{stat.label}</CardTitle>
+              <CardTitle className="text-sm font-medium text-on-dark-label">{stat.label}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="h-8 bg-gray-200 rounded animate-pulse" />
@@ -79,11 +79,11 @@ export function AdminStatsCards({
           >
             <Card className="hover:shadow-md transition-shadow">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-gray-600">{stat.label}</CardTitle>
+                <CardTitle className="text-sm font-medium text-on-dark-label">{stat.label}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between">
-                  <div className="text-3xl font-bold text-gray-900">{value}</div>
+                  <div className="text-3xl font-bold text-on-dark-primary">{value}</div>
                   <div className={`${stat.bgClass} p-3 rounded-lg`}>
                     <Icon className={`w-6 h-6 ${stat.colorClass}`} />
                   </div>

@@ -536,7 +536,7 @@ export default function AdminPanel({ token, user, onLogout }) {
                 transition={{ delay: idx * 0.05 }}
                 className="bg-white rounded-lg border border-gray-200 p-4"
               >
-                <p className="text-xs font-medium text-gray-600">{item.label}</p>
+                <p className="text-sm font-medium text-gray-600">{item.label}</p>
                 <p className="text-2xl font-bold text-gray-900 mt-1">{item.value}</p>
               </motion.div>
             ))}
