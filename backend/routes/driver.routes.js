@@ -611,6 +611,7 @@ router.patch('/requests/:requestId/location', async (req, res) => {
       Number.isFinite(Number(currentRequest.requesterLocation?.latitude)) &&
       Number.isFinite(Number(currentRequest.requesterLocation?.longitude));
     let nextStatus = previousStatus;
+    let schoolArrivalAt = null;
 
     if (previousStatus === 'accepted' && hasRequesterLocation) {
       const distanceToPickup = distanceInMeters({ latitude, longitude }, currentRequest.requesterLocation);
@@ -619,13 +620,33 @@ router.patch('/requests/:requestId/location', async (req, res) => {
       }
     }
 
+    const destinationLatitude = currentRequest.destinationLocation?.latitude;
+    const destinationLongitude = currentRequest.destinationLocation?.longitude;
+    const hasDestinationLocation =
+      Number.isFinite(destinationLatitude) &&
+      Number.isFinite(destinationLongitude);
+    if (previousStatus === 'picked_up' && hasDestinationLocation) {
+      const distanceToSchool = distanceInMeters({ latitude, longitude }, currentRequest.destinationLocation);
+      if (distanceToSchool <= ARRIVED_RADIUS_METERS) {
+        nextStatus = 'arrived_at_school';
+        schoolArrivalAt = new Date();
+      }
+    }
+
+    const locationUpdate = { liveLocation: nextLiveLocation, status: nextStatus };
+    const updateFilter = {
+      _id: currentRequest._id,
+      driver: req.user._id,
+      status: previousStatus,
+    };
+    if (schoolArrivalAt) {
+      locationUpdate.arrivedAtSchoolAt = schoolArrivalAt;
+      updateFilter.arrivedAtSchoolAt = null;
+    }
+
     const rideRequest = await VanRequest.findOneAndUpdate(
-      {
-        _id: currentRequest._id,
-        driver: req.user._id,
-        status: previousStatus,
-      },
-      { $set: { liveLocation: nextLiveLocation, status: nextStatus } },
+      updateFilter,
+      { $set: locationUpdate },
       { new: true }
     );
 
@@ -659,6 +680,16 @@ router.patch('/requests/:requestId/location', async (req, res) => {
         rideRequest.schoolName
       );
     }
+    if (schoolArrivalAt && rideRequest.status === 'arrived_at_school') {
+      await notifyParentArrivedAtSchool(
+        rideRequest.parent,
+        rideRequest._id,
+        req.user.fullName,
+        rideRequest.studentName,
+        rideRequest.schoolName,
+        schoolArrivalAt
+      );
+    }
 
     const io = getIo();
     if (io) {
@@ -688,7 +719,9 @@ router.patch('/requests/:requestId/location', async (req, res) => {
       });
     }
 
-    if (previousStatus === 'accepted' && rideRequest.status === 'arrived' && io) {
+    const arrivedAtPickup = previousStatus === 'accepted' && rideRequest.status === 'arrived';
+    const arrivedAtSchool = previousStatus === 'picked_up' && rideRequest.status === 'arrived_at_school';
+    if ((arrivedAtPickup || arrivedAtSchool) && io) {
       const populatedRequest = await VanRequest.findById(rideRequest._id)
         .populate('parent', 'fullName phone')
         .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber')
