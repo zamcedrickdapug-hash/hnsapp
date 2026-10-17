@@ -10,18 +10,24 @@ function todayString() {
 export default function DriverSettings({
 	user,
 	profileData,
-	photoName,
-	driverIdName,
 	photoPreview,
-	driverIdPreview,
+	savedPhotoPreview,
+	photoLoadError,
 	savingProfile,
 	profileStatus,
 	fileError,
 	onFieldChange,
-	onPhotoChange,
-	onDriverIdChange,
 	onSave,
 }) {
+	const initials = String(user.fullName || '')
+		.trim()
+		.split(/\s+/)
+		.filter(Boolean)
+		.slice(0, 2)
+		.map((part) => part[0].toUpperCase())
+		.join('') || '?'
+	const displayedPhoto = photoPreview || savedPhotoPreview
+
 	return (
 		<section className="driver-settings-section">
 			<header className="driver-main__header">
@@ -51,38 +57,36 @@ export default function DriverSettings({
 							<div className="upload-box">
 								<p>Profile Photo</p>
 								<small className="driver-upload-note">Your profile photo is set by the administrator</small>
-								{photoPreview ? (
+								{displayedPhoto ? (
 									<div className="upload-placeholder upload-placeholder--with-image">
-										<img src={photoPreview} alt="Profile preview" />
+										<img src={displayedPhoto} alt="Driver profile" />
 									</div>
 								) : (
-									<div className="upload-placeholder">{photoName || 'No photo selected'}</div>
+									<div className="upload-placeholder" aria-label={`${user.fullName} profile photo`}>
+										<span
+											aria-hidden="true"
+											style={{
+												width: 72,
+												height: 72,
+												borderRadius: '50%',
+												display: 'grid',
+												placeItems: 'center',
+												background: '#e2e8f0',
+												color: '#0f172a',
+												fontSize: 24,
+												fontWeight: 700,
+											}}
+										>
+											{initials}
+										</span>
+									</div>
 								)}
-								<label className="driver-upload-field">
-									<span>Profile Photo</span>
-									<input type="file" accept="image/*" onChange={onPhotoChange} />
-									<small>{photoName}</small>
-								</label>
+								{photoLoadError && <small className="driver-upload-note">{photoLoadError}</small>}
 							</div>
 
 							<div className="upload-box">
 								<p>Driver ID File</p>
-								{driverIdPreview ? (
-									<div className="upload-placeholder upload-placeholder--with-image">
-										{driverIdName?.toLowerCase().endsWith('.pdf') ? (
-											<div className="pdf-placeholder">📄 PDF</div>
-										) : (
-											<img src={driverIdPreview} alt="Driver ID preview" />
-										)}
-									</div>
-								) : (
-									<div className="upload-placeholder">{driverIdName || 'No file selected'}</div>
-								)}
-								<label className="driver-upload-field">
-									<span>Driver ID</span>
-									<input type="file" accept="image/*,.pdf" onChange={onDriverIdChange} />
-									<small>{driverIdName}</small>
-								</label>
+								<p className="driver-upload-note">Driver ID: submitted at registration</p>
 							</div>
 						</section>
 

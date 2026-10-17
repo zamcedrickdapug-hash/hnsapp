@@ -101,6 +101,39 @@ export default function DriverDashboard({ token, user, onLogout }) {
 	const [photoFile, setPhotoFile] = useState(null)
 	const [driverIdFile, setDriverIdFile] = useState(null)
 	const [fileError, setFileError] = useState('')
+	const [savedPhotoPreview, setSavedPhotoPreview] = useState(null)
+	const [photoLoadError, setPhotoLoadError] = useState('')
+
+	useEffect(() => {
+		if (activeSection !== 'settings') return undefined
+
+		let isActive = true
+		let objectUrl = null
+		const controller = new AbortController()
+		setSavedPhotoPreview(null)
+		setPhotoLoadError('')
+
+		apiFetch('/api/drivers/me/photo', {
+			headers: { Authorization: `Bearer ${token}` },
+			responseType: 'blob',
+			signal: controller.signal,
+		})
+			.then((blob) => {
+				if (!isActive) return
+				objectUrl = URL.createObjectURL(blob)
+				setSavedPhotoPreview(objectUrl)
+			})
+			.catch((photoError) => {
+				if (!isActive || photoError.name === 'AbortError' || photoError.status === 404) return
+				setPhotoLoadError('Unable to load the saved profile photo.')
+			})
+
+		return () => {
+			isActive = false
+			controller.abort()
+			if (objectUrl) URL.revokeObjectURL(objectUrl)
+		}
+	}, [activeSection, token])
 
 	// Refs
 	const watchIdRef = useRef(null)
@@ -1568,6 +1601,8 @@ export default function DriverDashboard({ token, user, onLogout }) {
 					photoName={photoName}
 					driverIdName={driverIdName}
 					photoPreview={photoPreview}
+					savedPhotoPreview={savedPhotoPreview}
+					photoLoadError={photoLoadError}
 					driverIdPreview={driverIdPreview}
 					savingProfile={savingProfile}
 					profileStatus={profileStatus}
