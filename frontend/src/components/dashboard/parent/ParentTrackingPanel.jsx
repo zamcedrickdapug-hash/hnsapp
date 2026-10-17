@@ -14,7 +14,9 @@ import { Phone, MapPin, Clock, AlertCircle } from 'lucide-react'
 
 export function ParentTrackingPanel({
   tripStatus = 'waiting',
+  driverProfile = null,
   driverName = null,
+  driverPhone = null,
   vehicleType = 'School Service Van',
   vehiclePlate = 'Not Available',
   currentLocation = null,
@@ -46,6 +48,19 @@ export function ParentTrackingPanel({
   }
 
   const statusInfo = statusConfig[tripStatus] || statusConfig.searching
+  const publicDriverName = driverProfile?.name || driverName
+  const initials = String(publicDriverName || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('')
+  const licenseMonth = /^(\d{4})-(\d{2})$/.exec(driverProfile?.licenseValidUntil || '')
+  const licenseValidUntil = licenseMonth
+    ? new Date(Date.UTC(Number(licenseMonth[1]), Number(licenseMonth[2]) - 1, 1))
+      .toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
+    : null
 
   if (isLoading || !driverName) {
     return (
@@ -85,12 +100,34 @@ export function ParentTrackingPanel({
           {driverName && (
             <div className="pb-4 border-b border-blue-100">
               <p className="text-xs font-medium text-gray-600">Driver</p>
-              <div className="flex items-center justify-between mt-2">
-                <div>
-                  <p className="font-semibold text-gray-900">{driverName}</p>
-                  <p className="text-sm text-gray-600">{vehicleType}</p>
-                  <p className="text-xs text-gray-500 font-mono">{vehiclePlate}</p>
+              <div className="flex items-center justify-between mt-2 gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div
+                  aria-hidden="true"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-800"
+                >
+                  {initials || 'D'}
                 </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-900">{publicDriverName}</p>
+                  <p className="text-sm text-gray-600">{driverProfile?.vehicleType || vehicleType}</p>
+                  <p className="text-xs text-gray-500 font-mono">{driverProfile?.plateNumber || vehiclePlate}</p>
+                  {driverPhone && (
+                    <a className="mt-1 inline-flex items-center gap-1 text-sm text-blue-700 underline" href={`tel:${driverPhone}`}>
+                      <Phone size={14} aria-hidden="true" />
+                      Call driver
+                    </a>
+                  )}
+                  {driverProfile?.verified && (
+                    <p className="mt-1 text-xs font-semibold text-green-700">Verified by admin</p>
+                  )}
+                  {driverProfile?.licenseExpired ? (
+                    <p className="mt-1 text-xs text-red-700">License expired</p>
+                  ) : licenseValidUntil ? (
+                    <p className="mt-1 text-xs text-gray-600">License valid until {licenseValidUntil}</p>
+                  ) : null}
+                </div>
+              </div>
                 <div className="text-right">
                   <div className={`inline-block px-2 py-1 rounded text-xs font-semibold ${socketConnected ? 'bg-green-50 text-green-600' : 'bg-gray-50 text-gray-600'}`}>
                     {socketConnected ? '🟢 Live' : '⚪ Offline'}

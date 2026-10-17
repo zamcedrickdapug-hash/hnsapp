@@ -9,6 +9,7 @@ const VanRequest = require('../models/VanRequest');
 const User = require('../models/User');
 const { getIo, buildTripRoomName, buildUserRoomName } = require('../socket');
 const { releaseVanRequestAssignment } = require('./releaseVanRequestAssignment');
+const { toParentSafeRequest } = require('./driverPublicProfile');
 
 /**
  * Update or create driver status
@@ -341,7 +342,7 @@ const updateTripStatus = async (driverId, requestId, tripStatus) => {
       { new: true }
     )
       .populate('parent', 'fullName phone')
-      .populate('driver', 'fullName phone')
+      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate')
       .populate('vehicleId', 'plateNumber vehicleType seatCapacity');
 
     if (!trip) {
@@ -359,15 +360,16 @@ const updateTripStatus = async (driverId, requestId, tripStatus) => {
       await updateTripStats(driverId, { status: 'completed' });
     }
 
+    const parentSafeTrip = toParentSafeRequest(trip);
     const io = getIo();
     if (io) {
-      const eventPayload = { request: trip };
+      const eventPayload = { request: parentSafeTrip };
       io.to(buildTripRoomName(requestId)).emit('trip:request-updated', eventPayload);
       io.to(buildUserRoomName(trip.parent?._id || trip.parent)).emit('trip:request-updated', eventPayload);
       io.to(buildUserRoomName(driverId)).emit('trip:request-updated', eventPayload);
     }
 
-    return trip;
+    return parentSafeTrip;
   } catch (error) {
     if (!['TRIP_NOT_ASSIGNED', 'INVALID_TRIP_TRANSITION', 'TRIP_STATUS_CHANGED'].includes(error.code)) {
       console.error('Error updating trip status:', error);

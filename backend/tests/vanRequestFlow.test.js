@@ -76,6 +76,7 @@ const createFixture = async (t) => {
       fullName: user.fullName,
       phone: user.phone,
       role: user.role,
+      ...(user.role === 'driver' ? { status: user.status, accountState: user.accountState } : {}),
       driver: copy(user.driver),
     };
   };
@@ -301,6 +302,28 @@ const createFixture = async (t) => {
       async save() { return this; },
     });
   };
+  const saveAcceptedNotification = async (
+    parentId,
+    requestId,
+    driverId,
+    driverName,
+    driverPhone,
+    plateNumber,
+    vehicleType,
+    studentName,
+    schoolName
+  ) => {
+    collectionNotifications.push({
+      _id: randomBytes(12).toString('hex'),
+      userId: String(parentId),
+      requestId: String(requestId),
+      type: 'accepted',
+      metadata: { driverName, driverPhone, plateNumber, vehicleType, studentName, schoolName },
+      read: false,
+      createdAt: new Date(),
+      async save() { return this; },
+    });
+  };
   const routeDependencies = {
     '../models/User': User,
     '../models/School': School,
@@ -320,7 +343,7 @@ const createFixture = async (t) => {
     },
     '../services/notificationService': {
       notifyParentSearching: noOpNotification,
-      notifyParentDriverAccepted: noOpNotification,
+      notifyParentDriverAccepted: saveAcceptedNotification,
       notifyParentOnTheWay: noOpNotification,
       notifyParentArrivalAtPickup: async (...args) => {
         pickupArrivalNotifications.push(args);
@@ -747,6 +770,93 @@ test('driver profile ignores client-sent assignedSchools', async (t) => {
 
   assert.equal(result.status, 200);
   assert.deepEqual(f.driverOne.driver.assignedSchools, [assignedSchool._id]);
+});
+
+test('parent responses, trip events, and notifications exclude private driver fields', async (t) => {
+  const f = await createFixture(t);
+  const canaries = [
+    'PRIVATE_LICENSE_CANARY',
+    'PRIVATE_BIRTHDATE_CANARY',
+    'PRIVATE_ADDRESS_CANARY',
+    'PRIVATE_EMAIL_CANARY',
+    'PRIVATE_DOCUMENT_CANARY',
+    'PRIVATE_IMAGE_CANARY',
+  ];
+  const rawExpiry = '2099-07-15T00:00:00.000Z';
+  f.driverOne.phone = '5550100100';
+  f.driverOne.email = canaries[3];
+  f.driverOne.homeAddress = canaries[2];
+  f.driverOne.status = 'approved';
+  f.driverOne.accountState = 'active';
+  f.driverOne.driver = {
+    licenseNumber: canaries[0],
+    dateOfBirth: canaries[1],
+    licenseExpirationDate: rawExpiry,
+    vehicleType: 'Van',
+    plateNumber: 'TEST-PLATE',
+    documents: {
+      licenseFront: { originalName: canaries[4], path: canaries[5] },
+      licenseBack: { originalName: canaries[4], path: canaries[5] },
+    },
+  };
+  f.driverOne.validId = { originalName: canaries[4] };
+
+  const created = await createRequest(f);
+  f.addVehicle(f.driverOne, 'ONE-PUBLIC');
+  await setOnline(f, f.driverOne);
+  const accepted = await f.request(`/api/drivers/requests/${created.body.request._id}/accept`, f.driverOne, {
+    method: 'PATCH',
+  });
+  assert.equal(accepted.status, 200);
+
+  const parentRequests = await f.request('/api/parents/van-requests', f.parent);
+  assert.equal(parentRequests.status, 200);
+  const safeRequest = parentRequests.body.requests.find((request) => request._id === created.body.request._id);
+  assert.ok(safeRequest);
+  assert.deepEqual(Object.keys(safeRequest.driverProfile).sort(), [
+    'licenseValidUntil',
+    'name',
+    'phone',
+    'plateNumber',
+    'vehicleType',
+    'verified',
+  ]);
+  assert.equal(safeRequest.driverProfile.licenseValidUntil, '2099-07');
+  assert.equal(safeRequest.driverProfile.verified, true);
+  assert.deepEqual(Object.keys(safeRequest.driver).sort(), ['_id', 'driver', 'fullName', 'phone']);
+  assert.deepEqual(Object.keys(safeRequest.driver.driver).sort(), ['plateNumber', 'vehicleType']);
+
+  const parentAndTripEvents = f.emitted.filter((event) =>
+    event.event === 'trip:request-updated' &&
+    [ `user:${f.parent._id}`, `trip:${created.body.request._id}` ].includes(event.room)
+  );
+  assert.ok(parentAndTripEvents.length > 0);
+  for (const { payload } of parentAndTripEvents) {
+    if (!payload.request?.driver) continue;
+    assert.deepEqual(Object.keys(payload.request.driverProfile).sort(), [
+      'licenseValidUntil',
+      'name',
+      'phone',
+      'plateNumber',
+      'vehicleType',
+      'verified',
+    ]);
+  }
+  const parentNotifications = await f.request('/api/parents/notifications', f.parent);
+  const acceptedNotification = parentNotifications.body.notifications.find((notification) => notification.type === 'accepted');
+  assert.ok(acceptedNotification);
+  assert.equal(Object.hasOwn(acceptedNotification.metadata, 'driverId'), false);
+  const payloads = [
+    parentRequests.body,
+    parentAndTripEvents,
+    parentNotifications.body.notifications,
+  ];
+  const serializedPayloads = JSON.stringify(payloads);
+  canaries.forEach((canary, index) => {
+    assert.equal(serializedPayloads.includes(canary), false, `private-field canary ${index} leaked`);
+  });
+  assert.equal(serializedPayloads.includes(rawExpiry), false);
+  assert.equal(serializedPayloads.includes('accountState'), false);
 });
 
 test('parent must select a non-empty unique list of saved children', async (t) => {

@@ -87,7 +87,6 @@ const notifyParentDriverAccepted = async (
       title: '✅ Driver Accepted Your Request',
       message: `Your driver ${driverName} is now preparing for pickup.`,
       metadata: {
-        driverId,
         driverName,
         driverPhone,
         plateNumber,

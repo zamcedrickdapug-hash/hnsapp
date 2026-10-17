@@ -20,6 +20,7 @@ const { sendPushToUserIds } = require('../utils/pushNotifications');
 const { normalizePhoneNumber, isValidPhoneNumber } = require('../utils/validation');
 const { verifyRegistrationIdentity } = require('../utils/firebaseIdentity');
 const { releaseVanRequestAssignment } = require('../services/releaseVanRequestAssignment');
+const { toParentSafeRequest } = require('../services/driverPublicProfile');
 const {
   getDriverEligibility,
   areScheduleDetailsCompatible,
@@ -422,8 +423,9 @@ router.patch('/requests/:requestId/accept', async (req, res) => {
 
     const populatedRequest = await VanRequest.findById(rideRequest._id)
       .populate('parent', 'fullName phone')
-      .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber')
+      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate')
       .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model');
+    const parentSafeRequest = toParentSafeRequest(populatedRequest);
 
     const parent = await User.findById(rideRequest.parent?._id || rideRequest.parent);
     const driver = await User.findById(req.user._id).select('fullName phone driver.vehicleType driver.plateNumber');
@@ -463,7 +465,7 @@ router.patch('/requests/:requestId/accept', async (req, res) => {
     const io = getIo();
     if (io) {
       const eventPayload = {
-        request: populatedRequest,
+        request: parentSafeRequest,
       };
 
       io.to(buildTripRoomName(rideRequest._id)).emit('trip:request-updated', eventPayload);
@@ -473,7 +475,7 @@ router.patch('/requests/:requestId/accept', async (req, res) => {
 
     return res.status(200).json({
       message: 'Ride request accepted successfully.',
-      request: populatedRequest,
+      request: parentSafeRequest,
     });
   } catch (error) {
     return res.status(500).json({ message: 'Unable to accept ride request right now.' });
@@ -541,18 +543,19 @@ router.patch('/requests/:requestId/reject', async (req, res) => {
 
     const populatedRequest = await VanRequest.findById(rejectedRequest._id)
       .populate('parent', 'fullName phone')
-      .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber')
+      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate')
       .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model');
+    const parentSafeRequest = toParentSafeRequest(populatedRequest);
 
     const io = getIo();
     if (io) {
-      const eventPayload = { request: populatedRequest };
+      const eventPayload = { request: parentSafeRequest };
       io.to(buildTripRoomName(rejectedRequest._id)).emit('trip:request-updated', eventPayload);
       io.to(buildUserRoomName(rejectedRequest.parent?._id || rejectedRequest.parent)).emit('trip:request-updated', eventPayload);
       io.to('drivers').emit('trip:request-updated', eventPayload);
     }
 
-    return res.status(200).json({ message: 'Request rejected and made available to other drivers.', request: populatedRequest });
+    return res.status(200).json({ message: 'Request rejected and made available to other drivers.', request: parentSafeRequest });
   } catch (error) {
     return res.status(500).json({ message: 'Unable to reject ride request right now.' });
   }
@@ -723,18 +726,19 @@ router.patch('/requests/:requestId/arrived', async (req, res) => {
 
     const populatedRequest = await VanRequest.findById(rideRequest._id)
       .populate('parent', 'fullName phone')
-      .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber')
+      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate')
       .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model');
+    const parentSafeRequest = toParentSafeRequest(populatedRequest);
 
     const io = getIo();
     if (io) {
-      const eventPayload = { request: populatedRequest };
+      const eventPayload = { request: parentSafeRequest };
       io.to(buildTripRoomName(rideRequest._id)).emit('trip:request-updated', eventPayload);
       io.to(buildUserRoomName(rideRequest.parent?._id || rideRequest.parent)).emit('trip:request-updated', eventPayload);
       io.to(buildUserRoomName(req.user._id)).emit('trip:request-updated', eventPayload);
     }
 
-    return res.status(200).json({ message: 'Arrival at pickup recorded.', request: populatedRequest });
+    return res.status(200).json({ message: 'Arrival at pickup recorded.', request: parentSafeRequest });
   } catch (error) {
     return res.status(500).json({ message: 'Unable to record arrival at pickup right now.' });
   }
@@ -784,11 +788,12 @@ router.patch('/requests/:requestId/picked-up', async (req, res) => {
 
     const populatedRequest = await VanRequest.findById(rideRequest._id)
       .populate('parent', 'fullName phone')
-      .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber');
+      .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate');
+    const parentSafeRequest = toParentSafeRequest(populatedRequest);
 
     const io = getIo();
     if (io) {
-      const eventPayload = { request: populatedRequest };
+      const eventPayload = { request: parentSafeRequest };
       io.to(buildTripRoomName(rideRequest._id)).emit('trip:request-updated', eventPayload);
       io.to(buildUserRoomName(rideRequest.parent?._id)).emit('trip:request-updated', eventPayload);
       io.to(buildUserRoomName(req.user._id)).emit('trip:request-updated', eventPayload);
@@ -802,7 +807,7 @@ router.patch('/requests/:requestId/picked-up', async (req, res) => {
 
     return res.status(200).json({
       message: 'Trip marked as picked up.',
-      request: populatedRequest,
+      request: parentSafeRequest,
     });
   } catch (error) {
     return res.status(500).json({ message: 'Unable to update trip status right now.' });
@@ -857,11 +862,12 @@ router.patch('/requests/:requestId/arrived-at-school', async (req, res) => {
 
       const populatedRequest = await VanRequest.findById(arrivedRequest._id)
         .populate('parent', 'fullName phone')
-        .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber')
+        .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate')
         .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model');
+      const parentSafeRequest = toParentSafeRequest(populatedRequest);
       const io = getIo();
       if (io) {
-        const eventPayload = { request: populatedRequest };
+        const eventPayload = { request: parentSafeRequest };
         io.to(buildTripRoomName(arrivedRequest._id)).emit('trip:request-updated', eventPayload);
         io.to(buildUserRoomName(arrivedRequest.parent?._id || arrivedRequest.parent)).emit('trip:request-updated', eventPayload);
         io.to(buildUserRoomName(req.user._id)).emit('trip:request-updated', eventPayload);
@@ -941,11 +947,12 @@ router.patch('/requests/complete-school-run', async (req, res) => {
 
       const populatedRequest = await VanRequest.findById(completedRequest._id)
         .populate('parent', 'fullName phone')
-        .populate('driver', 'fullName phone driver.vehicleType driver.plateNumber')
+        .populate('driver', 'fullName phone status accountState driver.vehicleType driver.plateNumber driver.licenseExpirationDate')
         .populate('vehicleId', 'plateNumber vehicleType seatCapacity color manufacturer model');
+      const parentSafeRequest = toParentSafeRequest(populatedRequest);
       const io = getIo();
       if (io) {
-        const eventPayload = { request: populatedRequest };
+        const eventPayload = { request: parentSafeRequest };
         io.to(buildTripRoomName(completedRequest._id)).emit('trip:completed', eventPayload);
         io.to(buildUserRoomName(completedRequest.parent?._id || completedRequest.parent)).emit('trip:completed', eventPayload);
         io.to(buildUserRoomName(req.user._id)).emit('trip:completed', eventPayload);

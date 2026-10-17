@@ -966,9 +966,11 @@ export default function ParentDashboard({ token, user, onLogout }) {
                 <>
                   <ParentTrackingPanel
                     tripStatus={activeRideRequest.status}
-                    driverName={activeRideRequest.driver?.fullName}
-                    vehicleType={activeRideRequest.vehicleId?.vehicleType || activeRideRequest.driver?.driver?.vehicleType}
-                    vehiclePlate={activeRideRequest.vehicleId?.plateNumber || activeRideRequest.driver?.driver?.plateNumber}
+                    driverProfile={activeRideRequest.driverProfile}
+                    driverName={activeRideRequest.driverProfile?.name || activeRideRequest.driver?.fullName}
+                    driverPhone={activeRideRequest.driverProfile?.phone || activeRideRequest.driver?.phone}
+                    vehicleType={activeRideRequest.driverProfile?.vehicleType || activeRideRequest.vehicleId?.vehicleType || activeRideRequest.driver?.driver?.vehicleType}
+                    vehiclePlate={activeRideRequest.driverProfile?.plateNumber || activeRideRequest.vehicleId?.plateNumber || activeRideRequest.driver?.driver?.plateNumber}
                     currentLocation={
                       asLatLng(activeRideRequest.liveLocation)?.map((value) => value.toFixed(6)).join(', ') ||
                       'Locating...'
