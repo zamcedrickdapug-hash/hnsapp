@@ -614,15 +614,16 @@ export default function ParentDashboard({ token, user, onLogout }) {
 
   const routeTripId = activeRideRequest?._id
   const routeTripStatus = activeRideRequest?.status
+  const routeTargetsSchool = ['picked_up', 'arrived_at_school'].includes(routeTripStatus)
   const routeVanLatitude = Number(activeRideRequest?.liveLocation?.latitude)
   const routeVanLongitude = Number(activeRideRequest?.liveLocation?.longitude)
   const routeTargetLatitude = Number(
-    routeTripStatus === 'picked_up'
+    routeTargetsSchool
       ? activeRideRequest?.destinationLocation?.latitude
       : activeRideRequest?.requesterLocation?.latitude
   )
   const routeTargetLongitude = Number(
-    routeTripStatus === 'picked_up'
+    routeTargetsSchool
       ? activeRideRequest?.destinationLocation?.longitude
       : activeRideRequest?.requesterLocation?.longitude
   )
@@ -649,7 +650,7 @@ export default function ParentDashboard({ token, user, onLogout }) {
 
     const vanPosition = [routeVanLatitude, routeVanLongitude]
     const targetPosition = [routeTargetLatitude, routeTargetLongitude]
-    const targetPhase = routeTripStatus === 'picked_up' ? 'school' : 'pickup'
+    const targetPhase = routeTargetsSchool ? 'school' : 'pickup'
     const targetKey = `${routeTripId}:${targetPhase}:${routeTargetLatitude},${routeTargetLongitude}`
     const routeState = routeRequestRef.current
     const targetChanged = routeState.targetKey !== targetKey
@@ -1009,13 +1010,13 @@ export default function ParentDashboard({ token, user, onLogout }) {
                         vanPosition={asLatLng(activeRideRequest.liveLocation)}
                         plannedRoute={plannedRoute}
                         pickupPosition={
-                          activeRideRequest.status === 'picked_up'
+                          ['picked_up', 'arrived_at_school'].includes(activeRideRequest.status)
                             ? asLatLng(activeRideRequest.destinationLocation)
                             : asLatLng(activeRideRequest.requesterLocation)
                         }
                         showRoute={Boolean(
                           asLatLng(activeRideRequest.liveLocation) &&
-                          (activeRideRequest.status === 'picked_up'
+                          (['picked_up', 'arrived_at_school'].includes(activeRideRequest.status)
                             ? asLatLng(activeRideRequest.destinationLocation)
                             : asLatLng(activeRideRequest.requesterLocation))
                         )}

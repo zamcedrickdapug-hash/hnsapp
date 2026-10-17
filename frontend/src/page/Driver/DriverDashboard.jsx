@@ -204,11 +204,17 @@ export default function DriverDashboard({ token, user, onLogout }) {
 		}
 	}, [searchingRequests.length, gpsStatus, selectedTrip, acceptedRequests.length, requests])
 
-	const selectedTripVanPosition = selectedTrip ? asLatLng(selectedTrip.liveLocation) : null
-	const selectedTripRequesterPosition = selectedTrip ? asLatLng(selectedTrip.requesterLocation) : null
-	const selectedTripDestinationPosition = selectedTrip ? asLatLng(selectedTrip.destinationLocation) : null
+	const mapTrip =
+		selectedTrip ||
+		arrivedAtSchoolRequests.find((item) => item._id === selectedRequestId) ||
+		arrivedAtSchoolRequests[0] ||
+		null
+	const selectedTripVanPosition = mapTrip ? asLatLng(mapTrip.liveLocation) : null
+	const selectedTripRequesterPosition = mapTrip ? asLatLng(mapTrip.requesterLocation) : null
+	const selectedTripDestinationPosition = mapTrip ? asLatLng(mapTrip.destinationLocation) : null
+	const selectedTripTargetsSchool = ['picked_up', 'arrived_at_school'].includes(mapTrip?.status)
 	const selectedTripMapTargetPosition =
-		selectedTrip?.status === 'picked_up' ? selectedTripDestinationPosition : selectedTripRequesterPosition
+		selectedTripTargetsSchool ? selectedTripDestinationPosition : selectedTripRequesterPosition
 	const selectedTripMapCenter = selectedTripVanPosition || selectedTripRequesterPosition || DEFAULT_MAP_CENTER
 
 	const activePickupPins = useMemo(() => {
@@ -926,7 +932,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 			return
 		}
 
-		const targetPhase = selectedTrip.status === 'picked_up' ? 'school' : 'pickup'
+		const targetPhase = ['picked_up', 'arrived_at_school'].includes(selectedTrip.status) ? 'school' : 'pickup'
 		const targetKey = `${selectedTrip._id}:${targetPhase}:${selectedTripMapTargetPosition[0]},${selectedTripMapTargetPosition[1]}`
 		const routeState = routeRequestRef.current
 		const targetChanged = routeState.targetKey !== targetKey
@@ -1111,7 +1117,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 							</Card>
 						</div>
 
-						{selectedTrip && (
+						{mapTrip && (
 							<div className="lg:col-span-2">
 								<Card>
 									<CardHeader>
@@ -1126,7 +1132,8 @@ export default function DriverDashboard({ token, user, onLogout }) {
 											vanPosition={selectedTripVanPosition}
 											plannedRoute={optimizedRoute}
 											showRoute={Boolean(
-												selectedTripVanPosition &&
+												mapTrip.status !== 'arrived_at_school' &&
+													selectedTripVanPosition &&
 													(optimizedRoute.length > 1 || selectedTripMapTargetPosition)
 											)}
 											routeMode="road"
