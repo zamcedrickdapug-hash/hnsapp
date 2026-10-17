@@ -35,17 +35,29 @@ const matches = (record, query) => {
   return Object.entries(query || {}).every(([key, expected]) => {
     if (key === '$or') return expected.some((clause) => matches(record, clause));
     const actual = record[key];
+    if (expected instanceof Date) {
+      return new Date(actual).getTime() === expected.getTime();
+    }
     if (expected && typeof expected === 'object' && !Array.isArray(expected)) {
-      if ('$in' in expected) return expected.$in.includes(actual);
+      if ('$in' in expected && !expected.$in.some((value) => String(value) === String(actual))) return false;
       if ('$ne' in expected) {
-        return Array.isArray(actual) ? !actual.includes(expected.$ne) : actual !== expected.$ne;
+        if (Array.isArray(actual) ? actual.includes(expected.$ne) : String(actual) === String(expected.$ne)) return false;
       }
       if ('$gte' in expected || '$lte' in expected) {
         const actualValue = actual instanceof Date ? actual.getTime() : new Date(actual).getTime();
         if ('$gte' in expected && actualValue < new Date(expected.$gte).getTime()) return false;
         if ('$lte' in expected && actualValue > new Date(expected.$lte).getTime()) return false;
-        return true;
       }
+      if ('$lt' in expected) {
+        const actualDate = new Date(actual).getTime();
+        const expectedDate = new Date(expected.$lt).getTime();
+        const isDateComparison = Number.isFinite(actualDate) && Number.isFinite(expectedDate);
+        const isLess = isDateComparison
+          ? actualDate < expectedDate
+          : String(actual).localeCompare(String(expected.$lt)) < 0;
+        if (!isLess) return false;
+      }
+      return Object.keys(expected).some((operator) => ['$in', '$ne', '$gte', '$lte', '$lt'].includes(operator));
     }
     if (expected === null) return actual == null;
     return String(actual) === String(expected);
@@ -76,6 +88,16 @@ const createFixture = async (t) => {
   const emitted = [];
   const notifications = [];
   const collectionNotifications = [];
+  const messages = [];
+  class Message {
+    static async distinct(field, query) {
+      assert.equal(field, 'requestId');
+      const requestIds = new Set((query.requestId?.$in || []).map(String));
+      return [...new Set(messages
+        .filter((message) => requestIds.has(String(message.requestId)))
+        .map((message) => message.requestId))];
+    }
+  }
   const pickupArrivalNotifications = [];
   const schoolArrivalNotifications = [];
   const plainUser = (user) => {
@@ -113,6 +135,7 @@ const createFixture = async (t) => {
     }
     populate(field) { this.populateFields.push(field); return this; }
     select() { return this; }
+    lean() { return this; }
     sort(fields) { this.sortFields = fields; return this; }
     limit(count) { this.limitCount = count; return this; }
     skip() { return this; }
@@ -123,7 +146,11 @@ const createFixture = async (t) => {
           if (this.sortFields) {
             items = [...items].sort((left, right) => {
               for (const [field, direction] of Object.entries(this.sortFields)) {
-                const comparison = new Date(left[field]).getTime() - new Date(right[field]).getTime();
+                const leftValue = left[field] instanceof Date ? left[field].getTime() : left[field];
+                const rightValue = right[field] instanceof Date ? right[field].getTime() : right[field];
+                const comparison = typeof leftValue === 'number' && typeof rightValue === 'number'
+                  ? leftValue - rightValue
+                  : String(leftValue).localeCompare(String(rightValue));
                 if (comparison !== 0) return comparison * direction;
               }
               return 0;
@@ -382,6 +409,7 @@ const createFixture = async (t) => {
     '../models/DriverPhoto': DriverPhoto,
     '../models/School': School,
     '../models/Notification': Notification,
+    '../models/Message': Message,
     '../models/VanRequest': VanRequest,
     '../models/Vehicle': Vehicle,
     '../models/DriverStatus': DriverStatus,
@@ -469,7 +497,7 @@ const createFixture = async (t) => {
     const response = await fetch(`${baseUrl}${route}`, {
       method,
       headers: {
-        Authorization: `Bearer ${tokenFor(user)}`,
+        ...(user ? { Authorization: `Bearer ${tokenFor(user)}` } : {}),
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -486,7 +514,30 @@ const createFixture = async (t) => {
     };
   };
 
-  return { parent, driverOne, driverTwo, User, users, requests, statuses, vehicles, schools, driverPhotos, driverEligibility, emitted, notifications, collectionNotifications, pickupArrivalNotifications, schoolArrivalNotifications, addSchool, addVehicle, request, baseUrl };
+  const addFinishedTrip = (driver, data = {}) => {
+    const record = {
+      _id: randomBytes(12).toString('hex'),
+      driver: driver._id,
+      parent: parent._id,
+      status: 'completed',
+      studentName: 'Student One',
+      students: [],
+      schoolName: 'Example School',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      acceptedAt: new Date(),
+      pickedUpAt: null,
+      arrivedAtSchoolAt: null,
+      liveLocation: { latitude: 1, longitude: 2 },
+      requesterLocation: { latitude: 3, longitude: 4 },
+      ...copy(data),
+    };
+    requests.set(String(record._id), record);
+    return record;
+  };
+  const addChat = (requestId) => messages.push({ requestId: String(requestId) });
+
+  return { parent, driverOne, driverTwo, User, users, requests, statuses, vehicles, schools, driverPhotos, driverEligibility, emitted, notifications, collectionNotifications, pickupArrivalNotifications, schoolArrivalNotifications, addSchool, addVehicle, addFinishedTrip, addChat, request, baseUrl };
 };
 
 const createRequest = (fixture, data = {}) => fixture.request('/api/parents/van-requests', fixture.parent, {
@@ -514,6 +565,150 @@ const createNotification = (user, overrides = {}) => ({
 const setOnline = async (fixture, driver) => fixture.request('/api/drivers/status/toggle', driver, {
   method: 'PATCH',
   body: { isOnline: true },
+});
+
+test('driver trip history is scoped to the authenticated driver and returns only approved fields', async (t) => {
+  const f = await createFixture(t);
+  const ownTrip = f.addFinishedTrip(f.driverOne, {
+    students: [{ studentName: 'Student One' }, { studentName: 'Student Two' }],
+    acceptedAt: new Date(Date.now() - 60 * 60 * 1000),
+    pickedUpAt: new Date(Date.now() - 50 * 60 * 1000),
+    arrivedAtSchoolAt: new Date(Date.now() - 10 * 60 * 1000),
+  });
+  f.addFinishedTrip(f.driverTwo, { studentName: 'Other Driver Student' });
+  f.addChat(ownTrip._id);
+
+  const response = await f.request('/api/drivers/trips/history', f.driverOne);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.trips.length, 1);
+  assert.deepEqual(response.body.trips[0].studentNames, ['Student One', 'Student Two']);
+  assert.equal(response.body.trips[0].parentName, 'Parent One');
+  assert.equal(response.body.trips[0].hasChat, true);
+  assert.equal(response.body.trips[0].durationMinutes, 50);
+  assert.deepEqual(Object.keys(response.body.trips[0]).sort(), [
+    'acceptedAt',
+    'arrivedAtSchoolAt',
+    'completedAt',
+    'createdAt',
+    'durationMinutes',
+    'hasChat',
+    'parentName',
+    'pickedUpAt',
+    'requestId',
+    'schoolName',
+    'status',
+    'studentNames',
+  ].sort());
+  const serialized = JSON.stringify(response.body);
+  for (const privateField of ['phone', 'email', 'liveLocation', 'latitude', 'longitude', 'requesterLocation']) {
+    assert.equal(serialized.includes(privateField), false);
+  }
+});
+
+test('driver trip history rejects parents and unauthenticated callers', async (t) => {
+  const f = await createFixture(t);
+
+  assert.equal((await f.request('/api/drivers/trips/history', f.parent)).status, 403);
+  assert.equal((await f.request('/api/drivers/trips/history', null)).status, 401);
+});
+
+test('driver trip history status and range filters work', async (t) => {
+  const f = await createFixture(t);
+  f.addFinishedTrip(f.driverOne, {
+    status: 'completed',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  f.addFinishedTrip(f.driverOne, {
+    status: 'cancelled',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  f.addFinishedTrip(f.driverOne, {
+    status: 'completed',
+    createdAt: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000),
+    updatedAt: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000),
+  });
+
+  const completed = await f.request('/api/drivers/trips/history?status=completed', f.driverOne);
+  assert.equal(completed.status, 200);
+  assert.equal(completed.body.trips.length, 2);
+  assert.ok(completed.body.trips.every((trip) => trip.status === 'completed'));
+
+  const cancelled = await f.request('/api/drivers/trips/history?status=cancelled', f.driverOne);
+  assert.deepEqual(cancelled.body.trips.map((trip) => trip.status), ['cancelled']);
+
+  const today = await f.request('/api/drivers/trips/history?range=today', f.driverOne);
+  assert.equal(today.body.trips.length, 2);
+  const lastSevenDays = await f.request('/api/drivers/trips/history?range=7d', f.driverOne);
+  assert.equal(lastSevenDays.body.trips.length, 2);
+  const lastThirtyDays = await f.request('/api/drivers/trips/history?range=30d', f.driverOne);
+  assert.equal(lastThirtyDays.body.trips.length, 2);
+});
+
+test('driver trip history limit and cursor paginate newest first', async (t) => {
+  const f = await createFixture(t);
+  const trips = [0, 1, 2].map((daysAgo) => f.addFinishedTrip(f.driverOne, {
+    createdAt: new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000),
+  }));
+
+  const firstPage = await f.request('/api/drivers/trips/history?limit=2', f.driverOne);
+  assert.equal(firstPage.body.trips.length, 2);
+  assert.equal(firstPage.body.hasMore, true);
+  assert.equal(firstPage.body.nextCursor, firstPage.body.trips[1].requestId);
+  assert.equal(firstPage.body.trips[0].requestId, String(trips[0]._id));
+
+  const nextPage = await f.request(
+    `/api/drivers/trips/history?limit=2&before=${firstPage.body.nextCursor}`,
+    f.driverOne
+  );
+  assert.equal(nextPage.body.trips.length, 1);
+  assert.equal(nextPage.body.trips[0].requestId, String(trips[2]._id));
+  assert.equal(nextPage.body.hasMore, false);
+  const foreignCursor = f.addFinishedTrip(f.driverTwo);
+  assert.equal(
+    (await f.request(`/api/drivers/trips/history?before=${foreignCursor._id}`, f.driverOne)).status,
+    404
+  );
+});
+
+test('driver trip history summary covers every finished trip, not only the current page', async (t) => {
+  const f = await createFixture(t);
+  const recent = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  f.addFinishedTrip(f.driverOne, {
+    status: 'completed',
+    createdAt: recent,
+    updatedAt: recent,
+    students: [{ studentName: 'Student One' }, { studentName: 'Student Two' }],
+  });
+  f.addFinishedTrip(f.driverOne, {
+    status: 'completed',
+    createdAt: recent,
+    updatedAt: recent,
+    studentName: 'Student Three',
+  });
+  f.addFinishedTrip(f.driverOne, { status: 'cancelled', createdAt: recent, updatedAt: recent });
+  f.addFinishedTrip(f.driverTwo, { status: 'completed', createdAt: recent, updatedAt: recent });
+
+  const response = await f.request('/api/drivers/trips/history?limit=1', f.driverOne);
+
+  assert.equal(response.body.trips.length, 1);
+  assert.deepEqual(response.body.summary, {
+    completed: 2,
+    cancelled: 1,
+    thisWeek: 2,
+    studentsTransported: 3,
+  });
+});
+
+test('driver trip history rejects malformed status, range, limit, and cursor params', async (t) => {
+  const f = await createFixture(t);
+
+  for (const query of ['status=searching', 'range=90d', 'limit=0', 'limit=2.5']) {
+    assert.equal((await f.request(`/api/drivers/trips/history?${query}`, f.driverOne)).status, 400);
+  }
+  assert.equal((await f.request('/api/drivers/trips/history?before=invalid', f.driverOne)).status, 404);
 });
 
 test('Parent request creation, live updates, vehicle assignment, and completion use VanRequest', async (t) => {

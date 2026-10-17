@@ -17,6 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Button } from '../../components/ui/button'
 import { DashboardLayout } from '../../components/dashboard'
 import { DriverStatsCards } from '../../components/dashboard/driver'
+import DriverTripHistory from '../../components/dashboard/driver/DriverTripHistory'
 import TripMessages from '../../components/common/TripMessages'
 import HelpSupport from '../../components/common/HelpSupport'
 import LiveTripMap from '../../components/tracking/LiveTripGoogleMap'
@@ -1043,9 +1044,11 @@ export default function DriverDashboard({ token, user, onLogout }) {
 						? 'Requests'
 						: activeSection === 'messages'
 							? 'Messages'
-							: activeSection === 'help'
-								? 'Help & Support'
-								: 'Settings'
+							: activeSection === 'trips'
+								? 'Trip History'
+								: activeSection === 'help'
+									? 'Help & Support'
+									: 'Settings'
 			}
 			notificationCount={newRequestCount}
 			badgeValues={{ newRequestCount, unreadMessageCount }}
@@ -1538,6 +1541,16 @@ export default function DriverDashboard({ token, user, onLogout }) {
 					driverBusy={driverBusy}
 					availabilityLoading={availabilityLoading}
 					onToggleAvailability={toggleDriverAvailability}
+				/>
+			) : null}
+
+			{activeSection === 'trips' ? (
+				<DriverTripHistory
+					token={token}
+					onMessageParent={(requestId) => {
+						setSelectedMessageRequestId(String(requestId))
+						setActiveSection('messages')
+					}}
 				/>
 			) : null}
 

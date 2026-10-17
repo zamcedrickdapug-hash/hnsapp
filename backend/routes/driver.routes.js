@@ -6,6 +6,7 @@ const DriverPhoto = require('../models/DriverPhoto');
 const ValidIdDocument = require('../models/ValidIdDocument');
 const Vehicle = require('../models/Vehicle');
 const DriverStatus = require('../models/DriverStatus');
+const Message = require('../models/Message');
 const { requireAuth, requireDriver } = require('../middleware/auth');
 const { getIo, buildTripRoomName, buildUserRoomName } = require('../socket');
 const {
@@ -277,6 +278,141 @@ const ensureDriver = (req, res, next) => {
 };
 
 router.use(requireAuth, ensureDriver);
+
+router.get('/trips/history', async (req, res) => {
+  try {
+    const allowedStatuses = ['completed', 'cancelled'];
+    const status = req.query.status === undefined ? 'all' : req.query.status;
+    const range = req.query.range === undefined ? 'all' : req.query.range;
+    if (typeof status !== 'string' || !['all', ...allowedStatuses].includes(status)) {
+      return res.status(400).json({ message: 'Status must be all, completed, or cancelled.' });
+    }
+    if (typeof range !== 'string' || !['all', 'today', '7d', '30d'].includes(range)) {
+      return res.status(400).json({ message: 'Range must be all, today, 7d, or 30d.' });
+    }
+
+    const rawLimit = req.query.limit;
+    const parsedLimit = rawLimit === undefined ? 20 : Number(rawLimit);
+    if (
+      typeof rawLimit === 'object' ||
+      !Number.isInteger(parsedLimit) ||
+      parsedLimit < 1
+    ) {
+      return res.status(400).json({ message: 'Limit must be a positive integer.' });
+    }
+    const limit = Math.min(parsedLimit, 50);
+
+    const finishedQuery = {
+      driver: req.user._id,
+      status: { $in: allowedStatuses },
+    };
+    const summaryRecords = await VanRequest.find(finishedQuery)
+      .select('status createdAt updatedAt completedAt students studentName')
+      .lean();
+    const now = new Date();
+    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const summary = summaryRecords.reduce((counts, trip) => {
+      const completed = trip.status === 'completed';
+      const completedAt = trip.completedAt || trip.updatedAt;
+      const studentCount = Array.isArray(trip.students) && trip.students.length
+        ? trip.students.length
+        : trip.studentName
+          ? 1
+          : 0;
+
+      if (completed) {
+        counts.completed += 1;
+        counts.studentsTransported += studentCount;
+        if (completedAt && new Date(completedAt) >= weekStart) counts.thisWeek += 1;
+      } else {
+        counts.cancelled += 1;
+      }
+      return counts;
+    }, { completed: 0, cancelled: 0, thisWeek: 0, studentsTransported: 0 });
+
+    const query = {
+      ...finishedQuery,
+      ...(status === 'all' ? {} : { status }),
+    };
+    if (range !== 'all') {
+      const rangeStart = new Date();
+      if (range === 'today') rangeStart.setHours(0, 0, 0, 0);
+      else rangeStart.setTime(now.getTime() - (range === '7d' ? 7 : 30) * 24 * 60 * 60 * 1000);
+      query.createdAt = { $gte: rangeStart };
+    }
+
+    if (req.query.before !== undefined) {
+      const before = req.query.before;
+      if (typeof before !== 'string' || !/^[a-f\d]{24}$/i.test(before)) {
+        return res.status(404).json({ message: 'Trip history cursor not found.' });
+      }
+      const cursor = await VanRequest.findOne({
+        _id: before,
+        driver: req.user._id,
+        status: { $in: allowedStatuses },
+      }).select('_id createdAt').lean();
+      if (!cursor) return res.status(404).json({ message: 'Trip history cursor not found.' });
+      query.$or = [
+        { createdAt: { $lt: cursor.createdAt } },
+        { createdAt: cursor.createdAt, _id: { $lt: cursor._id } },
+      ];
+    }
+
+    const page = await VanRequest.find(query)
+      .populate('parent', 'fullName')
+      .select('_id status students studentName schoolName parent createdAt updatedAt completedAt acceptedAt pickedUpAt arrivedAtSchoolAt')
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit + 1)
+      .lean();
+    const hasMore = page.length > limit;
+    const pageTrips = page.slice(0, limit);
+    const requestIds = pageTrips.map((trip) => trip._id);
+    const chats = requestIds.length
+      ? await Message.distinct('requestId', { requestId: { $in: requestIds } })
+      : [];
+    const chatRequestIds = new Set(chats.map(String));
+
+    const trips = pageTrips.map((trip) => {
+      const studentNames = Array.isArray(trip.students)
+        ? trip.students.map((student) => student?.studentName).filter((name) => typeof name === 'string' && name.trim())
+        : [];
+      if (!studentNames.length && typeof trip.studentName === 'string' && trip.studentName.trim()) {
+        studentNames.push(trip.studentName);
+      }
+      const completedAt = trip.completedAt || (trip.status === 'completed' ? trip.updatedAt : null);
+      const durationStart = trip.acceptedAt || trip.pickedUpAt;
+      const durationEnd = trip.arrivedAtSchoolAt || completedAt;
+      const duration = durationStart && durationEnd
+        ? Math.max(0, Math.round((new Date(durationEnd) - new Date(durationStart)) / 60000))
+        : null;
+
+      return {
+        requestId: String(trip._id),
+        status: trip.status,
+        studentNames,
+        schoolName: trip.schoolName || '',
+        parentName: trip.parent?.fullName || '',
+        createdAt: trip.createdAt || null,
+        acceptedAt: trip.acceptedAt || null,
+        pickedUpAt: trip.pickedUpAt || null,
+        arrivedAtSchoolAt: trip.arrivedAtSchoolAt || null,
+        completedAt,
+        durationMinutes: Number.isFinite(duration) ? duration : null,
+        hasChat: chatRequestIds.has(String(trip._id)),
+      };
+    });
+
+    return res.status(200).json({
+      trips,
+      summary,
+      hasMore,
+      nextCursor: hasMore && pageTrips.length ? String(pageTrips[pageTrips.length - 1]._id) : null,
+    });
+  } catch (error) {
+    console.error('[DRIVER] Failed to load trip history:', error.name || 'UnknownError');
+    return res.status(500).json({ message: 'Unable to load trip history right now.' });
+  }
+});
 
 router.get('/requests', async (req, res) => {
   try {
