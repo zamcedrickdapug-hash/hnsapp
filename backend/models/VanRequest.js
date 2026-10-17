@@ -155,6 +155,25 @@ const vanRequestSchema = new mongoose.Schema(
       type: locationSchema,
       default: null,
     },
+    fareAmount: {
+      type: Number,
+      default: null,
+    },
+    fareDistanceKm: {
+      type: Number,
+      default: null,
+    },
+    paymentStatus: {
+      type: String,
+      enum: ['unpaid', 'pending', 'paid'],
+      default: 'unpaid',
+      index: true,
+    },
+    paymentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Payment',
+      default: null,
+    },
     pickupConfirmedByParentAt: {
       type: Date,
       default: null,

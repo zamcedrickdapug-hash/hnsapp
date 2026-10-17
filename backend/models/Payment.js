@@ -1,5 +1,22 @@
 const mongoose = require('mongoose');
 
+const fareBreakdownSchema = new mongoose.Schema({
+  vanRequest: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'VanRequest',
+    required: true,
+  },
+  fare: {
+    type: Number,
+    required: true,
+    min: 0,
+  },
+  distanceKm: {
+    type: Number,
+    default: null,
+  },
+}, { _id: false });
+
 const paymentSchema = new mongoose.Schema(
   {
     referenceNo: {
@@ -24,6 +41,17 @@ const paymentSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'VanRequest',
       default: null,
+    },
+    vanRequests: {
+      type: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'VanRequest',
+      }],
+      default: [],
+    },
+    fareBreakdown: {
+      type: [fareBreakdownSchema],
+      default: [],
     },
     amount: {
       type: Number,

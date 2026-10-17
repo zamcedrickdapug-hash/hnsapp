@@ -7,6 +7,7 @@ const express = require('express');
 const paymentConfig = require('../config/paymentConfig');
 
 const root = path.resolve(__dirname, '..');
+const BILLING_DATE = new Date('2026-10-17T12:00:00+08:00');
 const ids = {
   parent: '111111111111111111111111',
   otherParent: '222222222222222222222222',
@@ -15,11 +16,15 @@ const ids = {
   admin: '555555555555555555555555',
   request: 'aaaaaaaaaaaaaaaaaaaaaaaa',
   otherRequest: 'bbbbbbbbbbbbbbbbbbbbbbbb',
+  request2: 'cccccccccccccccccccccccc',
+  request3: 'dddddddddddddddddddddddd',
+  request4: 'eeeeeeeeeeeeeeeeeeeeeeee',
 };
 
 const clone = (value) => {
   if (Array.isArray(value)) return value.map(clone);
   if (value instanceof Date) return new Date(value.getTime());
+  if (value?._bsontype === 'ObjectId') return value.toString();
   if (value && typeof value === 'object') {
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, clone(item)]));
   }
@@ -27,12 +32,17 @@ const clone = (value) => {
 };
 
 const idOf = (value) => String(value?._id || value || '');
-
 const matches = (record, query = {}) => Object.entries(query).every(([key, expected]) => {
   if (key === '$or') return expected.some((clause) => matches(record, clause));
   const actual = record?.[key];
-  if (expected && typeof expected === 'object' && !(expected instanceof Date) && !Array.isArray(expected)) {
-    if ('$in' in expected && !expected.$in.some((item) => String(item) === String(actual))) return false;
+  if (
+    expected
+    && typeof expected === 'object'
+    && !(expected instanceof Date)
+    && !Array.isArray(expected)
+    && expected._bsontype !== 'ObjectId'
+  ) {
+    if ('$in' in expected && !expected.$in.some((item) => idOf(item) === idOf(actual))) return false;
     if ('$gte' in expected && new Date(actual).getTime() < new Date(expected.$gte).getTime()) return false;
     if ('$lt' in expected && new Date(actual).getTime() >= new Date(expected.$lt).getTime()) return false;
     return Object.keys(expected).some((operator) => ['$in', '$gte', '$lt'].includes(operator));
@@ -43,29 +53,47 @@ const matches = (record, query = {}) => Object.entries(query).every(([key, expec
 
 const createFixture = async (t, seeded = {}) => {
   const payments = (seeded.payments || []).map((payment, index) => ({
-    _id: payment._id || (index + 1).toString(16).padStart(24, '0'),
-    createdAt: payment.createdAt || new Date(Date.now() - index * 1000),
+    _id: (index + 1).toString(16).padStart(24, '0'),
+    createdAt: new Date(Date.now() - index * 1000),
     ...clone(payment),
   }));
   const audits = clone(seeded.audits || []);
+  const defaultTrip = {
+    _id: ids.request,
+    parent: ids.parent,
+    driver: ids.driver,
+    status: 'completed',
+    updatedAt: BILLING_DATE,
+    requesterLocation: { latitude: 14.6, longitude: 121 },
+    destinationLocation: { latitude: 14.627, longitude: 121 },
+    fareAmount: null,
+    fareDistanceKm: null,
+    paymentStatus: 'unpaid',
+    paymentId: null,
+    studentName: 'Student A',
+    students: [{ studentName: 'Student A' }, { studentName: 'Student B' }],
+    schoolName: 'School A',
+    vehicleId: { plateNumber: 'ABC-123' },
+  };
   const requests = [
-    {
-      _id: ids.request,
-      parent: ids.parent,
-      driver: ids.driver,
-      status: 'completed',
-      studentName: 'Student A',
-      students: [{ studentName: 'Student A' }, { studentName: 'Student B' }],
-      schoolName: 'School A',
-      vehicleId: { plateNumber: 'ABC-123' },
-    },
+    defaultTrip,
     {
       _id: ids.otherRequest,
       parent: ids.otherParent,
       driver: ids.otherDriver,
-      status: 'accepted',
+      status: 'completed',
+      updatedAt: BILLING_DATE,
     },
-    ...(seeded.requests || []),
+    ...(seeded.requests || []).map((request) => ({
+      updatedAt: BILLING_DATE,
+      fareAmount: null,
+      fareDistanceKm: null,
+      paymentStatus: 'unpaid',
+      paymentId: null,
+      requesterLocation: { latitude: 14.6, longitude: 121 },
+      destinationLocation: { latitude: 14.627, longitude: 121 },
+      ...clone(request),
+    })),
   ];
   const users = new Map([
     [ids.parent, { _id: ids.parent, role: 'parent', fullName: 'Parent A' }],
@@ -82,7 +110,7 @@ const createFixture = async (t, seeded = {}) => {
       if (field === 'parent') result.parent = clone(users.get(idOf(result.parent)) || null);
       if (field === 'driver') result.driver = clone(users.get(idOf(result.driver)) || null);
       if (field === 'vanRequest') {
-        result.vanRequest = clone(requests.find((request) => idOf(request._id) === idOf(result.vanRequest)) || null);
+        result.vanRequest = clone(requests.find((trip) => idOf(trip._id) === idOf(result.vanRequest)) || null);
       }
     }
     return result;
@@ -125,16 +153,17 @@ const createFixture = async (t, seeded = {}) => {
       }).then(resolve, reject);
     }
   }
+
   const runAggregate = (records, pipeline) => {
     let rows = records;
     for (const stage of pipeline) {
       if (stage.$match) {
         rows = rows.filter((record) => matches(record, stage.$match));
       } else if (stage.$group) {
-        const key = stage.$group._id === '$status' ? 'status' : null;
+        const groupField = stage.$group._id === '$status' ? 'status' : null;
         const groups = new Map();
         rows.forEach((record) => {
-          const groupId = key ? record[key] : null;
+          const groupId = groupField ? record[groupField] : null;
           const group = groups.get(groupId) || { _id: groupId };
           Object.entries(stage.$group).forEach(([field, expression]) => {
             if (field === '_id') return;
@@ -153,14 +182,14 @@ const createFixture = async (t, seeded = {}) => {
     }
     return rows;
   };
+
   const Payment = {
     create: async (data) => {
-      if (
-        data.externalRef
-        && payments.some((payment) => idOf(payment.driver) === idOf(data.driver)
-          && ['pending', 'verified'].includes(payment.status)
-          && payment.externalRef === data.externalRef)
-      ) {
+      if (data.externalRef && payments.some((payment) => (
+        idOf(payment.driver) === idOf(data.driver)
+        && ['pending', 'verified'].includes(payment.status)
+        && payment.externalRef === data.externalRef
+      ))) {
         const duplicate = new Error('duplicate');
         duplicate.code = 11000;
         throw duplicate;
@@ -171,7 +200,7 @@ const createFixture = async (t, seeded = {}) => {
         throw duplicate;
       }
       const created = {
-        _id: (payments.length + 1).toString(16).padStart(24, '0'),
+        _id: data._id || (payments.length + 1).toString(16).padStart(24, '0'),
         createdAt: new Date(),
         ...clone(data),
       };
@@ -185,7 +214,7 @@ const createFixture = async (t, seeded = {}) => {
     findOneAndUpdate: async (query, update) => {
       const payment = payments.find((candidate) => matches(candidate, query));
       if (!payment) return null;
-      Object.assign(payment, clone(update.$set));
+      Object.assign(payment, clone(update.$set || {}));
       return clone(payment);
     },
   };
@@ -199,14 +228,28 @@ const createFixture = async (t, seeded = {}) => {
     findOne: (query = {}) => new FakeQuery(() => audits.find((audit) => matches(audit, query)) || null),
   };
   const VanRequest = {
+    find: (query = {}) => new FakeQuery(() => requests.filter((request) => matches(request, query))),
     findOne: (query = {}) => new FakeQuery(() => requests.find((request) => matches(request, query)) || null),
+    findOneAndUpdate: (query, update) => new FakeQuery(() => {
+      const request = requests.find((candidate) => matches(candidate, query));
+      if (!request) return null;
+      Object.assign(request, clone(update.$set || {}));
+      return request;
+    }),
+    updateMany: async (query, update) => {
+      const matched = requests.filter((request) => matches(request, query));
+      matched.forEach((request) => {
+        Object.assign(request, clone(update.$set || {}));
+        Object.keys(update.$unset || {}).forEach((field) => delete request[field]);
+      });
+      return { matchedCount: matched.length, modifiedCount: matched.length, nModified: matched.length };
+    },
     exists: async (query = {}) => requests.some((request) => matches(request, query)),
     countDocuments: async (query = {}) => requests.filter((request) => matches(request, query)).length,
   };
   const auth = {
     requireAuth: (req, res, next) => {
-      const userId = req.get('authorization')?.replace(/^Bearer /, '');
-      const user = users.get(userId);
+      const user = users.get(req.get('authorization'));
       if (!user) return res.status(401).json({ message: 'Authentication token is required.' });
       req.user = user;
       return next();
@@ -221,6 +264,7 @@ const createFixture = async (t, seeded = {}) => {
     '../models/VanRequest': VanRequest,
     '../middleware/auth': auth,
     '../config/paymentConfig': paymentConfig,
+    '../services/fareService': realRequire('../services/fareService'),
   };
   loaded.require = (name) => Object.hasOwn(dependencies, name) ? dependencies[name] : realRequire(name);
   loaded._compile(fs.readFileSync(filename, 'utf8'), filename);
@@ -236,76 +280,102 @@ const createFixture = async (t, seeded = {}) => {
     const response = await fetch(`http://127.0.0.1:${server.address().port}/api/payments${route}`, {
       method,
       headers: {
-        ...(userId ? { authorization: `Bearer ${userId}` } : {}),
+        ...(userId ? { authorization: userId } : {}),
         ...(body ? { 'content-type': 'application/json' } : {}),
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
     return { status: response.status, body: await response.json() };
   };
-  return { request, payments, audits, router: loaded.exports };
+  return { request, payments, audits, requests, router: loaded.exports };
 };
 
-test('parent submits a payment and sees only own payments', async (t) => {
+const extraTrip = (overrides = {}) => ({
+  parent: ids.parent,
+  driver: ids.driver,
+  status: 'completed',
+  ...overrides,
+});
+
+test('parent submits server-priced trips and sees only own payments', async (t) => {
   const f = await createFixture(t, {
     payments: [
-      { parent: ids.parent, driver: ids.driver, amount: 100, currency: 'PHP', method: 'cash', status: 'pending' },
+      { parent: ids.parent, driver: ids.driver, amount: 70, currency: 'PHP', method: 'cash', status: 'pending' },
       { parent: ids.otherParent, driver: ids.otherDriver, amount: 200, currency: 'PHP', method: 'cash', status: 'pending' },
     ],
   });
   const submitted = await f.request('POST', '/', ids.parent, {
-    vanRequestId: ids.request,
-    amount: 100,
+    vanRequestIds: [ids.request],
+    amount: 1,
     method: 'cash',
   });
   assert.equal(submitted.status, 201);
   assert.equal(submitted.body.payment.driver, ids.driver);
   assert.equal(submitted.body.payment.parent, ids.parent);
+  assert.equal(submitted.body.payment.amount, 70);
+  assert.equal(f.requests[0].paymentStatus, 'pending');
   assert.equal(f.audits.length, 1);
   assert.equal(f.audits[0].action, 'submitted');
   const listed = await f.request('GET', '/mine', ids.parent);
   assert.equal(listed.status, 200);
   assert.equal(listed.body.payments.length, 2);
   assert.ok(listed.body.payments.every((payment) => payment.parent === ids.parent));
+  assert.equal(listed.body.billableTrips[0].fare, 70);
 });
 
-test('parent cannot submit against another parent request or use another parent cursor', async (t) => {
+test('parent cannot submit against another parent trip or use another parent cursor', async (t) => {
   const f = await createFixture(t, {
     payments: [{ parent: ids.otherParent, driver: ids.otherDriver, amount: 100, method: 'cash', status: 'pending' }],
   });
-  const submitted = await f.request('POST', '/', ids.parent, {
-    vanRequestId: ids.otherRequest,
-    amount: 100,
+  assert.equal((await f.request('POST', '/', ids.parent, {
+    vanRequestIds: [ids.otherRequest],
     method: 'cash',
-  });
-  assert.equal(submitted.status, 404);
-  const listed = await f.request('GET', `/mine?before=${f.payments[0]._id}`, ids.parent);
-  assert.equal(listed.status, 404);
+  })).status, 404);
+  assert.equal((await f.request('GET', `/mine?before=${f.payments[0]._id}`, ids.parent)).status, 404);
 });
 
-test('amount, precision, max amount, method, and GCash reference are validated', async (t) => {
+test('simultaneous submissions cannot claim the same trip twice', async (t) => {
+  const f = await createFixture(t);
+  const body = { vanRequestIds: [ids.request], method: 'cash' };
+  const results = await Promise.all([
+    f.request('POST', '/', ids.parent, body),
+    f.request('POST', '/', ids.parent, body),
+  ]);
+  assert.deepEqual(results.map((result) => result.status).sort(), [201, 409]);
+  assert.equal(f.payments.length, 1);
+  assert.equal(f.audits.length, 1);
+});
+
+test('trip ids, method, GCash reference, and note are validated; client amount is ignored', async (t) => {
   const f = await createFixture(t);
   for (const body of [
-    { driverId: ids.driver, amount: 0, method: 'cash' },
-    { driverId: ids.driver, amount: 100.001, method: 'cash' },
-    { driverId: ids.driver, amount: 50000.01, method: 'cash' },
-    { driverId: ids.driver, amount: 100, method: 'bitcoin' },
-    { driverId: ids.driver, amount: 100, method: 'gcash' },
+    { vanRequestIds: [], method: 'cash' },
+    { vanRequestIds: [ids.request, ids.request], method: 'cash' },
+    { vanRequestIds: [ids.request], method: 'bitcoin' },
+    { vanRequestIds: [ids.request], method: 'gcash' },
+    { vanRequestIds: [ids.request], method: 'gcash', externalRef: 'x'.repeat(41) },
+    { vanRequestIds: [ids.request], method: 'cash', note: 'x'.repeat(201) },
   ]) {
     assert.equal((await f.request('POST', '/', ids.parent, body)).status, 400);
   }
-  assert.equal((await f.request('POST', '/', ids.parent, {
-    driverId: ids.driver,
-    amount: 1.15,
+  const response = await f.request('POST', '/', ids.parent, {
+    vanRequestIds: [ids.request],
+    amount: 0.01,
     method: 'gcash',
     externalRef: '  TX-123  ',
-  })).status, 201);
+  });
+  assert.equal(response.status, 201);
+  assert.equal(response.body.payment.amount, 70);
   assert.equal(f.payments[0].externalRef, 'TX-123');
-  assert.equal(f.payments[0].amount, 1.15);
 });
 
-test('GCash reference can be reused after rejection but conflicts while pending or verified', async (t) => {
+test('GCash reference reuse is allowed after rejection and blocked while pending or verified', async (t) => {
   const f = await createFixture(t, {
+    requests: [
+      extraTrip({ _id: ids.request2 }),
+      extraTrip({ _id: ids.request3 }),
+      extraTrip({ _id: ids.request4 }),
+    ],
     payments: [{
       parent: ids.parent,
       driver: ids.driver,
@@ -316,97 +386,95 @@ test('GCash reference can be reused after rejection but conflicts while pending 
       status: 'rejected',
     }],
   });
-  const payload = { driverId: ids.driver, amount: 100, method: 'gcash', externalRef: 'GC-REUSE' };
-  assert.equal((await f.request('POST', '/', ids.parent, payload)).status, 201);
-  assert.equal(f.payments.at(-1).status, 'pending');
-  assert.equal((await f.request('POST', '/', ids.parent, payload)).status, 409);
-  f.payments.at(-1).status = 'verified';
-  assert.equal((await f.request('POST', '/', ids.parent, payload)).status, 409);
-});
-
-test('same GCash external reference remains exclusive for pending and verified payments', async (t) => {
-  const f = await createFixture(t);
-  const payload = { driverId: ids.driver, amount: 100, method: 'gcash', externalRef: 'GC-123' };
-  assert.equal((await f.request('POST', '/', ids.parent, payload)).status, 201);
-  assert.equal((await f.request('POST', '/', ids.parent, payload)).status, 409);
-  f.payments[0].status = 'verified';
-  assert.equal((await f.request('POST', '/', ids.parent, payload)).status, 409);
-});
-
-test('only the assigned driver can verify/reject and review only pending payments', async (t) => {
-  const f = await createFixture(t, {
-    payments: [{ parent: ids.parent, driver: ids.driver, amount: 100, currency: 'PHP', method: 'cash', status: 'pending' }],
+  const submit = (requestId) => f.request('POST', '/', ids.parent, {
+    vanRequestIds: [requestId],
+    method: 'gcash',
+    externalRef: 'GC-REUSE',
   });
-  const paymentId = f.payments[0]._id;
+  assert.equal((await submit(ids.request2)).status, 201);
+  assert.equal((await submit(ids.request3)).status, 409);
+  const pending = f.payments.find((payment) => payment.externalRef === 'GC-REUSE' && payment.status === 'pending');
+  pending.status = 'verified';
+  assert.equal((await submit(ids.request4)).status, 409);
+});
+
+test('a pending GCash reference is exclusive for the same driver', async (t) => {
+  const f = await createFixture(t, { requests: [extraTrip({ _id: ids.request2 })] });
+  const body = { method: 'gcash', externalRef: 'GC-123' };
+  assert.equal((await f.request('POST', '/', ids.parent, { ...body, vanRequestIds: [ids.request] })).status, 201);
+  assert.equal((await f.request('POST', '/', ids.parent, { ...body, vanRequestIds: [ids.request2] })).status, 409);
+});
+
+test('one payment cannot mix trips assigned to different drivers', async (t) => {
+  const f = await createFixture(t, {
+    requests: [extraTrip({ _id: ids.request2, driver: ids.otherDriver })],
+  });
+  assert.equal((await f.request('POST', '/', ids.parent, {
+    vanRequestIds: [ids.request, ids.request2],
+    method: 'cash',
+  })).status, 400);
+});
+
+test('only the assigned driver can verify; verification is one-time and marks trips paid', async (t) => {
+  const f = await createFixture(t);
+  const submitted = await f.request('POST', '/', ids.parent, {
+    vanRequestIds: [ids.request],
+    method: 'cash',
+  });
+  const paymentId = submitted.body.payment._id;
   assert.equal((await f.request('POST', `/${paymentId}/verify`, ids.otherDriver, {})).status, 404);
   const verified = await f.request('POST', `/${paymentId}/verify`, ids.driver, {});
   assert.equal(verified.status, 200);
   assert.match(verified.body.payment.referenceNo, /^HNS-\d{8}-[A-Z0-9]{6}$/);
+  assert.equal(f.requests[0].paymentStatus, 'paid');
   assert.equal((await f.request('POST', `/${paymentId}/verify`, ids.driver, {})).status, 409);
   assert.equal((await f.request('POST', `/${paymentId}/reject`, ids.driver, { rejectReason: 'No matching record' })).status, 409);
-  assert.equal((await f.request('POST', `/${paymentId}/reject`, ids.otherDriver, { rejectReason: 'No matching record' })).status, 404);
-  assert.equal(f.audits.length, 1);
-  assert.equal(f.audits[0].action, 'verified');
+  assert.deepEqual(f.audits.map((audit) => audit.action), ['submitted', 'verified']);
 });
 
-test('rejection changes pending to rejected and records the reason and audit', async (t) => {
-  const f = await createFixture(t, {
-    payments: [{ parent: ids.parent, driver: ids.driver, amount: 100, currency: 'PHP', method: 'gcash', status: 'pending' }],
-  });
-  const paymentId = f.payments[0]._id;
+test('rejection releases linked trips so the parent can submit them again', async (t) => {
+  const f = await createFixture(t);
+  const first = await f.request('POST', '/', ids.parent, { vanRequestIds: [ids.request], method: 'cash' });
+  const paymentId = first.body.payment._id;
   assert.equal((await f.request('POST', `/${paymentId}/reject`, ids.driver, {})).status, 400);
-  const response = await f.request('POST', `/${paymentId}/reject`, ids.driver, { rejectReason: 'Reference not found' });
-  assert.equal(response.status, 200);
-  assert.equal(response.body.payment.status, 'rejected');
-  assert.equal(f.audits[0].action, 'rejected');
+  const rejected = await f.request('POST', `/${paymentId}/reject`, ids.driver, { rejectReason: 'Reference not found' });
+  assert.equal(rejected.status, 200);
+  assert.equal(f.requests[0].paymentStatus, 'unpaid');
+  assert.equal(f.requests[0].paymentId, null);
+  assert.equal((await f.request('POST', '/', ids.parent, { vanRequestIds: [ids.request], method: 'cash' })).status, 201);
+  assert.deepEqual(f.audits.map((audit) => audit.action), ['submitted', 'rejected', 'submitted']);
 });
 
-test('reference numbers are server generated, Manila dated, and unique', async (t) => {
-  const f = await createFixture(t, {
-    payments: [
-      { parent: ids.parent, driver: ids.driver, amount: 100, currency: 'PHP', method: 'cash', status: 'pending' },
-      { parent: ids.parent, driver: ids.driver, amount: 100, currency: 'PHP', method: 'cash', status: 'pending' },
-    ],
-  });
-  const today = new Date(Date.now() + 8 * 60 * 60 * 1000);
-  const expectedDate = `${today.getUTCFullYear()}${String(today.getUTCMonth() + 1).padStart(2, '0')}${String(today.getUTCDate()).padStart(2, '0')}`;
-  const results = await Promise.all(f.payments.map((payment) => f.request('POST', `/${payment._id}/verify`, ids.driver, {})));
-  const references = results.map((result) => result.body.payment.referenceNo);
-  assert.ok(references.every((reference) => reference.startsWith(`HNS-${expectedDate}-`)));
-  assert.equal(new Set(references).size, 2);
-  assert.ok(references.every((reference) => /^HNS-\d{8}-[A-Z0-9]{6}$/.test(reference)));
+test('reference numbers are server-generated and unique', async (t) => {
+  const f = await createFixture(t, { requests: [extraTrip({ _id: ids.request2 })] });
+  const first = await f.request('POST', '/', ids.parent, { vanRequestIds: [ids.request], method: 'cash' });
+  const verify = await f.request('POST', `/${first.body.payment._id}/verify`, ids.driver, {});
+  assert.match(verify.body.payment.referenceNo, /^HNS-\d{8}-[A-Z0-9]{6}$/);
+  const ref = verify.body.payment.referenceNo;
+  const retry = await f.request('POST', '/', ids.parent, { vanRequestIds: [ids.request2], method: 'cash' });
+  const second = await f.request('POST', `/${retry.body.payment._id}/verify`, ids.driver, {});
+  assert.notEqual(second.body.payment.referenceNo, ref);
 });
 
-test('receipt is available only for verified payments and excludes private fields', async (t) => {
-  const f = await createFixture(t, {
-    payments: [{
-      parent: ids.parent,
-      driver: ids.driver,
-      vanRequest: ids.request,
-      amount: 100,
-      currency: 'PHP',
-      method: 'cash',
-      status: 'pending',
-      externalRef: 'PRIVATE-GCASH-REF',
-      referenceNo: 'HNS-20261017-ABC123',
-    }],
-  });
-  const paymentId = f.payments[0]._id;
+test('receipt is verified-only, lists trip details, and excludes private fields', async (t) => {
+  const f = await createFixture(t);
+  const submitted = await f.request('POST', '/', ids.parent, { vanRequestIds: [ids.request], method: 'cash' });
+  const paymentId = submitted.body.payment._id;
   assert.equal((await f.request('GET', `/${paymentId}/receipt`, ids.parent)).status, 404);
-  f.payments[0].status = 'verified';
-  f.payments[0].verifiedAt = new Date();
+  await f.request('POST', `/${paymentId}/verify`, ids.driver, {});
   const receipt = await f.request('GET', `/${paymentId}/receipt`, ids.parent);
   assert.equal(receipt.status, 200);
-  assert.deepEqual(receipt.body.studentNames, ['Student A', 'Student B']);
-  assert.equal(receipt.body.schoolName, 'School A');
+  assert.deepEqual(receipt.body.trips[0].studentNames, ['Student A', 'Student B']);
+  assert.equal(receipt.body.trips[0].schoolName, 'School A');
+  assert.equal(receipt.body.trips[0].fare, 70);
+  assert.equal(receipt.body.total, 70);
   assert.equal(receipt.body.plateNumber, 'ABC-123');
   for (const forbidden of ['phone', 'email', 'latitude', 'longitude', 'externalRef', 'parentId', 'driverId']) {
     assert.equal(JSON.stringify(receipt.body).toLowerCase().includes(forbidden.toLowerCase()), false);
   }
 });
 
-test('verification endpoint returns only its minimal verified-payment shape', async (t) => {
-  const verifiedAt = new Date();
+test('reference verification returns only the minimal shape', async (t) => {
   const f = await createFixture(t, {
     payments: [{
       parent: ids.parent,
@@ -416,7 +484,7 @@ test('verification endpoint returns only its minimal verified-payment shape', as
       method: 'gcash',
       status: 'verified',
       referenceNo: 'HNS-20261017-ABC123',
-      verifiedAt,
+      verifiedAt: new Date(),
     }],
   });
   const response = await f.request('GET', '/verify/HNS-20261017-ABC123', ids.parent);
@@ -426,14 +494,15 @@ test('verification endpoint returns only its minimal verified-payment shape', as
   assert.equal((await f.request('GET', '/verify/bad-reference', ids.parent)).status, 404);
 });
 
-test('parent balance uses all completed trips and all verified payments, beyond the page', async (t) => {
+test('billable summary covers all trips beyond payment page and excludes pre-launch trips', async (t) => {
   const f = await createFixture(t, {
-    requests: Array.from({ length: 24 }, (_, index) => ({
-      _id: (index + 100).toString(16).padStart(24, '0'),
-      parent: ids.parent,
-      driver: ids.driver,
-      status: 'completed',
-    })),
+    requests: [
+      ...Array.from({ length: 24 }, (_, index) => extraTrip({
+        _id: (index + 100).toString(16).padStart(24, '0'),
+        paymentStatus: index === 0 ? 'paid' : index === 1 ? 'pending' : 'unpaid',
+      })),
+      extraTrip({ _id: '999999999999999999999999', updatedAt: new Date('2026-10-16T15:59:59.999Z') }),
+    ],
     payments: [
       { parent: ids.parent, driver: ids.driver, amount: 200, currency: 'PHP', method: 'cash', status: 'verified' },
       { parent: ids.parent, driver: ids.driver, amount: 100, currency: 'PHP', method: 'cash', status: 'pending' },
@@ -441,21 +510,86 @@ test('parent balance uses all completed trips and all verified payments, beyond 
   });
   const response = await f.request('GET', '/mine?limit=1', ids.parent);
   assert.equal(response.body.payments.length, 1);
-  assert.equal(response.body.summary.completedTrips, 25);
-  assert.equal(response.body.summary.totalFees, 25 * paymentConfig.feePerTrip);
-  assert.equal(response.body.summary.totalVerified, 200);
-  assert.equal(response.body.summary.outstanding, 25 * paymentConfig.feePerTrip - 200);
+  assert.equal(response.body.summary.billableTrips, 25);
+  assert.equal(response.body.summary.totalFees, 25 * 70);
+  assert.equal(response.body.summary.paid, 70);
+  assert.equal(response.body.summary.awaiting, 70);
+  assert.equal(response.body.summary.outstanding, 23 * 70);
+  assert.equal(response.body.billableTrips.length, 25);
+  assert.equal(f.requests.find((trip) => trip._id === '999999999999999999999999').fareAmount, null);
+});
+
+test('fare snapshot stays fixed if fare configuration later changes', async (t) => {
+  const f = await createFixture(t);
+  const first = await f.request('GET', '/mine', ids.parent);
+  const savedFare = f.requests[0].fareAmount;
+  const oldBaseFare = paymentConfig.baseFare;
+  try {
+    paymentConfig.baseFare = oldBaseFare + 100;
+    const second = await f.request('GET', '/mine', ids.parent);
+    assert.equal(second.body.billableTrips[0].fare, savedFare);
+  } finally {
+    paymentConfig.baseFare = oldBaseFare;
+  }
+  assert.equal(first.body.billableTrips[0].fare, savedFare);
+});
+
+test('driver sees allowlisted trip summaries, own collectible trips, and uncollected totals', async (t) => {
+  const f = await createFixture(t, {
+    requests: [
+      extraTrip({ _id: ids.request2, driver: ids.otherDriver }),
+      extraTrip({ _id: ids.request3, paymentStatus: 'pending' }),
+    ],
+    payments: [{
+      parent: ids.parent,
+      driver: ids.driver,
+      vanRequest: ids.request,
+      vanRequests: [ids.request],
+      fareBreakdown: [{ vanRequest: ids.request, fare: 70, distanceKm: 3 }],
+      amount: 70,
+      currency: 'PHP',
+      method: 'cash',
+      status: 'pending',
+    }],
+  });
+  const response = await f.request('GET', '/driver', ids.driver);
+  assert.equal(response.body.payments[0].tripSummary[0].fare, 70);
+  assert.equal(response.body.summary.uncollectedCount, 1);
+  assert.equal(response.body.summary.uncollectedAmount, 70);
+  assert.equal(response.body.summary.awaitingAmount, 70);
+  assert.equal(response.body.collectibleTrips.length, 1);
+  assert.equal(response.body.collectibleTrips[0].requestId, ids.request);
+  assert.equal((await f.request('GET', '/driver', ids.otherDriver)).body.payments.length, 0);
+  for (const forbidden of ['phone', 'email', 'latitude', 'longitude']) {
+    assert.equal(JSON.stringify(response.body).toLowerCase().includes(forbidden), false);
+  }
+});
+
+test('driver records cash only for own unpaid completed trips and writes audit rows', async (t) => {
+  const f = await createFixture(t, { requests: [extraTrip({ _id: ids.request2, driver: ids.otherDriver })] });
+  assert.equal((await f.request('POST', '/driver/record-cash', ids.otherDriver, {
+    vanRequestIds: [ids.request],
+  })).status, 404);
+  const response = await f.request('POST', '/driver/record-cash', ids.driver, { vanRequestIds: [ids.request] });
+  assert.equal(response.status, 201);
+  assert.equal(response.body.payment.status, 'verified');
+  assert.equal(response.body.payment.amount, 70);
+  assert.match(response.body.payment.referenceNo, /^HNS-\d{8}-[A-Z0-9]{6}$/);
+  assert.equal(f.requests[0].paymentStatus, 'paid');
+  assert.deepEqual(f.audits.map((audit) => audit.action), ['recorded_cash', 'verified']);
+  assert.equal((await f.request('POST', '/driver/record-cash', ids.driver, {
+    vanRequestIds: [ids.request],
+  })).status, 409);
 });
 
 test('driver cashier summary counts payments verified since Manila midnight', async (t) => {
-  const todayStart = new Date(Date.now() + 8 * 60 * 60 * 1000);
-  todayStart.setUTCHours(0, 0, 0, 0);
-  const beforeMidnight = new Date(todayStart.getTime() - 8 * 60 * 60 * 1000 - 1);
-  const midnight = new Date(todayStart.getTime() - 8 * 60 * 60 * 1000);
+  const localNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  localNow.setUTCHours(0, 0, 0, 0);
+  const midnight = new Date(localNow.getTime() - 8 * 60 * 60 * 1000);
   const f = await createFixture(t, {
     payments: [
       { parent: ids.parent, driver: ids.driver, amount: 100, currency: 'PHP', method: 'cash', status: 'pending' },
-      { parent: ids.parent, driver: ids.driver, amount: 200, currency: 'PHP', method: 'cash', status: 'verified', verifiedAt: beforeMidnight },
+      { parent: ids.parent, driver: ids.driver, amount: 200, currency: 'PHP', method: 'cash', status: 'verified', verifiedAt: new Date(midnight.getTime() - 1) },
       { parent: ids.parent, driver: ids.driver, amount: 300, currency: 'PHP', method: 'cash', status: 'verified', verifiedAt: midnight },
     ],
   });
@@ -466,23 +600,7 @@ test('driver cashier summary counts payments verified since Manila midnight', as
   assert.equal(response.body.summary.verifiedTotal, 500);
 });
 
-test('cash recording requires own active/completed request and writes both audit actions', async (t) => {
-  const f = await createFixture(t);
-  const response = await f.request('POST', '/driver/record-cash', ids.driver, {
-    vanRequestId: ids.request,
-    amount: 100,
-  });
-  assert.equal(response.status, 201);
-  assert.equal(response.body.payment.status, 'verified');
-  assert.match(response.body.payment.referenceNo, /^HNS-\d{8}-[A-Z0-9]{6}$/);
-  assert.deepEqual(f.audits.map((audit) => audit.action), ['recorded_cash', 'verified']);
-  assert.equal((await f.request('POST', '/driver/record-cash', ids.otherDriver, {
-    vanRequestId: ids.request,
-    amount: 100,
-  })).status, 404);
-});
-
-test('admin endpoints reject non-admins; audit routes are read-only', async (t) => {
+test('admin endpoints are read-only and reject non-admins', async (t) => {
   const f = await createFixture(t);
   assert.equal((await f.request('GET', '/admin/overview', ids.parent)).status, 403);
   assert.equal((await f.request('GET', '/admin/audit', ids.driver)).status, 403);
@@ -502,13 +620,13 @@ test('all payment routes require authentication', async (t) => {
     ['GET', '/driver'],
     ['GET', '/admin/overview'],
     ['GET', '/admin/audit'],
-    ['POST', '/', { driverId: ids.driver, amount: 100, method: 'cash' }],
+    ['POST', '/', { vanRequestIds: [ids.request], method: 'cash' }],
   ]) {
     assert.equal((await f.request(method, route, null, body)).status, 401);
   }
 });
 
-test('payment schemas define the required immutable audit data and duplicate-reference index', () => {
+test('payment model keeps the reference index limited to pending and verified references', () => {
   const Payment = require('../models/Payment');
   const PaymentAudit = require('../models/PaymentAudit');
   assert.equal(Payment.schema.path('referenceNo').options.unique, true);
