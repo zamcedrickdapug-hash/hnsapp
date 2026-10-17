@@ -37,20 +37,21 @@ function FollowVan({ van, target }) {
 // Iginuguhit ang planned route na galing sa backend (walang dagdag na Google API call)
 function PlannedRoute({ path }) {
   const map = useMap()
-  const lineRef = useRef(null)
 
   useEffect(() => {
-    if (!map) return
-    if (!lineRef.current) {
-      lineRef.current = new window.google.maps.Polyline({
-        strokeColor: '#3b82f6',
-        strokeOpacity: 0.85,
-        strokeWeight: 5,
-      })
-    }
-    lineRef.current.setMap(map)
-    lineRef.current.setPath(path)
-    return () => lineRef.current?.setMap(null)
+    if (!map || !path || path.length < 2) return
+    const feature = map.data.add({
+      geometry: new window.google.maps.Data.LineString(
+        path.map((point) => new window.google.maps.LatLng(point.lat, point.lng)),
+      ),
+    })
+    map.data.setStyle({
+      strokeColor: '#3b82f6',
+      strokeWeight: 5,
+      strokeOpacity: 0.9,
+      zIndex: 10,
+    })
+    return () => map.data.remove(feature)
   }, [map, path])
 
   return null
@@ -81,6 +82,10 @@ export default function LiveTripGoogleMap({
   const plannedPath = useMemo(
     () => (plannedRoute || []).map(toPoint).filter(Boolean),
     [plannedRoute],
+  )
+  const straightPath = useMemo(
+    () => (van && target ? [van, target] : null),
+    [van?.lat, van?.lng, target?.lat, target?.lng],
   )
 
   // Iwasan ang duplicate na marker kung ang target ay isa nang pickup pin
@@ -135,7 +140,7 @@ export default function LiveTripGoogleMap({
           {plannedPath.length > 1 ? (
             <PlannedRoute path={plannedPath} />
           ) : showRoute && van && target ? (
-            <PlannedRoute path={[van, target]} />
+            <PlannedRoute path={straightPath} />
           ) : null}
         </Map>
       </APIProvider>
