@@ -16,7 +16,11 @@
 }
 
 .ui-button:disabled {
-  opacity: 0.65;
+  opacity: 1;
+  background-image: none;
+  background-color: #475569;
+  color: #f8fafc;
+  border: 1px solid #64748b;
   cursor: not-allowed;
   transform: none;
 }
@@ -64,6 +68,7 @@
 }
 
 .ui-card {
+  color: var(--text-on-dark-primary);
   background: linear-gradient(160deg, rgba(12, 22, 56, 0.95), rgba(10, 18, 45, 0.84));
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 18px;
@@ -82,7 +87,7 @@
 
 .ui-card__description {
   margin: 0.22rem 0 0;
-  color: #93a2cc;
+  color: var(--text-on-dark-label);
   font-size: 0.9rem;
 }
 

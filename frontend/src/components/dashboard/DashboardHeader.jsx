@@ -67,7 +67,7 @@ function DashboardHeader({
             <Bell size={24} />
             {notificationCount > 0 && (
               <motion.span
-                className="absolute top-1 right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center"
+                className="absolute top-1 right-1 bg-red-700 text-white text-sm font-bold rounded-full min-w-5 min-h-5 flex items-center justify-center"
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ type: 'spring', stiffness: 500, damping: 30 }}
@@ -90,7 +90,7 @@ function DashboardHeader({
               </div>
               <div className="text-left hidden sm:block">
                 <p className="text-sm font-semibold text-gray-900">{userName}</p>
-                <p className="text-xs text-gray-500">Profile</p>
+                <p className="text-sm text-gray-600">Profile</p>
               </div>
               <ChevronDown
                 size={18}
@@ -170,7 +170,7 @@ function DashboardHeader({
             <Bell size={20} />
             {notificationCount > 0 && (
               <motion.span
-                className="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center"
+                className="absolute top-0 right-0 bg-red-700 text-white text-sm font-bold rounded-full min-w-5 min-h-5 flex items-center justify-center"
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
               >

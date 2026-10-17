@@ -1092,24 +1092,24 @@ export default function DriverDashboard({ token, user, onLogout }) {
 									{selectedTrip ? (
 										<>
 											<div>
-												<p className="text-xs font-medium text-gray-600">Parent</p>
-												<p className="font-semibold text-gray-900">
+												<p className="text-sm font-medium text-on-dark-label">Parent</p>
+												<p className="font-semibold text-on-dark-primary">
 													{selectedTrip.parent?.fullName || 'Parent'}
 												</p>
 											</div>
 											<div>
-												<p className="text-xs font-medium text-gray-600">Pickup</p>
-												<p className="font-semibold text-gray-900">{selectedTrip.pickupZone}</p>
+												<p className="text-sm font-medium text-on-dark-label">Pickup</p>
+												<p className="font-semibold text-on-dark-primary">{selectedTrip.pickupZone}</p>
 											</div>
 											<div>
-												<p className="text-xs font-medium text-gray-600">School destination</p>
-												<p className="font-semibold text-gray-900">{selectedTrip.schoolName || 'Not provided'}</p>
+												<p className="text-sm font-medium text-on-dark-label">School destination</p>
+												<p className="font-semibold text-on-dark-primary">{selectedTrip.schoolName || 'Not provided'}</p>
 											</div>
 											<div>
-												<p className="text-xs font-medium text-gray-600">Status</p>
+												<p className="text-sm font-medium text-on-dark-label">Status</p>
 												<p
 													className={`font-semibold ${
-														gpsStatus === 'Active' ? 'text-green-600' : 'text-gray-600'
+														gpsStatus === 'Active' ? 'text-green-300' : 'text-on-dark-label'
 													}`}
 												>
 													{gpsStatus}
@@ -1127,7 +1127,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 											</Button>
 										</>
 									) : (
-										<p className="text-sm text-gray-600">Accept a request first</p>
+										<p className="text-sm text-on-dark-label">Accept a request first</p>
 									)}
 								</CardContent>
 							</Card>
@@ -1166,14 +1166,14 @@ export default function DriverDashboard({ token, user, onLogout }) {
 						<CardHeader>
 							<div className="flex flex-wrap items-center justify-between gap-2">
 								<CardTitle className="text-base">Passengers</CardTitle>
-								<p className="text-sm font-semibold text-gray-600">
+								<p className="text-sm font-semibold text-on-dark-label">
 									On board: {onBoardPassengerCount} / Total: {totalPassengerCount}
 								</p>
 							</div>
 						</CardHeader>
 						<CardContent className="space-y-3">
 							{passengerRequests.length === 0 ? (
-								<p className="text-sm text-gray-600">No passengers yet.</p>
+								<p className="text-sm text-on-dark-label">No passengers yet.</p>
 							) : (
 								passengerRequests.map((item) => {
 									const statusLabels = {
@@ -1190,7 +1190,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 										>
 											<div className="min-w-0 flex-1">
 												{Array.isArray(item.students) && item.students.length > 0 ? (
-													<ul className="font-semibold text-gray-900">
+													<ul className="text-sm font-semibold text-on-dark-primary">
 														{item.students.map((student, index) => (
 															<li key={`${student.studentName}-${index}`}>
 																{student.studentName || 'Student'}
@@ -1199,17 +1199,17 @@ export default function DriverDashboard({ token, user, onLogout }) {
 														))}
 													</ul>
 												) : (
-													<p className="truncate font-semibold text-gray-900">
+													<p className="truncate text-sm font-semibold text-on-dark-primary">
 														{item.studentName || 'Student'}
 													</p>
 												)}
-												<p className="truncate text-sm text-gray-600">
+												<p className="truncate text-sm text-on-dark-label">
 													{item.parent?.fullName || 'Parent'}
 												</p>
-												<p className="truncate text-sm text-gray-600">{item.pickupZone || 'Pickup not provided'}</p>
+												<p className="truncate text-sm text-on-dark-label">{item.pickupZone || 'Pickup not provided'}</p>
 											</div>
 											<span
-												className={`shrink-0 rounded px-2 py-1 text-xs font-semibold ${status.className}`}
+												className={`shrink-0 rounded px-2 py-1 text-sm font-semibold ${status.className}`}
 											>
 												{status.label}
 											</span>
@@ -1281,18 +1281,18 @@ export default function DriverDashboard({ token, user, onLogout }) {
 								<CardDescription>Manage live location tracking</CardDescription>
 							</CardHeader>
 							<CardContent>
-								<p className="text-sm text-gray-600">Accept a request first to use GPS controls.</p>
+								<p className="text-sm text-on-dark-label">Accept a request first to use GPS controls.</p>
 							</CardContent>
 						</Card>
 					)}
 
 					{/* Active Trips List */}
 					<div className="space-y-4">
-						<h3 className="text-lg font-bold text-gray-900">Active Trips</h3>
+						<h3 className="text-lg font-bold text-on-dark-primary">Active Trips</h3>
 						{acceptedRequests.length === 0 ? (
 							<Card>
 								<CardContent className="py-12 text-center">
-									<p className="text-gray-600">
+									<p className="text-on-dark-label">
 										No accepted trips yet. Go to Requests and accept a parent request.
 									</p>
 								</CardContent>
@@ -1320,7 +1320,7 @@ export default function DriverDashboard({ token, user, onLogout }) {
 													<CardDescription>{formatDate(trip.createdAt)}</CardDescription>
 												</div>
 												<span
-													className={`px-3 py-1 rounded text-xs font-semibold ${
+													className={`px-3 py-1 rounded text-sm font-semibold ${
 														trip.status === 'picked_up'
 															? 'bg-green-100 text-green-800'
 															: 'bg-blue-100 text-blue-800'
@@ -1338,20 +1338,20 @@ export default function DriverDashboard({ token, user, onLogout }) {
 										</CardHeader>
 										<CardContent className="grid grid-cols-2 gap-4">
 											<div>
-												<p className="text-xs font-medium text-gray-600">STUDENT</p>
-												<p className="font-semibold text-gray-900">{trip.studentName || 'N/A'}</p>
+												<p className="text-sm font-medium text-on-dark-label">STUDENT</p>
+												<p className="font-semibold text-on-dark-primary">{trip.studentName || 'N/A'}</p>
 											</div>
 											<div>
-												<p className="text-xs font-medium text-gray-600">PICKUP</p>
-												<p className="font-semibold text-gray-900">{trip.pickupZone}</p>
+												<p className="text-sm font-medium text-on-dark-label">PICKUP</p>
+												<p className="font-semibold text-on-dark-primary">{trip.pickupZone}</p>
 											</div>
 											<div>
-												<p className="text-xs font-medium text-gray-600">SCHOOL</p>
-												<p className="font-semibold text-gray-900">{trip.schoolName || 'N/A'}</p>
+												<p className="text-sm font-medium text-on-dark-label">SCHOOL</p>
+												<p className="font-semibold text-on-dark-primary">{trip.schoolName || 'N/A'}</p>
 											</div>
 											<div>
-												<p className="text-xs font-medium text-gray-600">PHONE</p>
-												<p className="font-semibold text-gray-900">{trip.parent?.phone || 'N/A'}</p>
+												<p className="text-sm font-medium text-on-dark-label">PHONE</p>
+												<p className="font-semibold text-on-dark-primary">{trip.parent?.phone || 'N/A'}</p>
 											</div>
 										</CardContent>
 									</Card>

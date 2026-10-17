@@ -78,7 +78,7 @@ function DriverActiveTrips({
                     </p>
                   </div>
                   <motion.span
-                    className="px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full"
+                    className="px-3 py-1 bg-green-100 text-green-800 text-sm font-semibold rounded-full"
                     animate={{ scale: [1, 1.05, 1] }}
                     transition={{ duration: 2, repeat: Infinity }}
                   >
@@ -92,7 +92,7 @@ function DriverActiveTrips({
                   <div className="flex items-start gap-2">
                     <MapPin size={16} className="text-primary-500 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-gray-600 text-xs">Location</p>
+                      <p className="text-gray-600 text-sm">Location</p>
                       <p className="text-gray-900 font-medium">{formatLocation(trip.requesterLocation)}</p>
                     </div>
                   </div>
@@ -101,7 +101,7 @@ function DriverActiveTrips({
                   <div className="flex items-start gap-2">
                     <Phone size={16} className="text-primary-500 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-gray-600 text-xs">Contact</p>
+                      <p className="text-gray-600 text-sm">Contact</p>
                       <p className="text-gray-900 font-medium">{trip.requesterPhone || 'N/A'}</p>
                     </div>
                   </div>
@@ -110,7 +110,7 @@ function DriverActiveTrips({
                   <div className="flex items-start gap-2">
                     <User size={16} className="text-primary-500 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-gray-600 text-xs">Student</p>
+                      <p className="text-gray-600 text-sm">Student</p>
                       <p className="text-gray-900 font-medium">{trip.studentName || 'Unknown'}</p>
                     </div>
                   </div>
@@ -119,7 +119,7 @@ function DriverActiveTrips({
                   <div className="flex items-start gap-2">
                     <Navigation size={16} className="text-primary-500 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-gray-600 text-xs">Duration</p>
+                      <p className="text-gray-600 text-sm">Duration</p>
                       <p className="text-gray-900 font-medium">{trip.estimatedDuration || '--'} min</p>
                     </div>
                   </div>
@@ -127,7 +127,7 @@ function DriverActiveTrips({
 
                 {/* Trip Progress */}
                 <div className="bg-gray-100 rounded-lg p-2 mb-4">
-                  <div className="flex items-center justify-between text-xs text-gray-600 mb-2">
+                  <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
                     <span>Progress</span>
                     <span>{trip.progress || 0}%</span>
                   </div>

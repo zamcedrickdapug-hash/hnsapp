@@ -101,7 +101,7 @@ export default function Requests({
 										Open in Google Maps
 									</a>
 								) : null}
-								<small>{formatDate(request.createdAt)}</small>
+								<small className="text-sm">{formatDate(request.createdAt)}</small>
 							</div>
 
 							<div className="flex gap-2">

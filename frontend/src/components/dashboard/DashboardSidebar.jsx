@@ -69,7 +69,7 @@ function DashboardSidebar({
 
   // Sidebar content
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-gray-900 text-white overflow-hidden">
+    <div className="dashboard-sidebar flex flex-col h-full bg-slate-900 text-slate-50 overflow-hidden">
       {/* Header with logo and close button */}
       <div className="flex items-center justify-between p-6 border-b border-gray-800">
         <div className="flex items-center gap-3">
@@ -84,7 +84,7 @@ function DashboardSidebar({
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.95 }}
         >
-          <X size={20} className="text-gray-400" />
+          <X size={20} className="text-slate-200" />
         </motion.button>
       </div>
 
@@ -96,7 +96,7 @@ function DashboardSidebar({
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-white truncate">{userName}</p>
-            <p className="text-xs text-gray-400 capitalize">{role}</p>
+            <p className="text-sm text-slate-300 capitalize">{role}</p>
           </div>
         </div>
       </div>
@@ -116,7 +116,7 @@ function DashboardSidebar({
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all group ${
                   isActive
                     ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-lg'
-                    : 'text-gray-300 hover:bg-gray-800'
+                    : 'text-slate-200 hover:bg-slate-800'
                 }`}
                 whileHover={{ x: 4 }}
                 initial={{ opacity: 0, x: -20 }}
@@ -132,7 +132,7 @@ function DashboardSidebar({
                 {/* Badge */}
                 {badgeValue > 0 && (
                   <motion.span
-                    className="bg-red-500 text-white text-xs font-bold rounded-full px-2 py-1"
+                    className="bg-red-700 text-white text-sm font-bold rounded-full px-2 py-1"
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ type: 'spring', stiffness: 500 }}
@@ -167,7 +167,7 @@ function DashboardSidebar({
               key={item.id}
               onClick={() => handleNavigate(item.id)}
               className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-all text-sm ${
-                isActive ? 'bg-gray-800 text-white' : 'text-gray-400 hover:bg-gray-800'
+                isActive ? 'bg-slate-700 text-white' : 'text-slate-200 hover:bg-slate-800'
               }`}
               whileHover={{ x: 4 }}
             >
@@ -182,7 +182,7 @@ function DashboardSidebar({
       <div className="border-t border-gray-800 p-4">
         <motion.button
           onClick={onLogout}
-          className="w-full flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-red-600 hover:text-white rounded-lg transition-all group"
+          className="w-full flex items-center gap-3 px-4 py-3 text-slate-200 hover:bg-red-700 hover:text-white rounded-lg transition-all group"
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
         >

@@ -14,6 +14,14 @@
   --ink-600: #b4bddf;
   --ink-500: #8d9bc4;
   --line: rgba(255, 255, 255, 0.14);
+  --text-on-dark-primary: #f8fafc;
+  --text-on-dark-label: #cbd5e1;
+  --text-on-dark-hint: #94a3b8;
+  --text-on-light-primary: #0f172a;
+  --text-on-light-label: #475569;
+  --text-on-light-hint: #64748b;
+  --link-on-dark: #7dd3fc;
+  --link-on-light: #1d4ed8;
 }
 
 * {
@@ -47,4 +55,44 @@ h4 {
 
 #root {
   min-height: 100vh;
+}
+
+@layer utilities {
+  .text-on-dark-primary {
+    color: var(--text-on-dark-primary);
+  }
+
+  .text-on-dark-label {
+    color: var(--text-on-dark-label);
+  }
+
+  .text-on-dark-hint {
+    color: var(--text-on-dark-hint);
+  }
+
+  .text-on-light-primary {
+    color: var(--text-on-light-primary);
+  }
+
+  .text-on-light-label {
+    color: var(--text-on-light-label);
+  }
+
+  .text-on-light-hint {
+    color: var(--text-on-light-hint);
+  }
+
+  .link-on-dark {
+    color: var(--link-on-dark);
+  }
+
+  .link-on-light {
+    color: var(--link-on-light);
+  }
+}
+
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid #1d4ed8 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px #fff !important;
 }

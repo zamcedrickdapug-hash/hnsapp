@@ -75,7 +75,7 @@ function DriverRecentBookings({
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <h4 className="font-semibold text-gray-900">{booking.studentName || 'Trip'}</h4>
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${statusBadge.bg} ${statusBadge.text}`}>
+                        <span className={`px-2 py-1 text-sm font-semibold rounded-full ${statusBadge.bg} ${statusBadge.text}`}>
                           {statusBadge.label}
                         </span>
                       </div>
@@ -83,7 +83,7 @@ function DriverRecentBookings({
                     </div>
                     <div className="text-right">
                       <p className="text-lg font-bold text-gray-900">${(booking.amount / 100).toFixed(2)}</p>
-                      <p className="text-xs text-gray-600 mt-1">Fare</p>
+                      <p className="text-sm text-gray-600 mt-1">Fare</p>
                     </div>
                   </div>
 
@@ -92,7 +92,7 @@ function DriverRecentBookings({
                     <div className="flex items-start gap-2">
                       <User size={16} className="text-primary-500 flex-shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-gray-600 text-xs">Parent</p>
+                        <p className="text-gray-600 text-sm">Parent</p>
                         <p className="text-gray-900 font-medium">{booking.requesterName || 'N/A'}</p>
                       </div>
                     </div>
@@ -100,7 +100,7 @@ function DriverRecentBookings({
                     <div className="flex items-start gap-2">
                       <Clock size={16} className="text-primary-500 flex-shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-gray-600 text-xs">Duration</p>
+                        <p className="text-gray-600 text-sm">Duration</p>
                         <p className="text-gray-900 font-medium">{booking.duration || '--'} min</p>
                       </div>
                     </div>
@@ -109,7 +109,7 @@ function DriverRecentBookings({
                   {/* Rating Section */}
                   {booking.status === 'completed' && !booking.rating && (
                     <div className="bg-yellow-50 rounded-lg p-3 mb-4">
-                      <p className="text-xs font-medium text-yellow-900 mb-2">⭐ Rate this trip</p>
+                      <p className="text-sm font-medium text-yellow-900 mb-2">⭐ Rate this trip</p>
                       <div className="flex gap-1">
                         {[1, 2, 3, 4, 5].map((star) => (
                           <motion.button
