@@ -49,9 +49,10 @@ function MobileBottomNav({
     }
   }, [normalizedRole])
 
-  const helpItem = SECONDARY_NAVIGATION[0]
-  const HelpIcon = helpItem.icon
-  const moreIsActive = moreItems.some((item) => item.id === currentPage) || helpItem.id === currentPage
+  const helpItem = normalizedRole === 'admin' ? null : SECONDARY_NAVIGATION[0]
+  const HelpIcon = helpItem?.icon
+  const moreIsActive = moreItems.some((item) => item.id === currentPage) || helpItem?.id === currentPage
+  let previousMoreGroup = ''
 
   useEffect(() => {
     if (!moreOpen) return undefined
@@ -126,21 +127,25 @@ function MobileBottomNav({
             <nav aria-label="More">
               {moreItems.map((item) => {
                 const Icon = item.icon
+                const groupHeading = normalizedRole === 'admin' && item.group !== previousMoreGroup ? item.group : null
+                previousMoreGroup = item.group || previousMoreGroup
                 return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => navigateAndClose(item.id)}
-                    aria-label={item.label}
-                    aria-current={currentPage === item.id ? 'page' : undefined}
-                    className="flex min-h-[52px] w-full items-center gap-3 rounded-lg px-3 text-left text-slate-100 hover:bg-slate-800"
-                  >
-                    <Icon size={22} aria-hidden="true" />
-                    <span className="text-sm font-semibold">{item.label}</span>
-                  </button>
+                  <div key={item.id}>
+                    {groupHeading && <p className="admin-mobile-nav-group">{groupHeading}</p>}
+                    <button
+                      type="button"
+                      onClick={() => navigateAndClose(item.id)}
+                      aria-label={item.label}
+                      aria-current={currentPage === item.id ? 'page' : undefined}
+                      className="flex min-h-[52px] w-full items-center gap-3 rounded-lg px-3 text-left text-slate-100 hover:bg-slate-800"
+                    >
+                      <Icon size={22} aria-hidden="true" />
+                      <span className="text-sm font-semibold">{item.label}</span>
+                    </button>
+                  </div>
                 )
               })}
-              <button
+              {helpItem && <button
                 type="button"
                 onClick={() => navigateAndClose(helpItem.id)}
                 aria-label={helpItem.label}
@@ -149,7 +154,7 @@ function MobileBottomNav({
               >
                 <HelpIcon size={22} aria-hidden="true" />
                 <span className="text-sm font-semibold">{helpItem.label}</span>
-              </button>
+              </button>}
               <button
                 type="button"
                 onClick={() => {

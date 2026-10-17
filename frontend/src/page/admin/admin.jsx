@@ -20,7 +20,6 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
 import { BarChart3, Clock3, Settings } from 'lucide-react'
 import { apiFetch, resolveApiUrl } from '../../api'
 import { useSocket, useSocketEvent } from '../../hooks/useSocket'
@@ -30,6 +29,7 @@ import HelpSupport from '../../components/common/HelpSupport'
 import AdminApplySection from './AdminApplySection'
 import AdminDashboardSection from './AdminDashboardSection'
 import AdminUsersSection from './AdminUsersSection'
+import { StatusBadge } from './AdminUI'
 import AdminPaymentsPanel from '../../components/payments/AdminPaymentsPanel'
 import './admin.scss'
 
@@ -59,6 +59,7 @@ export default function AdminPanel({ token, user, onLogout }) {
   const [declineReasons, setDeclineReasons] = useState({})
   const [registrationLoading, setRegistrationLoading] = useState(false)
   const [registrationError, setRegistrationError] = useState('')
+  const [registrationNotice, setRegistrationNotice] = useState('')
   const [registrationActioningId, setRegistrationActioningId] = useState('')
 
   // ====== USER STATE ======
@@ -66,6 +67,7 @@ export default function AdminPanel({ token, user, onLogout }) {
   const [userFilters, setUserFilters] = useState(defaultUserFilters)
   const [usersLoading, setUsersLoading] = useState(false)
   const [usersError, setUsersError] = useState('')
+  const [usersNotice, setUsersNotice] = useState('')
   const [usersActioningId, setUsersActioningId] = useState('')
 
   // ====== ISSUE STATE ======
@@ -73,6 +75,9 @@ export default function AdminPanel({ token, user, onLogout }) {
   const [issuesLoading, setIssuesLoading] = useState(false)
   const [issuesError, setIssuesError] = useState('')
   const [issueActioningId, setIssueActioningId] = useState('')
+  const [recentPayments, setRecentPayments] = useState([])
+  const [paymentActivityError, setPaymentActivityError] = useState('')
+  const [paymentActivityLoading, setPaymentActivityLoading] = useState(true)
 
   // ====== LOCATION STATE ======
   const [locations, setLocations] = useState([])
@@ -104,24 +109,25 @@ export default function AdminPanel({ token, user, onLogout }) {
       (acc, item) => {
         acc.total += 1
         acc[item.role] = (acc[item.role] || 0) + 1
-        if (item.accountState === 'active') acc.active += 1
-        if (item.status === 'approved' && item.accountState === 'active') acc.approved += 1
+        if ((item.accountState || 'active') === 'active') acc.active += 1
+        if (item.status === 'approved' && (item.accountState || 'active') === 'active') acc.approved += 1
         if (item.accountState === 'suspended') acc.suspended += 1
+        if (item.role === 'driver' && item.status === 'approved' && (item.accountState || 'active') === 'active') acc.activeDrivers += 1
         return acc
       },
-      { total: 0, driver: 0, parent: 0, admin: 0, active: 0, approved: 0, suspended: 0 },
+      { total: 0, driver: 0, parent: 0, admin: 0, active: 0, activeDrivers: 0, approved: 0, suspended: 0 },
     )
   }, [users])
 
   // ====== API CALLS ======
 
   const loadRegistrations = useCallback(
-    async ({ silent = false, status = statusFilter } = {}) => {
+    async ({ silent = false } = {}) => {
       if (!silent) setRegistrationLoading(true)
       setRegistrationError('')
 
       try {
-        const response = await apiFetch(`/api/admin/registrations?status=${encodeURIComponent(status)}`, {
+        const response = await apiFetch('/api/admin/registrations?status=all', {
           headers: { Authorization: `Bearer ${token}` },
         })
         setRegistrations(response.registrations || [])
@@ -131,19 +137,19 @@ export default function AdminPanel({ token, user, onLogout }) {
         if (!silent) setRegistrationLoading(false)
       }
     },
-    [statusFilter, token],
+    [token],
   )
 
   const loadUsers = useCallback(
-    async ({ silent = false, filters = userFilters } = {}) => {
+    async ({ silent = false } = {}) => {
       if (!silent) setUsersLoading(true)
       setUsersError('')
 
       try {
         const searchParams = new URLSearchParams({
-          role: filters.role,
-          status: filters.status,
-          accountState: filters.accountState,
+          role: 'all',
+          status: 'all',
+          accountState: 'all',
         })
 
         const response = await apiFetch(`/api/admin/users?${searchParams.toString()}`, {
@@ -156,8 +162,23 @@ export default function AdminPanel({ token, user, onLogout }) {
         if (!silent) setUsersLoading(false)
       }
     },
-    [token, userFilters],
+    [token],
   )
+
+  const loadPaymentActivity = useCallback(async () => {
+    setPaymentActivityLoading(true)
+    setPaymentActivityError('')
+    try {
+      const response = await apiFetch('/api/payments/admin/overview', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      setRecentPayments(response.recentPayments || [])
+    } catch (error) {
+      setPaymentActivityError(error.message || 'Unable to load payment activity.')
+    } finally {
+      setPaymentActivityLoading(false)
+    }
+  }, [token])
 
   const loadDriverLocations = useCallback(
     async ({ silent = false } = {}) => {
@@ -235,16 +256,18 @@ export default function AdminPanel({ token, user, onLogout }) {
   useEffect(() => {
     if (activeSection !== 'dashboard') return
 
-    loadRegistrations({ status: 'all' })
-    loadUsers({ filters: defaultUserFilters })
+    loadRegistrations()
+    loadUsers()
     loadDriverLocations()
+    loadIssues()
+    loadPaymentActivity()
 
     const intervalId = window.setInterval(() => {
       loadDriverLocations({ silent: true })
     }, 20000)
 
     return () => window.clearInterval(intervalId)
-  }, [activeSection, loadDriverLocations, loadRegistrations, loadUsers])
+  }, [activeSection, loadDriverLocations, loadIssues, loadPaymentActivity, loadRegistrations, loadUsers])
 
   // Update socket connection state
   useEffect(() => {
@@ -313,6 +336,7 @@ export default function AdminPanel({ token, user, onLogout }) {
   const handleUpdateRegistrationStatus = async (registrationId, nextStatus) => {
     setRegistrationActioningId(registrationId)
     setRegistrationError('')
+    setRegistrationNotice('')
 
     try {
       const body = { status: nextStatus }
@@ -330,35 +354,11 @@ export default function AdminPanel({ token, user, onLogout }) {
         loadRegistrations({ silent: true }),
         loadUsers({ silent: true, filters: defaultUserFilters }),
       ])
+      setRegistrationNotice(`Application status updated to ${nextStatus}.`)
     } catch (error) {
       setRegistrationError(error.message || 'Unable to update account status.')
     } finally {
       setRegistrationActioningId('')
-    }
-  }
-
-  const handleUpdateUserStatus = async (userId, nextStatus, reason = '') => {
-    setUsersActioningId(userId)
-    setUsersError('')
-
-    try {
-      const body = { status: nextStatus }
-      if (nextStatus === 'declined') body.reason = reason
-
-      await apiFetch(`/api/admin/registrations/${userId}/status`, {
-        method: 'PATCH',
-        headers: { Authorization: 'Bearer ' + token },
-        body: JSON.stringify(body),
-      })
-
-      await Promise.all([
-        loadUsers({ silent: true }),
-        loadRegistrations({ silent: true, status: 'all' }),
-      ])
-    } catch (error) {
-      setUsersError(error.message || 'Unable to update application status.')
-    } finally {
-      setUsersActioningId('')
     }
   }
 
@@ -396,6 +396,7 @@ export default function AdminPanel({ token, user, onLogout }) {
   const handleUpdateAccountState = async (userId, nextAccountState) => {
     setUsersActioningId(userId)
     setUsersError('')
+    setUsersNotice('')
 
     try {
       await apiFetch(`/api/admin/users/${userId}/account-state`, {
@@ -405,6 +406,7 @@ export default function AdminPanel({ token, user, onLogout }) {
       })
 
       await Promise.all([loadUsers({ silent: true }), loadDriverLocations({ silent: true })])
+      setUsersNotice(`Account state updated to ${nextAccountState}.`)
     } catch (error) {
       setUsersError(error.message || 'Unable to update account state.')
     } finally {
@@ -413,11 +415,9 @@ export default function AdminPanel({ token, user, onLogout }) {
   }
 
   const handleDeleteUser = async (userId) => {
-    const shouldDelete = window.confirm('Are you sure you want to permanently delete this account?')
-    if (!shouldDelete) return
-
     setUsersActioningId(userId)
     setUsersError('')
+    setUsersNotice('')
 
     try {
       await apiFetch(`/api/admin/users/${userId}`, {
@@ -426,6 +426,7 @@ export default function AdminPanel({ token, user, onLogout }) {
       })
 
       await Promise.all([loadUsers({ silent: true }), loadDriverLocations({ silent: true })])
+      setUsersNotice('User account deleted.')
     } catch (error) {
       setUsersError(error.message || 'Unable to delete user account.')
     } finally {
@@ -438,7 +439,7 @@ export default function AdminPanel({ token, user, onLogout }) {
   return (
     <DashboardLayout
       role="admin"
-      userName={user.name || 'Admin'}
+      userName={user.name || user.fullName || 'Admin'}
       currentPage={activeSection}
       onNavigate={setActiveSection}
       onLogout={onLogout}
@@ -453,30 +454,29 @@ export default function AdminPanel({ token, user, onLogout }) {
         help: 'Help & Support',
       }[activeSection] || 'Admin Dashboard'}
       pageDescription={{
-        dashboard: 'Live map and operational overview of drivers.',
-        users: 'Moderate and manage all user accounts.',
-        applications: 'Review and approve or decline account applications.',
-        issues: 'Review reports submitted by users.',
-        payments: 'Read-only payment totals, recent payments, and audit records.',
-        analytics: 'System analytics and reports.',
-        settings: 'System configuration and policies.',
-        help: 'Frequently asked questions, contact details, and safety information.',
+        dashboard: 'Overview / Live operations and system health',
+        users: 'Management / User accounts and access',
+        applications: 'Management / Application review',
+        issues: 'Management / User-submitted reports',
+        payments: 'Management / Payment totals and audit records',
+        analytics: 'System / Analytics and reports',
+        settings: 'System / Configuration and policies',
+        help: 'System / Help and support',
       }[activeSection] || ''}
     >
       {/* Dashboard Section */}
       {activeSection === 'dashboard' && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
-          className="space-y-6"
-        >
+        <div className="space-y-6">
           <AdminStatsCards
-            totalRegistrations={registrationSummary.total}
-            pendingApprovals={registrationSummary.pending + registrationSummary.reviewing}
-            approvedUsers={registrationSummary.approved}
-            systemAlerts={0}
-            isLoading={locationsLoading || registrationLoading || usersLoading}
+            stats={[
+              { label: 'Total users', value: usersSummary.total, detail: 'Including admin accounts', icon: 'users' },
+              { label: 'Pending approvals', value: registrationSummary.pending + registrationSummary.reviewing, detail: `${registrationSummary.pending} pending · ${registrationSummary.reviewing} reviewing`, icon: 'pending' },
+              { label: 'Approved users', value: usersSummary.approved, detail: 'Approved and active accounts', icon: 'approved' },
+              { label: 'Active drivers', value: usersSummary.activeDrivers, detail: 'Approved driver accounts', icon: 'drivers' },
+              ...(!issuesError ? [{ label: 'Open issues', value: issues.filter((issue) => ['pending', 'reviewing'].includes(issue.status || 'pending')).length, detail: 'Pending or reviewing', icon: 'issues' }] : []),
+              { label: 'System alerts', value: [locationsError, registrationError, usersError, issuesError, paymentActivityError].filter(Boolean).length, detail: 'Current service warnings', icon: 'alerts' },
+            ]}
+            isLoading={locationsLoading || registrationLoading || usersLoading || issuesLoading || paymentActivityLoading}
           />
           {registrationError || usersError ? (
             <p className="feedback error" role="alert">{registrationError || usersError}</p>
@@ -488,67 +488,43 @@ export default function AdminPanel({ token, user, onLogout }) {
             error={locationsError}
             onRefresh={() => loadDriverLocations()}
             socketConnected={socketConnected}
+            pendingApplications={registrations.filter((item) => ['pending', 'reviewing'].includes(item.status))}
+            recentPayments={recentPayments}
+            activityLoading={registrationLoading || paymentActivityLoading}
+            activityError={paymentActivityError}
+            onReviewApplications={() => setActiveSection('applications')}
           />
-        </motion.div>
+        </div>
       )}
 
       {/* Users Section */}
       {activeSection === 'users' && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
-          className="space-y-6"
-        >
+        <div className="space-y-6">
           <AdminUsersSection
             users={users}
             loading={usersLoading}
             error={usersError}
+            notice={usersNotice}
             actioningId={usersActioningId}
             filters={userFilters}
+            signedInUserId={user.id || user._id || user.userId}
             onFilterChange={handleUserFilterChange}
             onRefresh={() => loadUsers()}
-            onUpdateStatus={handleUpdateUserStatus}
             onUpdateState={handleUpdateAccountState}
             onDeleteUser={handleDeleteUser}
           />
-        </motion.div>
+        </div>
       )}
 
       {/* Registrations Section */}
       {activeSection === 'applications' && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
-          className="space-y-6"
-        >
+        <div className="space-y-6">
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            {[
-              { label: 'Total', value: registrationSummary.total },
-              { label: 'Pending', value: registrationSummary.pending },
-              { label: 'Reviewing', value: registrationSummary.reviewing },
-              { label: 'Approved', value: registrationSummary.approved },
-              { label: 'Declined', value: registrationSummary.declined },
-            ].map((item, idx) => (
-              <motion.div
-                key={item.label}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.05 }}
-                className="bg-white rounded-lg border border-gray-200 p-4"
-              >
-                <p className="text-sm font-medium text-gray-600">{item.label}</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{item.value}</p>
-              </motion.div>
-            ))}
-          </div>
-
           <AdminApplySection
             registrations={registrations}
             statusFilter={statusFilter}
             declineReasons={declineReasons}
+            notice={registrationNotice}
             loading={registrationLoading}
             error={registrationError}
             actioningId={registrationActioningId}
@@ -563,7 +539,7 @@ export default function AdminPanel({ token, user, onLogout }) {
             onUpdateStatus={handleUpdateRegistrationStatus}
             onPreviewValidId={handlePreviewValidId}
           />
-        </motion.div>
+        </div>
       )}
 
       {activeSection === 'issues' && (
@@ -585,7 +561,7 @@ export default function AdminPanel({ token, user, onLogout }) {
         <ComingSoonSection
           Icon={BarChart3}
           title="Analytics"
-          description="System analytics and reports will be available here."
+          description="Not available yet"
         />
       )}
 
@@ -593,7 +569,7 @@ export default function AdminPanel({ token, user, onLogout }) {
         <ComingSoonSection
           Icon={Settings}
           title="System Settings"
-          description="System configuration and policies will be available here."
+          description="Not available yet"
         />
       )}
 
@@ -647,7 +623,7 @@ function AdminIssuesSection({ issues, loading, error, actioningId, onRefresh, on
                     <h3>{reporterName}</h3>
                     {typeof reporter === 'object' && reporter?.email ? <p>{reporter.email}</p> : null}
                   </div>
-                  <span className={`status-badge ${currentStatus}`}>{currentStatus}</span>
+                  <StatusBadge status={currentStatus} />
                 </div>
 
                 <dl className="admin-issue-card__details">

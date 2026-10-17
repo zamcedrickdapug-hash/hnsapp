@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowRight, Clock3 } from 'lucide-react'
 import Map, { Marker, Popup } from 'react-map-gl/maplibre'
 import maplibregl from 'maplibre-gl'
 import '../../components/tracking/maplibre-gl.css'
+import { EmptyState, StatusBadge } from './AdminUI'
 
 const MAP_STYLE = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json'
 
@@ -13,7 +15,18 @@ function formatDate(dateValue) {
   return new Date(dateValue).toLocaleString()
 }
 
-export default function AdminDashboardSection({ locations, loading, error, onRefresh, socketConnected = false }) {
+export default function AdminDashboardSection({
+  locations,
+  loading,
+  error,
+  onRefresh,
+  socketConnected = false,
+  pendingApplications = [],
+  recentPayments = [],
+  activityLoading = false,
+  activityError = '',
+  onReviewApplications,
+}) {
   const mapRef = useRef(null)
   const [selectedLocationId, setSelectedLocationId] = useState('')
 
@@ -67,23 +80,70 @@ export default function AdminDashboardSection({ locations, loading, error, onRef
     })
   }, [locations])
 
+  const recentActivity = useMemo(() => [
+    ...pendingApplications.map((application) => ({
+      type: 'application',
+      id: `application-${application.id}`,
+      title: `${application.fullName || 'Applicant'} · ${application.role || 'User'} application`,
+      date: application.createdAt,
+      status: application.status,
+    })),
+    ...recentPayments.map((payment, index) => ({
+      type: 'payment',
+      id: `payment-${payment.referenceNo || payment.createdAt}-${index}`,
+      title: `Payment · ${payment.currency || 'PHP'} ${Number(payment.amount || 0).toFixed(2)}`,
+      date: payment.createdAt,
+      status: payment.status,
+    })),
+  ].sort((left, right) => new Date(right.date || 0) - new Date(left.date || 0)).slice(0, 8), [pendingApplications, recentPayments])
+
   return (
     <section className="admin-section admin-dashboard-section">
-      <div className="admin-toolbar-card">
-        <div>
-          <h2>Driver World Map</h2>
-          <p>Track real-time location of all active drivers and inspect trip context.</p>
-          <p className="feedback" style={{ marginTop: 6 }}>
-            Live: <strong>{socketConnected ? 'Connected' : 'Disconnected'}</strong>
-          </p>
-        </div>
+      <section className="admin-needs-attention" aria-labelledby="admin-needs-attention-title">
+        <header>
+          <div>
+            <h2 id="admin-needs-attention-title">Needs attention</h2>
+            <p>Applications waiting for an admin decision.</p>
+          </div>
+          <button type="button" className="admin-button admin-button--secondary" onClick={onReviewApplications}>
+            Review applications <ArrowRight size={17} aria-hidden="true" />
+          </button>
+        </header>
+        {!pendingApplications.length ? (
+          <EmptyState>No applications need review.</EmptyState>
+        ) : (
+          <ul className="admin-attention-list">
+            {pendingApplications.slice(0, 5).map((application) => (
+              <li key={application.id}>
+                <div>
+                  <strong>{application.fullName || 'Applicant name unavailable'}</strong>
+                  <span>{application.role || 'User'} · Submitted {formatDate(application.createdAt)}</span>
+                </div>
+                <StatusBadge status={application.status} />
+                <button type="button" className="admin-button admin-button--primary" onClick={onReviewApplications}>Review</button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
-        <button type="button" onClick={onRefresh} disabled={loading}>
+      <div className="admin-toolbar-card admin-map-toolbar">
+        <div>
+          <h2>Driver map</h2>
+          <p>Track real-time location of all active drivers and inspect trip context.</p>
+        </div>
+        <div className="admin-map-toolbar__actions">
+          <StatusBadge
+            status={socketConnected ? 'active' : 'declined'}
+            label={`Live: ${socketConnected ? 'Connected' : 'Disconnected'}`}
+          />
+          <button type="button" className="admin-button admin-button--secondary" onClick={onRefresh} disabled={loading}>
           {loading ? 'Refreshing...' : 'Refresh Map'}
-        </button>
+          </button>
+        </div>
       </div>
 
-      <div className="summary-grid">
+      <div className="admin-map-stats">
         <article>
           <span>Located Drivers</span>
           <strong>{mapStats.totalLocated}</strong>
@@ -107,7 +167,7 @@ export default function AdminDashboardSection({ locations, loading, error, onRef
       </div>
 
       {error ? <p className="feedback error">{error}</p> : null}
-      {loading ? <p className="feedback">Loading driver locations...</p> : null}
+      {loading ? <p className="admin-inline-result" role="status">Loading driver locations…</p> : null}
 
       <div className="admin-map-card">
         <div className="admin-map-card__canvas">
@@ -160,6 +220,32 @@ export default function AdminDashboardSection({ locations, loading, error, onRef
           <p className="feedback">No live driver location available yet.</p>
         ) : null}
       </div>
+
+      <section className="admin-recent-activity" aria-labelledby="admin-recent-activity-title">
+        <header>
+          <div>
+            <h2 id="admin-recent-activity-title">Recent activity</h2>
+            <p>Latest payments and application submissions.</p>
+          </div>
+          <Clock3 size={19} aria-hidden="true" />
+        </header>
+        {activityError ? (
+          <p className="admin-inline-result admin-inline-result--error" role="alert">{activityError}</p>
+        ) : activityLoading ? (
+          <p className="admin-inline-result" role="status">Loading recent activity…</p>
+        ) : recentActivity.length === 0 ? (
+          <EmptyState>No recent activity to show.</EmptyState>
+        ) : (
+          <ul className="admin-activity-list">
+            {recentActivity.map((activity) => (
+              <li key={activity.id}>
+                <div><strong>{activity.title}</strong><span>{formatDate(activity.date)}</span></div>
+                <StatusBadge status={activity.status} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </section>
   )
 }

@@ -32,7 +32,9 @@ import { Bell, User, LogOut, Settings, ChevronDown } from 'lucide-react'
  * @param {Function} props.onLogout - Callback for logout
  */
 function DashboardHeader({
+  role = 'parent',
   title = 'Dashboard',
+  description = '',
   userName = 'User',
   notificationCount = 0,
   onNotificationClick = () => {},
@@ -44,10 +46,11 @@ function DashboardHeader({
   return (
     <>
       {/* Desktop Header */}
-      <header className="hidden md:flex h-20 bg-white border-b border-gray-200 items-center justify-between px-8 shadow-sm sticky top-0 z-40">
+      <header className="dashboard-header hidden md:flex h-20 bg-white border-b border-gray-200 items-center justify-between px-8 shadow-sm sticky top-0 z-40">
         {/* Left: Title */}
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+          {description && <p className="dashboard-header__description">{description}</p>}
         </div>
 
         {/* Right: Actions & Profile */}
@@ -98,9 +101,9 @@ function DashboardHeader({
             <AnimatePresence>
               {profileMenuOpen && (
                 <motion.div
-                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                  initial={role === 'admin' ? { y: 0, scale: 1 } : { opacity: 0, y: -10, scale: 0.95 }}
+                  animate={role === 'admin' ? { y: 0, scale: 1 } : { opacity: 1, y: 0, scale: 1 }}
+                  exit={role === 'admin' ? { y: 0, scale: 1 } : { opacity: 0, y: -10, scale: 0.95 }}
                   transition={{ duration: 0.2, ease: 'easeOut' }}
                   className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden z-50"
                 >
@@ -138,9 +141,16 @@ function DashboardHeader({
       </header>
 
       {/* Mobile Header */}
-      <header className="dashboard-mobile-header md:hidden sticky top-0 z-40 flex items-center justify-between border-b border-gray-200 bg-white">
+      <header className="dashboard-header dashboard-mobile-header md:hidden sticky top-0 z-40 flex items-center justify-between border-b border-gray-200 bg-white">
         {/* Mobile Title */}
-        <h1 className="min-w-0 flex-1 truncate text-left text-lg font-semibold text-gray-900" title={title}>{title}</h1>
+        {role === 'admin' ? (
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-left text-lg font-semibold text-gray-900" title={title}>{title}</h1>
+            {description && <p className="dashboard-header__description dashboard-header__description--mobile truncate">{description}</p>}
+          </div>
+        ) : (
+          <h1 className="min-w-0 flex-1 truncate text-left text-lg font-semibold text-gray-900" title={title}>{title}</h1>
+        )}
 
         {/* Mobile Actions */}
         <div className="ml-2 flex shrink-0 items-center gap-1">
@@ -182,9 +192,9 @@ function DashboardHeader({
         <AnimatePresence>
           {profileMenuOpen && (
             <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
+              initial={role === 'admin' ? { y: 0 } : { opacity: 0, y: -10 }}
+              animate={role === 'admin' ? { y: 0 } : { opacity: 1, y: 0 }}
+              exit={role === 'admin' ? { y: 0 } : { opacity: 0, y: -10 }}
               className="dashboard-mobile-profile-menu absolute right-4 z-50 w-44 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
             >
               <motion.button

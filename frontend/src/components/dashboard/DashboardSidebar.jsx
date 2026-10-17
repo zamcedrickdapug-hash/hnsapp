@@ -18,7 +18,7 @@
  * - User profile section
  */
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ChevronRight, LogOut } from 'lucide-react'
 import { getNavigationByRole, SECONDARY_NAVIGATION, DASHBOARD_CONFIG } from '../../constants/dashboardNavigation'
@@ -45,6 +45,7 @@ function DashboardSidebar({
 
   // Get navigation items for this role
   const navigationItems = getNavigationByRole(role)
+  let previousGroup = ''
 
   const toggleMenuExpand = (menuId) => {
     setExpandedMenus((prev) => ({
@@ -90,49 +91,52 @@ function DashboardSidebar({
             const Icon = item.icon
             const isActive = currentPage === item.id
             const badgeValue = item.badge ? badgeValues[item.badge] : null
+            const groupHeading = role === 'admin' && item.group !== previousGroup ? item.group : null
+            previousGroup = item.group || previousGroup
 
             return (
-              <motion.button
-                key={item.id}
-                onClick={() => handleNavigate(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all group ${
-                  isActive
-                    ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-lg'
-                    : 'text-slate-200 hover:bg-slate-800'
-                }`}
-                whileHover={{ x: 4 }}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{
-                  delay: index * DASHBOARD_CONFIG.ANIMATION_DELAY,
-                  duration: 0.3,
-                }}
-              >
-                <Icon size={20} className="flex-shrink-0" />
-                <span className="flex-1 text-left text-sm font-medium">{item.label}</span>
+              <Fragment key={item.id}>
+                {groupHeading && <p className="admin-sidebar-group-label">{groupHeading}</p>}
+                <motion.button
+                  onClick={() => handleNavigate(item.id)}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all group ${
+                    isActive
+                      ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-lg'
+                      : 'text-slate-200 hover:bg-slate-800'
+                  }`}
+                  whileHover={{ x: 4 }}
+                  initial={role === 'admin' ? { x: 0 } : { opacity: 0, x: -20 }}
+                  animate={role === 'admin' ? { x: 0 } : { opacity: 1, x: 0 }}
+                  transition={{
+                    delay: index * DASHBOARD_CONFIG.ANIMATION_DELAY,
+                    duration: 0.3,
+                  }}
+                >
+                  <Icon size={20} className="flex-shrink-0" />
+                  <span className="flex-1 text-left text-sm font-medium">{item.label}</span>
 
-                {/* Badge */}
-                {badgeValue > 0 && (
-                  <motion.span
-                    className="bg-red-700 text-white text-sm font-bold rounded-full px-2 py-1"
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ type: 'spring', stiffness: 500 }}
-                  >
-                    {badgeValue > 99 ? '99+' : badgeValue}
-                  </motion.span>
-                )}
-
-                {isActive && (
-                  <motion.div
-                    className="absolute right-0 w-1 h-8 bg-white rounded-l-lg"
-                    layoutId="activeNav"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.3 }}
-                  />
-                )}
-              </motion.button>
+                  {badgeValue > 0 && (
+                    <motion.span
+                      className="bg-red-700 text-white text-sm font-bold rounded-full px-2 py-1"
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: 'spring', stiffness: 500 }}
+                    >
+                      {badgeValue > 99 ? '99+' : badgeValue}
+                    </motion.span>
+                  )}
+                  {isActive && (
+                    <motion.div
+                      className="absolute right-0 w-1 h-8 bg-white rounded-l-lg"
+                      layoutId="activeNav"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.3 }}
+                    />
+                  )}
+                </motion.button>
+              </Fragment>
             )
           })}
         </div>
@@ -140,7 +144,7 @@ function DashboardSidebar({
 
       {/* Secondary Navigation */}
       <div className="border-t border-gray-800 px-3 py-4 space-y-1">
-        {SECONDARY_NAVIGATION.map((item) => {
+        {(role === 'admin' ? [] : SECONDARY_NAVIGATION).map((item) => {
           const Icon = item.icon
           const isActive = currentPage === item.id
 

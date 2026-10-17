@@ -79,7 +79,7 @@ function DashboardLayout({
   }, [onNotificationClick])
 
   return (
-    <div className="dashboard-layout-shell flex h-screen overflow-hidden bg-gray-50">
+    <div className={`dashboard-layout-shell flex h-screen overflow-hidden bg-gray-50 ${role === 'admin' ? 'admin-console-shell' : ''}`}>
       {/* Sidebar */}
       <DashboardSidebar
         role={role}
@@ -94,7 +94,9 @@ function DashboardLayout({
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <DashboardHeader
+          role={role}
           title={pageTitle}
+          description={role === 'admin' ? pageDescription : ''}
           userName={userName}
           notificationCount={notificationCount}
           onNotificationClick={handleNotificationClick}
@@ -106,17 +108,20 @@ function DashboardLayout({
 
         {/* Scrollable Content */}
         <main className="dashboard-main-scroll flex-1 overflow-y-auto overflow-x-hidden">
-          <motion.div
-            className={`w-full h-full ${contentClassName}`}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, ease: 'easeOut' }}
-          >
-            {/* Mobile Safe Area Padding */}
-            <div className="dashboard-mobile-content p-4 md:p-8">
-              {children}
+          {role === 'admin' ? (
+            <div className={`w-full h-full ${contentClassName}`}>
+              <div className="dashboard-mobile-content p-4 md:p-8">{children}</div>
             </div>
-          </motion.div>
+          ) : (
+            <motion.div
+              className={`w-full h-full ${contentClassName}`}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+            >
+              <div className="dashboard-mobile-content p-4 md:p-8">{children}</div>
+            </motion.div>
+          )}
         </main>
       </div>
 
@@ -126,13 +131,13 @@ function DashboardLayout({
           initial={{ x: '100%' }}
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
-          className="w-96 bg-white border-l border-gray-200 hidden lg:flex flex-col"
+          className="notification-panel w-96 bg-white border-l border-gray-200 hidden lg:flex flex-col"
         >
           {/* Notification panel content here */}
-          <div className="p-4 border-b border-gray-200">
+          <div className="notification-panel__header p-4 border-b border-gray-200">
             <h2 className="text-lg font-bold text-gray-900">Notifications</h2>
           </div>
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="notification-panel__body flex-1 overflow-y-auto p-4">
             <p className="text-gray-500 text-center py-8">No notifications</p>
           </div>
         </motion.aside>
