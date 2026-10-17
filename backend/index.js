@@ -23,6 +23,7 @@ const verificationRoutes = require('./routes/verification.routes');
 const safetyReportingRoutes = require('./routes/safetyReporting.routes');
 const tripSafetyRoutes = require('./routes/tripSafety.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
+const messagesRoutes = require('./routes/messages.routes');
 const { getAllowedFrontendOrigins } = require('./utils/frontendOrigins');
 
 dotenv.config();
@@ -213,6 +214,7 @@ app.use('/api/verification', verificationRoutes);
 app.use('/api/safety', safetyReportingRoutes);
 app.use('/api/trip-safety', tripSafetyRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/messages', messagesRoutes);
 
 console.log('[Startup] Routes registered:');
 console.log('  - /api/auth');
