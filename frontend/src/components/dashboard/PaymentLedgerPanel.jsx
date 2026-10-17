@@ -54,7 +54,6 @@ export default function PaymentLedgerPanel({ role, token }) {
   const [collectibleTrips, setCollectibleTrips] = useState([])
   const [nextCursor, setNextCursor] = useState(null)
   const [selectedTripIds, setSelectedTripIds] = useState([])
-  const [method, setMethod] = useState('cash')
   const [externalRef, setExternalRef] = useState('')
   const [note, setNote] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -66,6 +65,7 @@ export default function PaymentLedgerPanel({ role, token }) {
   const [confirming, setConfirming] = useState(false)
   const [rejectingPayment, setRejectingPayment] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [singleCashTripId, setSingleCashTripId] = useState(null)
   const [receiptPaymentId, setReceiptPaymentId] = useState(null)
   const receiptTriggerRef = useRef(null)
 
@@ -79,7 +79,12 @@ export default function PaymentLedgerPanel({ role, token }) {
       const response = await apiFetch(endpoint, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      setPayments((current) => append ? [...current, ...response.payments] : response.payments)
+      const sortedPayments = isParent
+        ? response.payments
+        : [...response.payments].sort((left, right) => (
+            (left.status === 'pending' ? 0 : 1) - (right.status === 'pending' ? 0 : 1)
+          ))
+      setPayments((current) => append ? [...current, ...sortedPayments] : sortedPayments)
       setSummary(response.summary || {})
       setNextCursor(response.nextCursor || null)
       if (isParent) {
@@ -148,8 +153,8 @@ export default function PaymentLedgerPanel({ role, token }) {
       const body = isParent
         ? {
             vanRequestIds: selectedTripIds,
-            method,
-            ...(method === 'gcash' ? { externalRef: externalRef.trim() } : {}),
+            method: 'gcash',
+            externalRef: externalRef.trim(),
             ...(note.trim() ? { note: note.trim() } : {}),
           }
         : {
@@ -196,6 +201,27 @@ export default function PaymentLedgerPanel({ role, token }) {
     }
   }
 
+  const recordSingleCash = async (trip) => {
+    setActionLoading(`cash-${trip.requestId}`)
+    setError('')
+    setMessage('')
+    try {
+      await apiFetch('/api/payments/driver/record-cash', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ vanRequestIds: [trip.requestId] }),
+      })
+      setMessage('Cash payment recorded and verified.')
+      setSingleCashTripId(null)
+      setSelectedTripIds((current) => current.filter((id) => id !== trip.requestId))
+    } catch (actionError) {
+      setError(getErrorMessage(actionError))
+    } finally {
+      await loadPayments()
+      setActionLoading('')
+    }
+  }
+
   const closeReceipt = useCallback(() => {
     setReceiptPaymentId(null)
     window.requestAnimationFrame(() => receiptTriggerRef.current?.focus())
@@ -227,8 +253,6 @@ export default function PaymentLedgerPanel({ role, token }) {
 
       {error && <MessageBox type="error" message={error} onRetry={() => refresh(true)} />}
       {message && <MessageBox type="success" message={message} />}
-      <PaymentReferenceVerifier token={token} />
-
       {isParent ? (
         <ParentLedger
           summary={summary}
@@ -237,8 +261,6 @@ export default function PaymentLedgerPanel({ role, token }) {
           selectedTripIds={selectedTripIds}
           selectedTrips={selectedTrips}
           selectedAmount={selectedAmount}
-          method={method}
-          setMethod={setMethod}
           externalRef={externalRef}
           setExternalRef={setExternalRef}
           note={note}
@@ -291,12 +313,24 @@ export default function PaymentLedgerPanel({ role, token }) {
           setRejectingPayment={setRejectingPayment}
           rejectReason={rejectReason}
           setRejectReason={setRejectReason}
+          singleCashTripId={singleCashTripId}
+          setSingleCashTripId={setSingleCashTripId}
+          recordSingleCash={recordSingleCash}
           openReceipt={(payment, event) => {
             receiptTriggerRef.current = event.currentTarget
             setReceiptPaymentId(payment._id)
           }}
         />
       )}
+
+      <details className="group rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <summary className="min-h-11 cursor-pointer py-2 text-base font-semibold text-slate-900 outline-none focus-visible:ring-4 focus-visible:ring-blue-200">
+          Check a receipt
+        </summary>
+        <div className="pt-3">
+          <PaymentReferenceVerifier token={token} />
+        </div>
+      </details>
 
       {receiptPaymentId && (
         <PaymentReceipt paymentId={receiptPaymentId} token={token} onClose={closeReceipt} />
@@ -312,8 +346,6 @@ function ParentLedger({
   selectedTripIds,
   selectedTrips,
   selectedAmount,
-  method,
-  setMethod,
   externalRef,
   setExternalRef,
   note,
@@ -401,37 +433,39 @@ function ParentLedger({
 
       <form onSubmit={submitPayment} className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <h3 className="text-lg font-semibold text-slate-900">Submit payment</h3>
-        <p className="text-sm text-slate-600">Pay your driver directly. Payments are manually verified by your assigned driver.</p>
-        {hasPaymentValue(info.gcashAccountName) && hasPaymentValue(info.gcashNumber) && (
-          <p className="text-sm text-slate-700">
-            GCash: {info.gcashAccountName} · {info.gcashNumber}
+        <div className="space-y-2 rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <h4 className="text-base font-semibold text-slate-900">How to pay</h4>
+          <ol className="list-inside list-decimal space-y-1 text-sm leading-6 text-slate-700">
+            <li>
+              Pay the fare of your selected trips to your driver by GCash:{' '}
+              {hasPaymentValue(info.gcashAccountName) && hasPaymentValue(info.gcashNumber)
+                ? `${info.gcashAccountName} · ${info.gcashNumber}`
+                : 'Ask your driver for payment details.'}
+            </li>
+            <li>Copy the reference number from your GCash receipt.</li>
+            <li>Enter that reference number here and submit.</li>
+            <li>Your driver confirms the payment, and you get a receipt.</li>
+          </ol>
+          <p className="text-sm font-medium leading-6 text-slate-800">
+            Paying cash? Hand the fare to your driver. They will record it and you will get a receipt.
           </p>
-        )}
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="space-y-1 text-sm font-medium text-slate-700">
-            <span>Payment method</span>
-            <select
-              value={method}
-              onChange={(event) => setMethod(event.target.value)}
+          <label className="space-y-1 text-sm font-medium text-slate-700 sm:col-span-2">
+            <span>GCash reference number</span>
+            <input
+              required
+              maxLength={40}
+              value={externalRef}
+              onChange={(event) => setExternalRef(event.target.value)}
               className={inputClasses}
-            >
-              <option value="cash">Cash</option>
-              <option value="gcash">GCash</option>
-            </select>
+              placeholder="Reference number from your GCash receipt"
+              aria-describedby="gcash-reference-hint"
+            />
+            <span id="gcash-reference-hint" className="block text-sm font-normal text-slate-600">
+              Find this on your GCash receipt (usually 13 digits).
+            </span>
           </label>
-          {method === 'gcash' && (
-            <label className="space-y-1 text-sm font-medium text-slate-700">
-              <span>GCash reference number</span>
-              <input
-                required
-                maxLength={40}
-                value={externalRef}
-                onChange={(event) => setExternalRef(event.target.value)}
-                className={inputClasses}
-                placeholder="Enter the GCash transaction reference"
-              />
-            </label>
-          )}
           <label className="space-y-1 text-sm font-medium text-slate-700 sm:col-span-2">
             <span>Note (optional)</span>
             <input
@@ -455,7 +489,7 @@ function ParentLedger({
             </div>
           </div>
         ) : (
-          <button type="submit" disabled={sending || !selectedTrips.length || (method === 'gcash' && !externalRef.trim())} className={primaryButtonClasses}>
+          <button type="submit" disabled={sending || !selectedTrips.length || !externalRef.trim()} className={primaryButtonClasses}>
             Continue to confirmation
           </button>
         )}
@@ -504,16 +538,21 @@ function DriverLedger({
   setRejectingPayment,
   rejectReason,
   setRejectReason,
+  singleCashTripId,
+  setSingleCashTripId,
+  recordSingleCash,
   openReceipt,
 }) {
   return (
     <>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard label="Awaiting verification" value={summary.pendingCount ?? 0} />
-        <SummaryCard label="Awaiting amount" value={formatMoney(summary.pendingAmount)} />
+        <SummaryCard
+          label="Collected today"
+          value={`${summary.verifiedToday ?? 0} ${summary.verifiedToday === 1 ? 'payment' : 'payments'}`}
+        />
+        <SummaryCard label="Collected total" value={formatMoney(summary.verifiedTotal)} />
         <SummaryCard label="Not yet collected" value={formatMoney(summary.uncollectedAmount)} />
-        <SummaryCard label="Verified today" value={summary.verifiedToday ?? 0} />
-        <SummaryCard label="Verified total" value={formatMoney(summary.verifiedTotal)} />
       </div>
 
       <section className="space-y-3" aria-labelledby="pending-payments-title">
@@ -537,6 +576,11 @@ function DriverLedger({
             ))}
           </div>
         </div>
+        {payments.some((payment) => payment.status === 'pending' && payment.method === 'gcash') && (
+          <p className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm leading-6 text-slate-800">
+            Check your GCash app for this reference and amount before you verify.
+          </p>
+        )}
         <PaymentHistory
           payments={payments}
           role="driver"
@@ -554,10 +598,10 @@ function DriverLedger({
         />
       </section>
 
-      <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="record-cash-title">
+      <section className="space-y-4" aria-labelledby="record-cash-title">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 id="record-cash-title" className="text-lg font-semibold text-slate-900">Record cash payment</h3>
+            <h3 id="record-cash-title" className="text-lg font-semibold text-slate-900">Trips to collect</h3>
             <p className="text-sm text-slate-600">Choose completed, unpaid trips assigned to you.</p>
           </div>
           <button type="button" onClick={selectAll} disabled={!trips.length} className={secondaryButtonClasses}>
@@ -571,12 +615,41 @@ function DriverLedger({
         ) : (
           <ul className="grid min-w-0 gap-3 lg:grid-cols-2">
             {trips.map((trip) => (
-              <TripCheckbox
-                key={trip.requestId}
-                trip={trip}
-                checked={selectedTripIds.includes(trip.requestId)}
-                onChange={() => toggleTrip(trip.requestId)}
-              />
+              <li key={trip.requestId} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <TripCheckbox
+                  trip={trip}
+                  checked={selectedTripIds.includes(trip.requestId)}
+                  onChange={() => toggleTrip(trip.requestId)}
+                />
+                {singleCashTripId === trip.requestId ? (
+                  <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
+                    <p className="text-sm font-semibold leading-6 text-slate-900">
+                      Record {formatMoney(trip.fare)} cash received for this trip?
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={Boolean(actionLoading)}
+                        onClick={() => recordSingleCash(trip)}
+                        className={primaryButtonClasses}
+                      >
+                        {actionLoading === `cash-${trip.requestId}` ? 'Recording…' : 'Confirm cash received'}
+                      </button>
+                      <button type="button" onClick={() => setSingleCashTripId(null)} className={secondaryButtonClasses}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setSingleCashTripId(trip.requestId)}
+                    className={secondaryButtonClasses}
+                  >
+                    Cash received
+                  </button>
+                )}
+              </li>
             ))}
           </ul>
         )}
@@ -747,7 +820,7 @@ function PaymentHistory({
 
 function TripCheckbox({ trip, checked, onChange }) {
   return (
-    <li className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
+    <div className="min-w-0">
       <label className="flex min-h-11 items-start gap-3">
         <input
           type="checkbox"
@@ -765,7 +838,7 @@ function TripCheckbox({ trip, checked, onChange }) {
           <span className="mt-1 block text-sm text-slate-600">{dateTimeInManila(trip.date)}</span>
         </span>
       </label>
-    </li>
+    </div>
   )
 }
 

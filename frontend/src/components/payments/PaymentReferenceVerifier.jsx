@@ -57,11 +57,14 @@ export default function PaymentReferenceVerifier({ token }) {
   return (
     <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 text-slate-900 shadow-sm" aria-labelledby="reference-verifier-title">
       <div>
-        <h3 id="reference-verifier-title" className="text-lg font-semibold text-slate-900">Verify a reference number</h3>
-        <p className="mt-1 text-sm text-slate-600">Format: HNS-YYYYMMDD-XXXXXX</p>
+        <h3 id="reference-verifier-title" className="text-lg font-semibold text-slate-900">Check a receipt</h3>
+        <p className="mt-1 text-sm leading-6 text-slate-600">
+          Check that a receipt from this app is genuine. Enter the reference number printed on the receipt
+          (HNS-YYYYMMDD-XXXXXX). This is not your GCash reference number.
+        </p>
       </div>
-      <form onSubmit={verify} className="flex flex-col gap-3 sm:flex-row">
-        <label className="sr-only" htmlFor="payment-reference-input">Payment reference number</label>
+      <form onSubmit={verify} className="flex flex-col gap-3 sm:flex-row sm:items-start">
+        <label className="sr-only" htmlFor="payment-reference-input">Receipt reference number</label>
         <input
           id="payment-reference-input"
           type="text"
@@ -76,7 +79,7 @@ export default function PaymentReferenceVerifier({ token }) {
           maxLength={20}
           autoCapitalize="characters"
           autoComplete="off"
-          className="min-h-11 min-w-0 w-full flex-1 rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-900 placeholder:text-slate-500 outline-none focus-visible:border-blue-600 focus-visible:ring-4 focus-visible:ring-blue-200"
+          className="block min-h-11 w-full min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-base leading-6 text-slate-900 placeholder:text-slate-500 outline-none focus-visible:border-blue-600 focus-visible:ring-4 focus-visible:ring-blue-200 sm:w-auto"
         />
         <button
           type="submit"
@@ -84,7 +87,7 @@ export default function PaymentReferenceVerifier({ token }) {
           className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 text-sm font-semibold text-white outline-none hover:bg-blue-800 focus-visible:ring-4 focus-visible:ring-blue-300 disabled:cursor-not-allowed disabled:bg-slate-400 sm:w-auto"
         >
           <Search size={18} aria-hidden="true" />
-          {loading ? 'Checking…' : 'Verify reference'}
+          {loading ? 'Checking…' : 'Check receipt'}
         </button>
       </form>
 
